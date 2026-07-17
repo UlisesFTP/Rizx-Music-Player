@@ -1,0 +1,120 @@
+package fm.rizx.player.ui.player
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import fm.rizx.player.domain.model.DownloadState
+import fm.rizx.player.domain.model.DownloadStatus
+import fm.rizx.player.ui.theme.RizxTheme
+import fm.rizx.player.ui.theme.mr
+
+/**
+ * The Now Playing overflow menu — what you can do to *this song* that isn't a transport control.
+ *
+ * Hard-edged and flat rather than Material's rounded elevated sheet, to match the rest of the shell.
+ */
+@Composable
+fun NowPlayingMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    download: DownloadState?,
+    canvasOn: Boolean,
+    canvasAvailable: Boolean,
+    onDownload: () -> Unit,
+    onDeleteDownload: () -> Unit,
+    onToggleCanvas: () -> Unit,
+    onShare: () -> Unit,
+) {
+    val c = RizxTheme.colors
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        shape = RectangleShape,
+        containerColor = c.elev,
+        border = androidx.compose.foundation.BorderStroke(1.dp, c.hardLine),
+        modifier = Modifier.background(c.elev),
+    ) {
+        when (download?.status) {
+            null -> MenuRow(Icons.Filled.FileDownload, "Download", c.text) { onDismiss(); onDownload() }
+
+            DownloadStatus.QUEUED ->
+                MenuRow(Icons.Filled.FileDownload, "Queued for download", c.muted, enabled = false) {}
+
+            DownloadStatus.DOWNLOADING ->
+                MenuRow(Icons.Filled.FileDownload, "Downloading ${download.progressPercent}%", c.muted, enabled = false) {}
+
+            DownloadStatus.COMPLETE ->
+                MenuRow(Icons.Filled.DownloadDone, "Downloaded — remove", c.text) { onDismiss(); onDeleteDownload() }
+
+            DownloadStatus.FAILED ->
+                MenuRow(Icons.Filled.ErrorOutline, "Download failed — retry", c.redAccent) { onDismiss(); onDownload() }
+        }
+
+        // Named for what it actually is. It is not a Spotify Canvas — it's the song's own video, muted.
+        MenuRow(
+            icon = if (canvasOn) Icons.Filled.VideocamOff else Icons.Filled.Videocam,
+            label = when {
+                canvasOn && !canvasAvailable -> "Video preview on — none for this song"
+                canvasOn -> "Turn off video preview"
+                else -> "Video preview"
+            },
+            tint = if (canvasOn) c.accent else c.text,
+        ) { onDismiss(); onToggleCanvas() }
+
+        MenuRow(Icons.Filled.Share, "Share", c.text) { onDismiss(); onShare() }
+    }
+}
+
+/**
+ * Shares the song via the system sheet. Sends the provider's own web link when the track has one (Deezer
+ * and YouTube both put a real URL on their `ProviderRef`), so the recipient lands on the song rather than
+ * on a bare string.
+ */
+fun android.content.Context.shareTrack(track: fm.rizx.player.domain.model.Track) {
+    val who = track.artists.joinToString { it.name }
+    val what = listOf(track.title, who).filter { it.isNotBlank() }.joinToString(" — ")
+    val body = listOfNotNull(what.takeIf { it.isNotBlank() }, track.source.url).joinToString("\n")
+    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_TITLE, what)
+        putExtra(android.content.Intent.EXTRA_TEXT, body)
+    }
+    runCatching { startActivity(android.content.Intent.createChooser(send, null)) }
+}
+
+@Composable
+private fun MenuRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: androidx.compose.ui.graphics.Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        enabled = enabled,
+        onClick = onClick,
+        leadingIcon = { Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp)) },
+        text = { Text(label, style = mr(13, FontWeight.Medium), color = tint) },
+    )
+}

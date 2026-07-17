@@ -1,0 +1,201 @@
+package fm.rizx.player.ui.search
+
+import fm.rizx.player.MainDispatcherRule
+import fm.rizx.player.core.error.AppError
+import fm.rizx.player.domain.model.AlbumRef
+import fm.rizx.player.domain.model.ArtistRef
+import fm.rizx.player.domain.model.PlaylistRef
+import fm.rizx.player.domain.model.ProviderRef
+import fm.rizx.player.domain.model.SearchCategory
+import fm.rizx.player.domain.model.SearchParams
+import fm.rizx.player.domain.model.SearchResults
+import fm.rizx.player.domain.model.Track
+import fm.rizx.player.domain.repository.FavoritesRepository
+import fm.rizx.player.domain.repository.MetadataRepository
+import fm.rizx.player.domain.usecase.SearchMusicUseCase
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class SearchViewModelTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
+    private val noopFavorites = object : FavoritesRepository {
+        override fun favoriteTracks() = flowOf(emptyList<Track>())
+        override fun favoriteAlbums() = flowOf(emptyList<AlbumRef>())
+        override fun favoriteArtists() = flowOf(emptyList<ArtistRef>())
+        override fun isFavoriteTrack(source: ProviderRef) = flowOf(false)
+        override suspend fun addTrack(track: Track) {}
+        override suspend fun removeTrack(source: ProviderRef) {}
+        override suspend fun toggleTrack(track: Track): Boolean = true
+        override suspend fun addAlbum(album: AlbumRef) {}
+        override suspend fun removeAlbum(source: ProviderRef) {}
+        override suspend fun addArtist(artist: ArtistRef) {}
+        override suspend fun removeArtist(source: ProviderRef) {}
+    }
+
+    private val emptyStreaming = object : fm.rizx.player.data.search.StreamingSourcesSearch {
+        override suspend fun search(query: String) = SearchResults()
+    }
+
+    private val emptyPlaylists = object : fm.rizx.player.data.search.PlaylistSourcesSearch {
+        override suspend fun search(query: String) = SearchResults()
+    }
+
+    private fun vmWith(
+        repo: MetadataRepository,
+        streaming: fm.rizx.player.data.search.StreamingSourcesSearch = emptyStreaming,
+        playlists: fm.rizx.player.data.search.PlaylistSourcesSearch = emptyPlaylists,
+    ) = SearchViewModel(SearchMusicUseCase(repo), streaming, playlists, noopFavorites)
+
+    private fun fakeRepo(block: suspend (SearchParams) -> SearchResults) = object : MetadataRepository {
+        override suspend fun search(params: SearchParams): SearchResults = block(params)
+        override suspend fun albumDetail(source: fm.rizx.player.domain.model.ProviderRef) = null
+        override suspend fun artistDetail(source: fm.rizx.player.domain.model.ProviderRef) = null
+        override suspend fun radioTracks(seed: Track): List<Track> = emptyList()
+        override suspend fun playlistTracks(source: fm.rizx.player.domain.model.ProviderRef): List<Track> = emptyList()
+    }
+
+    private fun tracks(vararg titles: String) =
+        SearchResults(tracks = titles.map { Track(title = it, source = ProviderRef("f", it)) })
+
+    @Test
+    fun `blank query stays idle`() {
+        val vm = vmWith(fakeRepo { SearchResults() })
+        vm.onQueryChange("   ")
+        assertEquals(SearchUiState.Idle, vm.uiState.value)
+    }
+
+    @Test
+    fun `query yields results after debounce`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        val vm = vmWith(fakeRepo { tracks("Velvet Hours") })
+        vm.onQueryChange("velvet")
+        advanceUntilIdle()
+        val state = vm.uiState.value
+        assertTrue(state is SearchUiState.Results)
+        assertEquals("Velvet Hours", (state as SearchUiState.Results).results.tracks.single().title)
+    }
+
+    @Test
+    fun `no matches yields empty`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        val vm = vmWith(fakeRepo { SearchResults() })
+        vm.onQueryChange("zzz")
+        advanceUntilIdle()
+        assertEquals(SearchUiState.Empty, vm.uiState.value)
+    }
+
+    @Test
+    fun `provider failure yields error`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        val vm = vmWith(fakeRepo { throw RuntimeException("boom") })
+        vm.onQueryChange("x")
+        advanceUntilIdle()
+        val state = vm.uiState.value
+        assertTrue(state is SearchUiState.Error)
+        assertEquals("boom", (state as SearchUiState.Error).message)
+    }
+
+    @Test
+    fun `network failure yields offline, not a generic error`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        val vm = vmWith(fakeRepo { throw AppError.Network("no route to host") })
+        vm.onQueryChange("x")
+        advanceUntilIdle()
+        assertEquals(SearchUiState.Offline, vm.uiState.value)
+    }
+
+    @Test
+    fun `retry re-runs the query and recovers`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        var online = false
+        val vm = vmWith(fakeRepo { if (online) tracks("Yellow") else throw AppError.Network("offline") })
+        vm.onQueryChange("yellow")
+        advanceUntilIdle()
+        assertEquals(SearchUiState.Offline, vm.uiState.value)
+
+        online = true
+        vm.retry()
+        advanceUntilIdle()
+        val state = vm.uiState.value
+        assertTrue(state is SearchUiState.Results)
+        assertEquals("Yellow", (state as SearchUiState.Results).results.tracks.single().title)
+    }
+
+    @Test
+    fun `rapid typing debounces to the last query only`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        val seen = mutableListOf<String>()
+        val vm = vmWith(fakeRepo { seen += it.query; SearchResults() })
+        vm.onQueryChange("a")
+        advanceTimeBy(100) // less than the 300ms debounce
+        vm.onQueryChange("ab")
+        advanceUntilIdle()
+        assertEquals(listOf("ab"), seen)
+    }
+
+    @Test
+    fun `the Artists tab requests artists-only from the catalog`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        var capturedTypes: List<SearchCategory>? = null
+        val repo = fakeRepo { params ->
+            capturedTypes = params.types
+            SearchResults(artists = listOf(ArtistRef(name = "Daft Punk", source = ProviderRef("deezer", "artist:1"))))
+        }
+        val vm = vmWith(repo)
+        vm.onQueryChange("daft")
+        advanceUntilIdle()
+
+        vm.selectTab(SearchTab.Artists)
+        advanceUntilIdle()
+
+        assertEquals(listOf(SearchCategory.ARTISTS), capturedTypes) // narrowed to the dedicated artist index
+        val state = vm.uiState.value as SearchUiState.Results
+        assertEquals("Daft Punk", state.results.artists.single().name)
+    }
+
+    @Test
+    fun `the Playlists tab searches the playlist sources, not the catalog`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        val playlists = object : fm.rizx.player.data.search.PlaylistSourcesSearch {
+            override suspend fun search(query: String) =
+                SearchResults(playlists = listOf(PlaylistRef(id = "1", name = "Chill Vibes", source = ProviderRef("deezer", "playlist:1"))))
+        }
+        val vm = vmWith(fakeRepo { SearchResults() }, playlists = playlists)
+        vm.onQueryChange("chill")
+        advanceUntilIdle()
+
+        vm.selectTab(SearchTab.Playlists)
+        advanceUntilIdle()
+
+        val state = vm.uiState.value as SearchUiState.Results
+        assertEquals("Chill Vibes", state.results.playlists.single().name)
+        assertEquals(SearchTab.Playlists, vm.tab.value)
+    }
+
+    @Test
+    fun `the Underground tab searches YouTube plus SoundCloud, not the catalog`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        var metadataHit = false
+        val streaming = object : fm.rizx.player.data.search.StreamingSourcesSearch {
+            override suspend fun search(query: String) =
+                SearchResults(tracks = listOf(Track(title = "Exclusive Remix", source = ProviderRef("youtube", "abc"))))
+        }
+        val vm = vmWith(fakeRepo { metadataHit = true; SearchResults() }, streaming)
+
+        // Default Songs tab hits only the catalog (empty here) — never the streaming sources.
+        vm.onQueryChange("remix")
+        advanceUntilIdle()
+        assertTrue(metadataHit)
+        assertEquals(SearchUiState.Empty, vm.uiState.value)
+
+        // Switching to Underground re-runs the same query against YouTube + SoundCloud instead.
+        vm.selectTab(SearchTab.Underground)
+        advanceUntilIdle()
+
+        val state = vm.uiState.value as SearchUiState.Results
+        assertEquals("Exclusive Remix", state.results.tracks.single().title)
+        assertEquals(SearchTab.Underground, vm.tab.value)
+    }
+}

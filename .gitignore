@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Rizx Player — repository ignore rules
+#
+# The public repository ships the app itself (Proyecto/), its license/attribution,
+# and user-facing documentation (docs/*.md). Internal AI/spec-driven-development
+# working material, local IDE/tooling config, build output, and secrets stay out
+# of version control.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Editors / IDE / local tooling ────────────────────────────────────────────
+.claude/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ── Internal planning & spec material (kept private) ─────────────────────────
+# Root planning docs that guide development but are not part of the shipped project.
+/AGENTS.md
+/CLAUDE.md
+/ROADMAP.md
+/NUCLEAR_UPSTREAM_STUDY.md
+/PROJECT_CONTEXT_NUCLEAR_ANDROID.md
+/RAG_KNOWLEDGE_BASE_NUCLEAR_TO_ANDROID.md
+/SDD_CODEX_META_PLAN_NUCLEAR_ANDROID.md
+/SPEC_REVIEW_VS_UPSTREAM.md
+/skills/
+/nuclear_android_docs_specs_package/
+
+# Internal spec-driven-development docs. Public, user-facing docs live directly in
+# docs/*.md (tracked). The working specs / ADRs / plans / checklists below are the
+# internal design record and stay private.
+/docs/specs/
+/docs/adr/
+/docs/plans/
+/docs/checklists/
+
+# ── Android / Gradle build output ────────────────────────────────────────────
+build/
+.gradle/
+.kotlin/
+/captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+
+# ── Local machine config & signing secrets (NEVER commit) ────────────────────
+local.properties
+keystore.properties
+*.jks
+*.keystore
+*.p12
+
+# ── Build artifacts ──────────────────────────────────────────────────────────
+*.apk
+*.aab
+*.ap_
+*.dex

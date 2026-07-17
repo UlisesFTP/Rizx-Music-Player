@@ -1,0 +1,76 @@
+Rizx Player — a native Android music player
+Copyright (C) 2026 The Rizx Player authors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See the LICENSE file for the full text.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+------------------------------------------------------------------------------
+Upstream origin and attribution
+------------------------------------------------------------------------------
+
+Rizx Player is an independent hard fork / clean-room reimplementation of the
+business logic of Nuclear, the open-source desktop music player:
+
+    Nuclear — https://github.com/nukeop/nuclear
+    Copyright (C) nukeop and the Nuclear contributors
+    Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0)
+
+Rizx re-implements Nuclear's domain logic (providers, queue, two-phase stream
+resolution, playback, favorites, playlists) on native Android (Kotlin, Jetpack
+Compose, Media3/ExoPlayer, Room, DataStore). It is NOT a port of Nuclear's
+React/Tauri desktop UI, is not affiliated with or endorsed by the Nuclear
+project, and does not upstream patches (upstream does not accept contributions).
+
+As a derived work, Rizx Player carries the full AGPL-3.0 obligations
+independently: the license text, this attribution, the Corresponding Source, and
+a log of major modifications are preserved and distributed with every build.
+
+------------------------------------------------------------------------------
+Corresponding Source (AGPL §6)
+------------------------------------------------------------------------------
+
+The complete Corresponding Source for each distributed build is published in this
+project's public Git repository, tagged to match the build's versionName /
+versionCode. The in-app About screen links to it. Build configuration required to
+reproduce the build (Gradle) is included; signing keys and secrets are not.
+
+------------------------------------------------------------------------------
+AGPL §13 (remote network interaction) — assessment
+------------------------------------------------------------------------------
+
+The MVP is a standalone client with no backend or server component operated by
+the authors, so §13 is not triggered. If a server/remote component is ever added
+(hosted backend, remote-control API, cast/MPD server, etc.), §13 activates and
+that component must offer its Corresponding Source to remote users. See
+docs/LICENSING.md.
+
+------------------------------------------------------------------------------
+Major modifications relative to upstream Nuclear
+------------------------------------------------------------------------------
+
+- Complete native Android reimplementation (Kotlin / Jetpack Compose / Material 3
+  / Navigation Compose) replacing the React/Redux/Electron(Tauri) desktop UI.
+- Media3 / ExoPlayer + MediaSessionService background playback replacing the
+  Web Audio / MSE / hls.js web streaming stack.
+- Room + DataStore persistence replacing the desktop store.
+- Provider architecture (metadata + streaming providers, registry, two-phase
+  ephemeral stream resolution) re-modeled from upstream packages/model and
+  plugin-sdk; first real provider integration uses the public iTunes Search API.
+- No arbitrary JS/TS plugin runtime, plugin store, or WebView-wrapper in the MVP.
+
+------------------------------------------------------------------------------
+Bundled third-party components
+------------------------------------------------------------------------------
+
+Open-source libraries bundled in the app are listed with their licenses in
+docs/THIRD_PARTY_LICENSES.md and surfaced in-app via About -> Open-source
+licenses. Bundled fonts are licensed under the SIL Open Font License 1.1 (see
+Proyecto/README.md). Search results and 30-second audio previews are fetched at
+runtime from the iTunes Search API (Apple Inc.) under Apple's terms; no Apple
+code or assets are bundled.

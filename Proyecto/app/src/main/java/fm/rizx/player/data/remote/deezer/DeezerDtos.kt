@@ -1,0 +1,108 @@
+package fm.rizx.player.data.remote.deezer
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+/**
+ * Wire DTOs for the keyless Deezer public API (`https://api.deezer.com`). Durations are seconds; cover/
+ * picture URLs come in fixed sizes. DTOs stay in this layer (ADR 0006); the lenient shared `Json` drops
+ * the many fields we don't use.
+ */
+
+@Serializable
+data class DeezerSearchResponse(val data: List<DeezerTrackDto> = emptyList())
+
+@Serializable
+data class DeezerAlbumsResponse(val data: List<DeezerAlbumShortDto> = emptyList())
+
+@Serializable
+data class DeezerTrackDto(
+    val id: Long? = null,
+    val title: String? = null,
+    /** Seconds. */
+    val duration: Int? = null,
+    val artist: DeezerArtistShortDto? = null,
+    val album: DeezerAlbumShortDto? = null,
+    val preview: String? = null,
+    @SerialName("track_position") val trackPosition: Int? = null,
+)
+
+@Serializable
+data class DeezerArtistShortDto(
+    val id: Long? = null,
+    val name: String? = null,
+    @SerialName("picture_xl") val pictureXl: String? = null,
+    @SerialName("picture_medium") val pictureMedium: String? = null,
+)
+
+@Serializable
+data class DeezerAlbumShortDto(
+    val id: Long? = null,
+    val title: String? = null,
+    @SerialName("cover_xl") val coverXl: String? = null,
+    @SerialName("cover_medium") val coverMedium: String? = null,
+    @SerialName("release_date") val releaseDate: String? = null,
+    /** Present on `search/album` rows (the album's main artist); absent on track-nested albums. */
+    val artist: DeezerArtistShortDto? = null,
+)
+
+/** `/album/{id}` — full album with its track list. */
+@Serializable
+data class DeezerAlbumDto(
+    val id: Long? = null,
+    val title: String? = null,
+    @SerialName("cover_xl") val coverXl: String? = null,
+    @SerialName("cover_medium") val coverMedium: String? = null,
+    @SerialName("release_date") val releaseDate: String? = null,
+    @SerialName("nb_tracks") val nbTracks: Int? = null,
+    /** Seconds. */
+    val duration: Int? = null,
+    val artist: DeezerArtistShortDto? = null,
+    val tracks: DeezerTracksWrapper? = null,
+)
+
+@Serializable
+data class DeezerTracksWrapper(val data: List<DeezerTrackDto> = emptyList())
+
+/** `/artist/{id}` — artist header. */
+@Serializable
+data class DeezerArtistDto(
+    val id: Long? = null,
+    val name: String? = null,
+    @SerialName("picture_xl") val pictureXl: String? = null,
+    @SerialName("picture_medium") val pictureMedium: String? = null,
+    @SerialName("nb_fan") val nbFan: Long? = null,
+)
+
+/** `/chart` — top tracks/albums/artists/playlists in one keyless call (Phase 19 dashboard). */
+@Serializable
+data class DeezerChartDto(
+    val tracks: DeezerTracksWrapper = DeezerTracksWrapper(),
+    val albums: DeezerAlbumsResponse = DeezerAlbumsResponse(),
+    val artists: DeezerArtistsWrapper = DeezerArtistsWrapper(),
+    val playlists: DeezerPlaylistsWrapper = DeezerPlaylistsWrapper(),
+)
+
+@Serializable
+data class DeezerArtistsWrapper(val data: List<DeezerArtistShortDto> = emptyList())
+
+@Serializable
+data class DeezerPlaylistsWrapper(val data: List<DeezerPlaylistDto> = emptyList())
+
+@Serializable
+data class DeezerPlaylistDto(
+    val id: Long? = null,
+    val title: String? = null,
+    @SerialName("picture_xl") val pictureXl: String? = null,
+    @SerialName("picture_medium") val pictureMedium: String? = null,
+    @SerialName("nb_tracks") val nbTracks: Int? = null,
+)
+
+/** `/playlist/{id}` — full playlist with its track list (Phase 22 URL import). */
+@Serializable
+data class DeezerPlaylistFullDto(
+    val id: Long? = null,
+    val title: String? = null,
+    val description: String? = null,
+    val tracks: DeezerTracksWrapper? = null,
+)

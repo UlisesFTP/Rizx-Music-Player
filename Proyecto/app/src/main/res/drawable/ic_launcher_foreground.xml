@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Rizx logomark: an ivory square block with a coral corner notch (from the design header). -->
+    <path
+        android:fillColor="#FFFFE5"
+        android:pathData="M36,36 L72,36 L72,72 L36,72 Z" />
+    <path
+        android:fillColor="#EF6A3C"
+        android:pathData="M64,64 L72,64 L72,72 L64,72 Z" />
+</vector>
