@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.cache.CacheManager
 import fm.rizx.player.domain.playback.AudioEffectsController
 import fm.rizx.player.domain.repository.SettingsRepository
+import fm.rizx.player.playback.AudioOutputCapabilities
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,19 +26,28 @@ class PreferencesViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val audioEffects: AudioEffectsController,
     private val cache: CacheManager,
+    private val audioOutput: AudioOutputCapabilities,
 ) : ViewModel() {
 
     val dataSaver: StateFlow<Boolean> = settings.dataSaver.asState(false)
     val crossfade: StateFlow<Boolean> = settings.crossfade.asState(false)
     val gapless: StateFlow<Boolean> = settings.gapless.asState(true)
     val normalize: StateFlow<Boolean> = settings.normalizeVolume.asState(false)
+    val hiRes: StateFlow<Boolean> = settings.hiResOutput.asState(false)
 
     private val _cacheSize = MutableStateFlow(cache.diskSizeLabel())
     val cacheSize: StateFlow<String> = _cacheSize.asStateFlow()
 
+    /** What the device's DAC can do (native/max sample rate + float), shown beside the Hi-Res toggle. */
+    private val _audioOutputLabel = MutableStateFlow(runCatching { audioOutput.describe() }.getOrDefault(""))
+    val audioOutputLabel: StateFlow<String> = _audioOutputLabel.asStateFlow()
+
     fun setDataSaver(enabled: Boolean) { viewModelScope.launch { settings.setDataSaver(enabled) } }
     fun setCrossfade(enabled: Boolean) { viewModelScope.launch { settings.setCrossfade(enabled) } }
     fun setGapless(enabled: Boolean) { viewModelScope.launch { settings.setGapless(enabled) } }
+
+    /** Persisted output preference; the audio sink reads it at the next playback-service start. */
+    fun setHiRes(enabled: Boolean) { viewModelScope.launch { settings.setHiResOutput(enabled) } }
 
     /** Persists **and** applies the live loudness effect (the controller writes the setting through). */
     fun setNormalize(enabled: Boolean) = audioEffects.setNormalizeVolume(enabled)

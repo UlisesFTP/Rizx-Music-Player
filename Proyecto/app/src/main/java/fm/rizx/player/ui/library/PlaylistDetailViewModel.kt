@@ -37,6 +37,13 @@ class PlaylistDetailViewModel @Inject constructor(
     val playlist: StateFlow<Playlist?> =
         playlists.playlist(playlistId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    init {
+        // Repairs covers that the import couldn't supply (Spotify ships no per-track images, and playlists
+        // imported before cover support have none at all). A no-op once everything already has artwork, and
+        // the observed Flow above picks the result up on its own.
+        viewModelScope.launch { playlists.backfillArtwork(playlistId) }
+    }
+
     val downloadStates: StateFlow<Map<String, DownloadState>> = downloads.states
 
     fun removeItem(itemId: String) {

@@ -90,6 +90,12 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.NORMALIZE_VOLUME] = enabled }
     }
 
+    override val hiResOutput: Flow<Boolean> = dataStore.data.map { it[Keys.HI_RES_OUTPUT] ?: false }
+
+    override suspend fun setHiResOutput(enabled: Boolean) {
+        dataStore.edit { it[Keys.HI_RES_OUTPUT] = enabled }
+    }
+
     // Off by default: a canvas pulls a video stream on top of the audio one, so it has to be asked for.
     override val canvasEnabled: Flow<Boolean> = dataStore.data.map { it[Keys.CANVAS] ?: false }
 
@@ -110,6 +116,7 @@ class SettingsRepositoryImpl(
         val CROSSFADE = booleanPreferencesKey("core.audio.crossfade")
         val GAPLESS = booleanPreferencesKey("core.audio.gapless")
         val NORMALIZE_VOLUME = booleanPreferencesKey("core.audio.normalizeVolume")
+        val HI_RES_OUTPUT = booleanPreferencesKey("core.audio.hiResOutput")
         val CANVAS = booleanPreferencesKey("core.ui.canvas")
     }
 

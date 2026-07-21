@@ -11,7 +11,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [FavoriteEntity::class, PlaylistEntity::class, PlaylistItemEntity::class, RecentlyPlayedEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class RizxDatabase : RoomDatabase() {
@@ -28,5 +28,15 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
                 "(`provider` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `trackJson` TEXT NOT NULL, " +
                 "`playedAtIso` TEXT NOT NULL, PRIMARY KEY(`provider`, `sourceId`))",
         )
+    }
+}
+
+/**
+ * v2 → v3: adds `playlists.artworkUrl` so an imported playlist keeps its cover. Nullable with no default,
+ * so existing rows simply read back null and get backfilled on next open — nothing is rewritten here.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `playlists` ADD COLUMN `artworkUrl` TEXT")
     }
 }

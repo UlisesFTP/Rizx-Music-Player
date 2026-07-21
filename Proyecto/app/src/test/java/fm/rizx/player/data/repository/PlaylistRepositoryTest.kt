@@ -49,8 +49,19 @@ class PlaylistRepositoryTest {
         override fun observePlaylist(id: String): Flow<PlaylistEntity?> = playlists.map { it[id] }
         override fun observeSummaries(): Flow<List<PlaylistSummaryRow>> =
             combine(playlists, items) { pls, its ->
-                pls.values.map { p -> PlaylistSummaryRow(p.id, p.name, p.description, p.isReadOnly, its.count { it.playlistId == p.id }) }
+                pls.values.map { p ->
+                    PlaylistSummaryRow(
+                        p.id, p.name, p.description, p.isReadOnly,
+                        its.count { it.playlistId == p.id }, p.artworkUrl,
+                    )
+                }
             }
+        override suspend fun setArtworkUrl(id: String, url: String?) {
+            playlists.value[id]?.let { playlists.value = playlists.value + (id to it.copy(artworkUrl = url)) }
+        }
+        override suspend fun updateItemTrack(itemId: String, trackJson: String) {
+            items.value = items.value.map { if (it.id == itemId) it.copy(trackJson = trackJson) else it }
+        }
         override suspend fun insertItem(item: PlaylistItemEntity) { items.value = items.value + item }
         override suspend fun deleteItem(itemId: String) { items.value = items.value.filterNot { it.id == itemId } }
         override fun observeItems(playlistId: String): Flow<List<PlaylistItemEntity>> =

@@ -5,6 +5,7 @@ import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.core.cache.CacheManager
 import fm.rizx.player.domain.playback.AudioEffectsController
 import fm.rizx.player.domain.repository.SettingsRepository
+import fm.rizx.player.playback.AudioOutputCapabilities
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -31,8 +32,11 @@ class PreferencesViewModelTest {
         every { diskSizeLabel() } returns "12.0 MB"
         coEvery { clear() } returns Unit
     }
+    private val audioOutput = mockk<AudioOutputCapabilities> {
+        every { describe() } returns "48 kHz output"
+    }
 
-    private fun vm() = PreferencesViewModel(settings, effects, cache)
+    private fun vm() = PreferencesViewModel(settings, effects, cache, audioOutput)
 
     @Test
     fun `toggling data saver persists and re-emits`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
@@ -59,6 +63,18 @@ class PreferencesViewModelTest {
         vm().setNormalize(true)
         verify { effects.setNormalizeVolume(true) }
     }
+
+    @Test
+    fun `hi-res persists, re-emits, and exposes the DAC capability label`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            val vm = vm()
+            assertEquals("48 kHz output", vm.audioOutputLabel.value)
+            vm.hiRes.test {
+                assertEquals(false, awaitItem()) // opt-in, off by default
+                vm.setHiRes(true)
+                assertEquals(true, awaitItem())
+            }
+        }
 
     @Test
     fun `clear cache clears the image cache and refreshes the size`() =
@@ -89,6 +105,9 @@ class PreferencesViewModelTest {
         override suspend fun setGapless(enabled: Boolean) { gaplessFlow.value = enabled }
         override val normalizeVolume = normalizeFlow
         override suspend fun setNormalizeVolume(enabled: Boolean) { normalizeFlow.value = enabled }
+        val hiResFlow = MutableStateFlow(false)
+        override val hiResOutput = hiResFlow
+        override suspend fun setHiResOutput(enabled: Boolean) { hiResFlow.value = enabled }
         private val canvasFlow = MutableStateFlow(false)
         override val canvasEnabled = canvasFlow
         override suspend fun setCanvasEnabled(enabled: Boolean) { canvasFlow.value = enabled }

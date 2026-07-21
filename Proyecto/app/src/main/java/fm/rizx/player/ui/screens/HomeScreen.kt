@@ -117,12 +117,12 @@ fun HomeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
-                        // App logo (matches the launcher icon: ivory square + coral corner on a dark tile).
+                        // App logo — the launcher icon in miniature: the logomark on the brand's ivory paper.
                         Box(
                             Modifier
                                 .size(40.dp)
                                 .clip(RectangleShape)
-                                .background(Color(0xFF14110C))
+                                .background(Color(0xFFF3ECE2))
                                 .border(1.dp, c.line2, RectangleShape),
                             contentAlignment = Alignment.Center,
                         ) {

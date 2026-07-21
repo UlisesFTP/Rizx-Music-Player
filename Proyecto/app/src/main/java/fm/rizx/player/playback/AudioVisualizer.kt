@@ -49,6 +49,18 @@ class AudioVisualizer @Inject constructor() {
     private val bandHi = IntArray(BAR_COUNT)
     private val smoothed = FloatArray(BAR_COUNT)
 
+    /** Scratch for one frame's normalised band magnitudes, and the level they're measured against. */
+    private val band = FloatArray(BAR_COUNT)
+    private var reference = AGC_FLOOR
+
+    /**
+     * Spectral tilt. Music loses energy towards the treble, so without compensation the right-hand third
+     * of the spectrum sits dead flat while the bass end does all the moving. Boosting progressively with
+     * frequency spreads the animation across the full width. Bands above the source's cutoff stay still
+     * either way — there's nothing there to lift.
+     */
+    private val tilt = FloatArray(BAR_COUNT) { 1f + TILT_TOP_BOOST * (it.toFloat() / (BAR_COUNT - 1)) }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** The sink handed to a [TeeAudioProcessor]; `PlaybackService` inserts it into the audio pipeline. */
@@ -134,13 +146,31 @@ class AudioVisualizer @Inject constructor() {
             im[j] = 0f
         }
         fft(re, im)
+
+        // Per-band peak, brought back to roughly unit scale. The FFT is unnormalised, so a full-scale
+        // tone lands near FFT_SIZE/2 rather than 1 — feeding that straight into the log curve is what
+        // pinned every bar to the ceiling.
+        var frameMax = 0f
         for (b in 0 until BAR_COUNT) {
             var peak = 0f
             for (k in bandLo[b] until bandHi[b]) {
                 val mag = sqrt(re[k] * re[k] + im[k] * im[k])
                 if (mag > peak) peak = mag
             }
-            val level = (ln(1f + peak * GAIN) / LOG_NORM).coerceIn(0f, 1f)
+            val magnitude = peak / HALF_SIZE * tilt[b]
+            band[b] = magnitude
+            if (magnitude > frameMax) frameMax = magnitude
+        }
+
+        // Adaptive reference: track the recent loudest band and normalise against it, plus [HEADROOM] of
+        // slack so even the tallest bar usually stops short of the top. Quiet passages still read (the
+        // reference falls with them) without silence amplifying noise (it can't fall below [AGC_FLOOR]).
+        reference = maxOf(frameMax, reference * AGC_DECAY).coerceAtLeast(AGC_FLOOR)
+        val scale = reference * HEADROOM
+
+        for (b in 0 until BAR_COUNT) {
+            val normalized = (band[b] / scale).coerceIn(0f, 1f)
+            val level = (ln(1f + normalized * GAIN) / LOG_NORM).coerceIn(0f, 1f)
             val prev = smoothed[b]
             // Fast attack, slow release — the classic lively spectrum feel.
             smoothed[b] = if (level >= prev) level else prev * RELEASE + level * (1f - RELEASE)
@@ -190,10 +220,30 @@ class AudioVisualizer @Inject constructor() {
     companion object {
         const val BAR_COUNT = 56
         private const val FFT_SIZE = 512
+        private const val HALF_SIZE = FFT_SIZE / 2f
         private const val DOWNSAMPLE = 2
         private const val FRAME_MS = 40L // ~25 fps updates
-        private const val GAIN = 42f
+
+        /**
+         * Curve of the level → bar-height mapping. A little perceptual lift so quiet detail still shows,
+         * but far gentler than a broadcast-style compressor: high values flatten everything towards the
+         * top, which is exactly the "always maxed" look this replaced.
+         */
+        private const val GAIN = 5f
         private val LOG_NORM = ln(1f + GAIN)
+
+        /** How fast the adaptive reference falls (per frame). ~0.5 s to follow a drop in level. */
+        private const val AGC_DECAY = 0.94f
+
+        /** Floor for the reference, so near-silence doesn't get amplified into full-height noise. */
+        private const val AGC_FLOOR = 0.02f
+
+        /** Slack above the loudest band, so the tallest bar normally sits below the ceiling. */
+        private const val HEADROOM = 1.25f
+
+        /** Extra gain applied to the highest band by the spectral tilt (lowest band keeps 1x). */
+        private const val TILT_TOP_BOOST = 9f
+
         private const val RELEASE = 0.80f
         private const val IDLE = 0.05f
         private const val IDLE_DECAY = 0.86f

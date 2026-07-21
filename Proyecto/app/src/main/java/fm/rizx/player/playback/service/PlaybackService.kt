@@ -38,6 +38,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
@@ -96,6 +97,11 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
 
         val dataSourceFactory = ResolvingDataSource.Factory(DefaultDataSource.Factory(this), streamResolver)
+        // Hi-Res output (opt-in): force the 32-bit float PCM output path so high-resolution local files
+        // aren't truncated to 16-bit. Read once here because the sink is built once — the setting therefore
+        // applies to this playback session (a live toggle takes effect on the next service start). It's a
+        // tiny startup read, like AudioEffects reads normalizeVolume; a no-op for 16-bit/lossy sources.
+        val hiResOutput = runBlocking { settings.hiResOutput.first() }
         // A pass-through TeeAudioProcessor taps the decoded PCM so the Now Playing waveform can react to
         // the actual audio spectrum. It runs before the default silence/speed processors and outputs the
         // buffer unchanged, so it doesn't affect playback. No RECORD_AUDIO permission (it's our own audio).
@@ -105,7 +111,7 @@ class PlaybackService : MediaSessionService() {
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
             ): AudioSink = DefaultAudioSink.Builder(context)
-                .setEnableFloatOutput(enableFloatOutput)
+                .setEnableFloatOutput(enableFloatOutput || hiResOutput)
                 .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                 .setAudioProcessors(arrayOf(TeeAudioProcessor(visualizer.sink)))
                 .build()

@@ -2,5 +2,18 @@
 <resources>
     <!-- Pre-Compose window background = Ivory (dark) surface, to avoid a white launch flash. -->
     <color name="rizx_window_bg">#0A0A0B</color>
-    <color name="ic_launcher_background">#0A0A0B</color>
+
+    <!-- Brand identity palette ("Bold Evolution"). -->
+    <color name="rizx_brand_paper">#F3ECE2</color>   <!-- ivory paper: the app-icon field -->
+    <color name="rizx_brand_ink">#161616</color>     <!-- the logomark itself -->
+    <color name="rizx_brand_accent">#FB4312</color>  <!-- dynamic accent slash / brand dot -->
+
+    <!-- Launcher icon field: the ivory paper the logomark sits on. -->
+    <color name="ic_launcher_background">@color/rizx_brand_paper</color>
+
+    <!--
+      Splash background. Uses the app's own window background rather than the identity sheet's
+      #181818 so the splash hands off to the first Compose frame with no visible colour step.
+    -->
+    <color name="rizx_splash_bg">@color/rizx_window_bg</color>
 </resources>

@@ -11,4 +11,22 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
+
+    <!--
+      Launch theme. Android 12+ always draws a system splash on cold start, and its icon slot is masked to
+      a circle — it can only ever hold the bare symbol, never the full "logomark + Rizx." lockup. So the
+      launch is staged: this system splash covers the ~2s until Compose's first frame (same dark field,
+      symbol only, nothing clipped), then RizxSplash presents the complete lockup at full size.
+
+      Blanking this icon was tried and reverted: it turned the entire cold start into an empty black
+      screen. windowSplashScreenIconBackgroundColor stays unset so no circle is painted behind the mark.
+
+      Inherits Theme.Rizx, so nothing has to be swapped at runtime once the splash dismisses. Uses the
+      *platform* SplashScreen API (API 31+), not androidx.core:splashscreen — minSdk is 34, so no compat
+      shim and no new dependency is needed.
+    -->
+    <style name="Theme.Rizx.Splash" parent="Theme.Rizx">
+        <item name="android:windowSplashScreenBackground">@color/rizx_splash_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+    </style>
 </resources>

@@ -56,6 +56,15 @@ interface SettingsRepository {
     suspend fun setNormalizeVolume(enabled: Boolean)
 
     /**
+     * Hi-Res output: force ExoPlayer's 32-bit float PCM output path so high-resolution audio (24-bit /
+     * high-sample-rate local lossless files) isn't truncated to 16-bit. **Off by default.** Applies to the
+     * next playback session (the audio sink is built once, at service start); it's a no-op for 16-bit/lossy
+     * sources and on devices whose DAC can't do float.
+     */
+    val hiResOutput: Flow<Boolean>
+    suspend fun setHiResOutput(enabled: Boolean)
+
+    /**
      * Play the song's video muted behind the Now Playing artwork. **Off by default**: it pulls a second
      * stream on top of the audio, and for the auto-generated uploads that make up most of YouTube Music
      * the "video" is a still image, so it must be asked for rather than assumed.

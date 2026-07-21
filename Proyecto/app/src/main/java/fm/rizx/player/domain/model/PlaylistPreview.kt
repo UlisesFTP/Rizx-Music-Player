@@ -9,4 +9,6 @@ data class PlaylistPreview(
     val description: String? = null,
     val tracks: List<Track> = emptyList(),
     val origin: ProviderRef? = null,
+    /** The playlist's own cover, when the source supplies one. Persisted with the saved playlist. */
+    val artwork: ArtworkSet? = null,
 )

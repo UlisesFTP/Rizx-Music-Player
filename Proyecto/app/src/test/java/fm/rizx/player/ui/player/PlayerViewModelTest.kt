@@ -49,6 +49,8 @@ class PlayerViewModelTest {
         override suspend fun setGapless(enabled: Boolean) {}
         override val normalizeVolume: Flow<Boolean> = flowOf(false)
         override suspend fun setNormalizeVolume(enabled: Boolean) {}
+        override val hiResOutput: Flow<Boolean> = flowOf(false)
+        override suspend fun setHiResOutput(enabled: Boolean) {}
         override val canvasEnabled: Flow<Boolean> = flowOf(false)
         override suspend fun setCanvasEnabled(enabled: Boolean) {}
     }

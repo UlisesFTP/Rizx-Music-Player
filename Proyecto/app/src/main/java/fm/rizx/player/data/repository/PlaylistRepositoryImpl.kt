@@ -4,8 +4,13 @@ import fm.rizx.player.data.local.db.PlaylistDao
 import fm.rizx.player.data.local.db.PlaylistEntity
 import fm.rizx.player.data.local.db.PlaylistItemEntity
 import fm.rizx.player.core.error.AppError
+import fm.rizx.player.data.artwork.TrackArtworkEnricher
 import fm.rizx.player.data.local.store.PlaylistTransfer
 import fm.rizx.player.data.local.store.TrackJson
+import fm.rizx.player.domain.model.Artwork
+import fm.rizx.player.domain.model.ArtworkPurpose
+import fm.rizx.player.domain.model.ArtworkSet
+import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.domain.model.Playlist
 import fm.rizx.player.domain.model.PlaylistItem
 import fm.rizx.player.domain.model.PlaylistSummary
@@ -32,13 +37,17 @@ class PlaylistRepositoryImpl(
     private val dao: PlaylistDao,
     private val registry: ProviderRegistry? = null,
     private val enabled: EnabledProviderStore? = null,
+    /** Fills in covers a source didn't supply. Null in tests that don't exercise artwork. */
+    private val artwork: TrackArtworkEnricher? = null,
     private val newId: () -> String = { UUID.randomUUID().toString() },
     private val nowIso: () -> String = { Instant.now().toString() },
 ) : PlaylistRepository {
 
     override fun playlists(): Flow<List<PlaylistSummary>> =
         dao.observeSummaries().map { rows ->
-            rows.map { PlaylistSummary(it.id, it.name, it.description, it.itemCount, it.isReadOnly) }
+            rows.map {
+                PlaylistSummary(it.id, it.name, it.description, it.itemCount, it.isReadOnly, it.artworkUrl)
+            }
         }
 
     override fun playlist(id: String): Flow<Playlist?> =
@@ -120,7 +129,40 @@ class PlaylistRepositoryImpl(
         val provider = playlistProviderFor(url)
             ?: throw AppError.ProviderFailure("Import", "No provider can import this URL")
         val preview = provider.fetchPlaylist(url)
-        return saveImported(preview.name, preview.description, preview.tracks, origin = preview.origin?.id)
+        // Fill in what the source didn't give us: per-track covers (Spotify supplies none) and, only if the
+        // playlist itself came without one, a cover borrowed from its tracks.
+        val tracks = artwork?.enrich(preview.tracks) ?: preview.tracks
+        val cover = preview.artwork.coverUrl() ?: artwork?.playlistCover(tracks)
+        return saveImported(
+            preview.name, preview.description, tracks, origin = preview.origin?.id, artworkUrl = cover,
+        )
+    }
+
+    /**
+     * Repairs covers on an already-saved playlist. Cheap no-op once everything has artwork, so callers can
+     * fire it on every open. Failures are swallowed — a missing cover must never break opening a playlist.
+     */
+    override suspend fun backfillArtwork(id: String) {
+        val enricher = artwork ?: return
+        val entity = dao.getPlaylist(id) ?: return
+        val items = dao.getItems(id)
+        if (items.isEmpty()) return
+
+        val decoded = items.map { it to TrackJson.decodeTrack(it.trackJson) }
+        if (entity.artworkUrl != null && decoded.all { (_, track) -> track.artwork.coverUrl() != null }) return
+
+        runCatching {
+            val enriched = enricher.enrich(decoded.map { (_, track) -> track })
+            decoded.forEachIndexed { index, (item, before) ->
+                val after = enriched[index]
+                if (after.artwork.coverUrl() != before.artwork.coverUrl()) {
+                    dao.updateItemTrack(item.id, TrackJson.encodeTrack(after))
+                }
+            }
+            if (entity.artworkUrl == null) {
+                enricher.playlistCover(enriched)?.let { dao.setArtworkUrl(id, it) }
+            }
+        }
     }
 
     override suspend fun previewPlaylist(source: ProviderRef): List<Track> {
@@ -157,7 +199,13 @@ class PlaylistRepositoryImpl(
      * Persists an imported playlist immediately (import always sticks — no extra "save" step) as a normal,
      * **editable** playlist with a fresh id and resolution-stripped items. [origin] keeps the provenance.
      */
-    private suspend fun saveImported(name: String, description: String?, tracks: List<Track>, origin: String?): String {
+    private suspend fun saveImported(
+        name: String,
+        description: String?,
+        tracks: List<Track>,
+        origin: String?,
+        artworkUrl: String? = null,
+    ): String {
         val id = newId()
         val now = nowIso()
         dao.insertPlaylist(
@@ -165,6 +213,7 @@ class PlaylistRepositoryImpl(
                 id = id, name = name, description = description,
                 createdAtIso = now, lastModifiedIso = now,
                 isReadOnly = false, parentId = null, originProvider = "import", originId = origin ?: id,
+                artworkUrl = artworkUrl,
             ),
         )
         // Insert items directly rather than via addTracks() so lastModified isn't bumped per track.
@@ -193,6 +242,8 @@ class PlaylistRepositoryImpl(
 
     private fun PlaylistEntity.toDomain(items: List<PlaylistItem>) = Playlist(
         id = id, name = name, description = description,
+        artwork = artworkUrl?.takeIf { it.isNotBlank() }
+            ?.let { ArtworkSet(listOf(Artwork(url = it, purpose = ArtworkPurpose.COVER))) },
         createdAtIso = createdAtIso, lastModifiedIso = lastModifiedIso,
         origin = if (originProvider != null && originId != null) ProviderRef(originProvider, originId) else null,
         isReadOnly = isReadOnly, parentId = parentId, items = items,

@@ -33,13 +33,17 @@ interface PlaylistDao {
     @Query(
         """
         SELECT p.id AS id, p.name AS name, p.description AS description, p.isReadOnly AS isReadOnly,
-               COUNT(i.id) AS itemCount
+               p.artworkUrl AS artworkUrl, COUNT(i.id) AS itemCount
         FROM playlists p LEFT JOIN playlist_items i ON i.playlistId = p.id
         GROUP BY p.id
         ORDER BY p.lastModifiedIso DESC
         """,
     )
     fun observeSummaries(): Flow<List<PlaylistSummaryRow>>
+
+    /** Sets the cover without touching lastModifiedIso — artwork is a cache, not a user edit. */
+    @Query("UPDATE playlists SET artworkUrl = :url WHERE id = :id")
+    suspend fun setArtworkUrl(id: String, url: String?)
 
     // ---- Items ----
 
@@ -54,6 +58,10 @@ interface PlaylistDao {
 
     @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId ORDER BY sortOrder ASC")
     suspend fun getItems(playlistId: String): List<PlaylistItemEntity>
+
+    /** Rewrites a stored track in place — used to backfill cover art onto already-imported items. */
+    @Query("UPDATE playlist_items SET trackJson = :trackJson WHERE id = :itemId")
+    suspend fun updateItemTrack(itemId: String, trackJson: String)
 
     @Query("UPDATE playlist_items SET sortOrder = :order WHERE id = :itemId")
     suspend fun updateOrder(itemId: String, order: Int)

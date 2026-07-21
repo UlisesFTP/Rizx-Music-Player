@@ -53,6 +53,16 @@ interface PlaylistRepository {
      * the matching playlist provider (Deezer / YouTube / Spotify). Returns empty if none can serve it.
      */
     suspend fun previewPlaylist(source: ProviderRef): List<Track>
+
+    /**
+     * Fills in any cover art an already-saved playlist is missing — its own cover and the covers of its
+     * tracks — and persists the result. Idempotent and safe to call on every open: a playlist that already
+     * has artwork does no work and makes no network calls.
+     *
+     * Exists because imports predating cover support (and sources like Spotify, whose tracklist carries no
+     * images) leave blank tiles behind; this repairs them in place instead of forcing a re-import.
+     */
+    suspend fun backfillArtwork(id: String)
 }
 
 class ReadOnlyPlaylistException(id: String) : Exception("Playlist $id is read-only")

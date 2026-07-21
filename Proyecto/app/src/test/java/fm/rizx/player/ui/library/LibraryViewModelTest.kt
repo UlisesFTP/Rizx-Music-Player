@@ -64,6 +64,7 @@ class LibraryViewModelTest {
         override suspend fun importPlaylistFile(text: String, fallbackName: String?): String = "id"
         override suspend fun importFromUrl(url: String): String = "id"
         override suspend fun previewPlaylist(source: ProviderRef): List<Track> = emptyList()
+        override suspend fun backfillArtwork(id: String) = Unit
     }
 
     private class FakeRecent : RecentlyPlayedRepository {

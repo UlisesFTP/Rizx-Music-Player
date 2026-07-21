@@ -52,20 +52,23 @@ class SettingsRepositoryTest {
     fun `audio and data toggles use their defaults then persist`() = runTest {
         val repo = SettingsRepositoryImpl(backgroundScope.newStore())
 
-        // Defaults: quality is max (data saver off), gapless on, crossfade + normalize off.
+        // Defaults: quality is max (data saver off), gapless on, crossfade + normalize + hi-res off.
         assertEquals(false, repo.dataSaver.first())
         assertEquals(false, repo.crossfade.first())
         assertEquals(true, repo.gapless.first())
         assertEquals(false, repo.normalizeVolume.first())
+        assertEquals(false, repo.hiResOutput.first())
 
         repo.setDataSaver(true)
         repo.setCrossfade(true)
         repo.setGapless(false)
         repo.setNormalizeVolume(true)
+        repo.setHiResOutput(true)
 
         assertEquals(true, repo.dataSaver.first())
         assertEquals(true, repo.crossfade.first())
         assertEquals(false, repo.gapless.first())
         assertEquals(true, repo.normalizeVolume.first())
+        assertEquals(true, repo.hiResOutput.first())
     }
 }

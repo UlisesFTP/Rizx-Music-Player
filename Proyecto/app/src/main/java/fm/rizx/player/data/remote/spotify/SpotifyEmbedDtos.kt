@@ -32,10 +32,17 @@ data class SpotifyEmbedEntity(
     val type: String? = null,
     val uri: String? = null,
     val subtitle: String? = null,
+    /** The playlist's own cover. Verified present on the live embed — this is the import's real cover. */
+    val coverArt: SpotifyCoverArtDto? = null,
     val trackList: List<SpotifyEmbedTrackDto> = emptyList(),
 )
 
-/** One tracklist row. [duration] is **milliseconds**; [uri] is `spotify:track:<id>`; [subtitle] the artists. */
+/**
+ * One tracklist row. [duration] is **milliseconds**; [uri] is `spotify:track:<id>`; [subtitle] the artists.
+ *
+ * [coverArt] is declared for completeness but is **empty on playlist embeds** (verified live: 0 of 50 rows
+ * carried an image). Per-track covers therefore have to be sourced elsewhere — see `TrackArtworkEnricher`.
+ */
 @Serializable
 data class SpotifyEmbedTrackDto(
     val uri: String? = null,
@@ -43,4 +50,17 @@ data class SpotifyEmbedTrackDto(
     val subtitle: String? = null,
     val duration: Long? = null,
     val isPlayable: Boolean? = null,
+    val coverArt: SpotifyCoverArtDto? = null,
+)
+
+/** An image set: `{ "sources": [ { "url": ..., "width": ..., "height": ... } ] }`. */
+@Serializable
+data class SpotifyCoverArtDto(val sources: List<SpotifyImageDto> = emptyList())
+
+/** One image variant. Spotify frequently reports `width`/`height` as null, so both stay optional. */
+@Serializable
+data class SpotifyImageDto(
+    val url: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
 )

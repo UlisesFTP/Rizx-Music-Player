@@ -528,9 +528,15 @@ private fun PlaylistRow(playlist: PlaylistSummary, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(13.dp),
     ) {
-        // A playlist has no cover art of its own, so give it identity the way the rest of the app does:
-        // the same tinted CoverArt tile, carrying its initial — no data model change needed.
-        CoverArt(tintFor(playlist.id), initial = playlist.name.take(1).uppercase(), Modifier.size(46.dp), initialSize = 20)
+        // Imported playlists carry their real cover; anything without one falls back to the tinted tile
+        // with its initial, exactly as before (CoverArt already handles a null/failed image).
+        CoverArt(
+            tintFor(playlist.id),
+            initial = playlist.name.take(1).uppercase(),
+            Modifier.size(46.dp),
+            initialSize = 20,
+            imageUrl = playlist.artworkUrl,
+        )
         Column(Modifier.weight(1f)) {
             Text(playlist.name, style = mr(15, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(

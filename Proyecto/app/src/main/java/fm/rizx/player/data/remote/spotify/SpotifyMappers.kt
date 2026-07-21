@@ -1,5 +1,8 @@
 package fm.rizx.player.data.remote.spotify
 
+import fm.rizx.player.domain.model.Artwork
+import fm.rizx.player.domain.model.ArtworkPurpose
+import fm.rizx.player.domain.model.ArtworkSet
 import fm.rizx.player.domain.model.ArtistCredit
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Track
@@ -47,6 +50,23 @@ fun SpotifyEmbedTrackDto.toTrackOrNull(): Track? {
         title = name,
         artists = artists,
         durationMs = duration?.takeIf { it > 0 }, // already milliseconds
+        // Normally null on playlist embeds; kept so album/track embeds (which do carry art) map for free.
+        artwork = coverArt.toArtworkSet(),
         source = SpotifyIds.track(trackId),
     )
+}
+
+/**
+ * Maps Spotify's image set to an [ArtworkSet], dropping blank urls. Returns null (not an empty set) when
+ * there is nothing usable, so callers can treat "no cover" as a single null check.
+ *
+ * Every variant is tagged [ArtworkPurpose.COVER]; Spotify usually omits width/height, which simply makes
+ * `pick()` fall back to the first entry.
+ */
+fun SpotifyCoverArtDto?.toArtworkSet(): ArtworkSet? {
+    val items = this?.sources.orEmpty().mapNotNull { source ->
+        val url = source.url?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        Artwork(url = url, width = source.width, height = source.height, purpose = ArtworkPurpose.COVER)
+    }
+    return items.takeIf { it.isNotEmpty() }?.let { ArtworkSet(it) }
 }

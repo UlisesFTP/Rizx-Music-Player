@@ -32,6 +32,12 @@ data class PlaylistEntity(
     val parentId: String?,
     val originProvider: String?,
     val originId: String?,
+    /**
+     * The playlist's cover (v3). Stored as a single URL rather than a serialized [ArtworkSet]: a cover is
+     * displayed at one size, and a plain column keeps the list projection cheap. Remote and re-fetchable,
+     * so it is a cache, never durable truth.
+     */
+    val artworkUrl: String? = null,
 )
 
 /**
@@ -80,4 +86,5 @@ data class PlaylistSummaryRow(
     val description: String?,
     val isReadOnly: Boolean,
     val itemCount: Int,
+    val artworkUrl: String? = null,
 )

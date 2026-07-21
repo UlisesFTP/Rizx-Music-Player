@@ -5,6 +5,7 @@ import fm.rizx.player.data.remote.spotify.SpotifyEmbedEntity
 import fm.rizx.player.data.remote.spotify.SpotifyEmbedNextData
 import fm.rizx.player.data.remote.spotify.SpotifyIds
 import fm.rizx.player.data.remote.spotify.spotifyPlaylistId
+import fm.rizx.player.data.remote.spotify.toArtworkSet
 import fm.rizx.player.data.remote.spotify.toTrackOrNull
 import fm.rizx.player.domain.model.PlaylistPreview
 import fm.rizx.player.domain.provider.PlaylistProvider
@@ -60,6 +61,8 @@ class SpotifyPlaylistProvider(
                     description = describe(entity),
                     tracks = tracks,
                     origin = SpotifyIds.playlist(playlistId),
+                    // The embed does carry the playlist's own cover, even though its rows carry none.
+                    artwork = entity.coverArt.toArtworkSet(),
                 )
             }
         } catch (e: CancellationException) {

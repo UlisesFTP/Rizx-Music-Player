@@ -44,6 +44,8 @@ fun PreferencesScreen(
     val crossfade by vm.crossfade.collectAsStateWithLifecycle()
     val gapless by vm.gapless.collectAsStateWithLifecycle()
     val normalize by vm.normalize.collectAsStateWithLifecycle()
+    val hiRes by vm.hiRes.collectAsStateWithLifecycle()
+    val audioOutputLabel by vm.audioOutputLabel.collectAsStateWithLifecycle()
     val dataSaver by vm.dataSaver.collectAsStateWithLifecycle()
     val cacheSize by vm.cacheSize.collectAsStateWithLifecycle()
 
@@ -64,6 +66,15 @@ fun PreferencesScreen(
         ToggleRow("Crossfade", crossfade) { vm.setCrossfade(!crossfade) }
         ToggleRow("Gapless playback", gapless) { vm.setGapless(!gapless) }
         ToggleRow("Normalize volume", normalize) { vm.setNormalize(!normalize) }
+        ToggleRowDetail(
+            title = "Hi-Res output",
+            caption = buildString {
+                append("Best with local lossless files\n")
+                if (audioOutputLabel.isNotEmpty()) { append(audioOutputLabel); append(" · ") }
+                append("applies on next playback")
+            },
+            checked = hiRes,
+        ) { vm.setHiRes(!hiRes) }
 
         SectionLabel("Appearance")
         SettingRow("Theme", if (isDark) "Dark" else "Light", onClick = onToggleTheme)
@@ -112,6 +123,26 @@ private fun ToggleRow(title: String, checked: Boolean, onToggle: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(title, style = mr(14, FontWeight.SemiBold), color = c.text, modifier = Modifier.weight(1f))
+        RizxToggle(checked = checked, onToggle = onToggle)
+    }
+}
+
+/** A [ToggleRow] with a muted caption line under the title — used to carry the Hi-Res explainer + the
+ *  device's DAC capability, without a second (misleading) chevron row. */
+@Composable
+private fun ToggleRowDetail(title: String, caption: String, checked: Boolean, onToggle: () -> Unit) {
+    val c = RizxTheme.colors
+    Row(
+        Modifier.fillMaxWidth().clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onToggle).padding(vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = mr(14, FontWeight.SemiBold), color = c.text)
+            if (caption.isNotEmpty()) {
+                Text(caption, style = mr(11, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 3.dp))
+            }
+        }
         RizxToggle(checked = checked, onToggle = onToggle)
     }
 }

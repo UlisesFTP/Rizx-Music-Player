@@ -304,7 +304,7 @@ fun NowPlayingScreen(
                         Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp, vertical = 14.dp)
-                            .height(52.dp)
+                            .height(WAVEFORM_HEIGHT)
                             .pointerInput(Unit) {
                                 detectTapGestures { offset ->
                                     haptics.select()
@@ -698,3 +698,11 @@ private fun FooterChip(
 
 // (The animated "snake-lights" aurora was removed: the dark Now Playing backdrop is now a
 // smooth wash of the album's own colours, matching the reference.)
+
+/**
+ * Height of the waveform scrubber (was 52.dp). Trimmed ~25% to hand vertical space back to the title and
+ * transport below it, which is what keeps the player from cramping on shorter screens. The bars scale to
+ * this box and the seek maths is relative to the canvas, so shrinking it costs no scrubbing accuracy — and
+ * it stays well above the 48.dp touch-target guidance once the 14.dp vertical padding is counted.
+ */
+private val WAVEFORM_HEIGHT = 39.dp

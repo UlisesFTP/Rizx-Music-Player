@@ -1,6 +1,7 @@
 package fm.rizx.player.data.provider
 
 import fm.rizx.player.core.error.AppError
+import fm.rizx.player.domain.model.coverUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -40,14 +41,17 @@ class SpotifyPlaylistProviderTest {
         embedUrlTemplate = server.url("/embed/playlist/").toString() + "%s",
     )
 
-    private fun embedHtml(tracks: String, name: String = "Today’s Top Hits"): String =
+    private fun embedHtml(tracks: String, name: String = "Today’s Top Hits", coverArt: String = ""): String =
         """<!DOCTYPE html><html><body><div>markup</div>
            <script id="__NEXT_DATA__" type="application/json">
            {"props":{"pageProps":{"state":{"data":{"entity":
-             {"type":"playlist","name":"$name","subtitle":"Spotify","trackList":[$tracks]}
+             {"type":"playlist","name":"$name","subtitle":"Spotify",$coverArt"trackList":[$tracks]}
            }}}}}
            </script></body></html>
         """.trimIndent()
+
+    /** Shape the live embed actually returns: width/height are usually null. */
+    private fun coverArtJson(url: String) = """"coverArt":{"sources":[{"url":"$url","width":null,"height":null}]},"""
 
     private fun trackJson(id: String, title: String, artists: String, durationMs: Long) =
         """{"uri":"spotify:track:$id","title":"$title","subtitle":"$artists","duration":$durationMs,"isPlayable":true}"""
@@ -84,6 +88,35 @@ class SpotifyPlaylistProviderTest {
         assertEquals("spotify:65DbTqJKhbwqYbZ1Okr0rc", preview.tracks[0].source.identityKey)
         // Comma-joined artists are split so the first stays clean for the streaming search.
         assertEquals(listOf("Shakira", "Burna Boy"), preview.tracks[1].artists.map { it.name })
+    }
+
+    @Test
+    fun `reads the playlist cover from the embed`() = runBlocking {
+        val cover = "https://i.scdn.co/image/ab67706f00000002b2fcce8f3fce2910355ee501"
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                embedHtml(trackJson("65DbTqJKhbwqYbZ1Okr0rc", "Choosin' Texas", "Ella Langley", 232226), coverArt = coverArtJson(cover)),
+            ),
+        )
+
+        val preview = provider().fetchPlaylist("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M")
+
+        assertEquals(cover, preview.artwork.coverUrl())
+    }
+
+    @Test
+    fun `a playlist without cover art previews with no artwork rather than a blank url`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                embedHtml(trackJson("65DbTqJKhbwqYbZ1Okr0rc", "Choosin' Texas", "Ella Langley", 232226)),
+            ),
+        )
+
+        val preview = provider().fetchPlaylist("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M")
+
+        assertEquals(null, preview.artwork)
+        // Rows carry no images on playlist embeds, so tracks stay artwork-less until the enricher runs.
+        assertEquals(null, preview.tracks[0].artwork)
     }
 
     @Test

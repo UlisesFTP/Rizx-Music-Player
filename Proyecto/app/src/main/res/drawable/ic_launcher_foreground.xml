@@ -1,13 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rizx logomark — the "R" letterform fused with concentric broadcast arcs and a record centre,
+  plus the dynamic accent slash on the leg (brand identity: "Bold Evolution").
+
+  Authored as a vector rather than a raster trace because the mark is pure geometry: concentric
+  circles centred on (101,139), a rectangular stem, and two parallelograms. That keeps it sharp at
+  every density and lets the same geometry drive the launcher icon, the splash icon and the
+  monochrome/themed icon. The arcs are stroked circles sliced with trimPathStart/End, so the gaps
+  stay true circles instead of hand-fitted path data.
+
+  Symbol space is 250 x 290; the group scales it to 58/108 of the adaptive canvas so the mark sits
+  inside the safe zone on any launcher mask.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Rizx logomark: an ivory square block with a coral corner notch (from the design header). -->
-    <path
-        android:fillColor="#FFFFE5"
-        android:pathData="M36,36 L72,36 L72,72 L36,72 Z" />
-    <path
-        android:fillColor="#EF6A3C"
-        android:pathData="M64,64 L72,64 L72,72 L64,72 Z" />
+
+    <group
+        android:translateX="29"
+        android:translateY="25"
+        android:scaleX="0.2"
+        android:scaleY="0.2">
+
+        <!--
+          Stem. Its right edge follows the counter circle (r=56 about 101,139) where the two meet, so the
+          bowl's negative space is cut by the outline itself. (A second circular subpath + evenOdd would
+          also fill the part of the circle that overhangs the stem, blotting out the bowl.)
+        -->
+        <path
+            android:fillColor="#161616"
+            android:pathData="M0,39 L104,39 L104,83.08 A56,56 0 0,0 77,189.6 L77,278 L67,289 L0,289 Z" />
+
+        <!-- Record centre. -->
+        <path
+            android:fillColor="#161616"
+            android:pathData="M78,139 A23,23 0 1,0 124,139 A23,23 0 1,0 78,139 Z" />
+
+        <!-- Bowl of the R (inner arc). -->
+        <path
+            android:strokeColor="#161616"
+            android:strokeWidth="26"
+            android:trimPathStart="0.03"
+            android:trimPathEnd="0.402"
+            android:pathData="M101,70 A69,69 0 0,1 101,208 A69,69 0 0,1 101,70 Z" />
+
+        <!-- Outer broadcast arc, upper segment (12 o'clock round to just before 3). -->
+        <path
+            android:strokeColor="#161616"
+            android:strokeWidth="29"
+            android:trimPathStart="0.017"
+            android:trimPathEnd="0.243"
+            android:pathData="M101,14.5 A124.5,124.5 0 0,1 101,263.5 A124.5,124.5 0 0,1 101,14.5 Z" />
+
+        <!-- Outer broadcast arc, lower segment (just after 3 o'clock, ending above the accent slash). -->
+        <path
+            android:strokeColor="#161616"
+            android:strokeWidth="29"
+            android:trimPathStart="0.257"
+            android:trimPathEnd="0.369"
+            android:pathData="M101,14.5 A124.5,124.5 0 0,1 101,263.5 A124.5,124.5 0 0,1 101,14.5 Z" />
+
+        <!-- Leg of the R. -->
+        <path
+            android:fillColor="#161616"
+            android:pathData="M94,200 L153,200 L222,289 L163,289 Z" />
+
+        <!-- Dynamic accent slash. -->
+        <path
+            android:fillColor="#FB4312"
+            android:pathData="M200,244 L215,244 L249,289 L234,289 Z" />
+    </group>
 </vector>

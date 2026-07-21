@@ -11,7 +11,9 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import fm.rizx.player.data.local.db.FavoriteDao
+import fm.rizx.player.data.artwork.TrackArtworkEnricher
 import fm.rizx.player.data.local.db.MIGRATION_1_2
+import fm.rizx.player.data.local.db.MIGRATION_2_3
 import fm.rizx.player.data.local.db.PlaylistDao
 import fm.rizx.player.data.local.db.RecentlyPlayedDao
 import fm.rizx.player.data.local.db.RizxDatabase
@@ -40,7 +42,8 @@ object PersistenceModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RizxDatabase =
         Room.databaseBuilder(context, RizxDatabase::class.java, "rizx.db")
-            .addMigrations(MIGRATION_1_2) // v2 adds recently_played, preserving favorites/playlists
+            // v2 adds recently_played; v3 adds playlists.artworkUrl. Both preserve existing data.
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
 
     @Provides
@@ -56,13 +59,20 @@ object PersistenceModule {
     @Singleton
     fun provideFavoritesRepository(dao: FavoriteDao): FavoritesRepository = FavoritesRepositoryImpl(dao)
 
+    /** Fills in covers an import didn't supply (notably Spotify, whose tracklist carries no images). */
+    @Provides
+    @Singleton
+    fun provideTrackArtworkEnricher(registry: ProviderRegistry): TrackArtworkEnricher =
+        TrackArtworkEnricher(registry)
+
     @Provides
     @Singleton
     fun providePlaylistRepository(
         dao: PlaylistDao,
         registry: ProviderRegistry,
         enabled: EnabledProviderStore,
-    ): PlaylistRepository = PlaylistRepositoryImpl(dao, registry, enabled)
+        artwork: TrackArtworkEnricher,
+    ): PlaylistRepository = PlaylistRepositoryImpl(dao, registry, enabled, artwork)
 
     @Provides
     @Singleton

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Rizx logomark in ivory, drawn tight to its own bounds (250 x 290 — no adaptive-icon safe-zone
+  padding), for use inside the app on dark surfaces: the splash lockup pairs it with the "Rizx."
+  wordmark. Same geometry as ic_launcher_foreground; see that file for how the mark is constructed.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="250dp"
+    android:height="290dp"
+    android:viewportWidth="250"
+    android:viewportHeight="290">
+
+    <!-- Stem; its right edge follows the counter circle so the bowl reads as negative space. -->
+    <path
+        android:fillColor="#F3ECE2"
+        android:pathData="M0,39 L104,39 L104,83.08 A56,56 0 0,0 77,189.6 L77,278 L67,289 L0,289 Z" />
+
+    <!-- Record centre. -->
+    <path
+        android:fillColor="#F3ECE2"
+        android:pathData="M78,139 A23,23 0 1,0 124,139 A23,23 0 1,0 78,139 Z" />
+
+    <!-- Bowl of the R (inner arc). -->
+    <path
+        android:strokeColor="#F3ECE2"
+        android:strokeWidth="26"
+        android:trimPathStart="0.03"
+        android:trimPathEnd="0.402"
+        android:pathData="M101,70 A69,69 0 0,1 101,208 A69,69 0 0,1 101,70 Z" />
+
+    <!-- Outer broadcast arc, upper segment. -->
+    <path
+        android:strokeColor="#F3ECE2"
+        android:strokeWidth="29"
+        android:trimPathStart="0.017"
+        android:trimPathEnd="0.243"
+        android:pathData="M101,14.5 A124.5,124.5 0 0,1 101,263.5 A124.5,124.5 0 0,1 101,14.5 Z" />
+
+    <!-- Outer broadcast arc, lower segment. -->
+    <path
+        android:strokeColor="#F3ECE2"
+        android:strokeWidth="29"
+        android:trimPathStart="0.257"
+        android:trimPathEnd="0.369"
+        android:pathData="M101,14.5 A124.5,124.5 0 0,1 101,263.5 A124.5,124.5 0 0,1 101,14.5 Z" />
+
+    <!-- Leg of the R. -->
+    <path
+        android:fillColor="#F3ECE2"
+        android:pathData="M94,200 L153,200 L222,289 L163,289 Z" />
+
+    <!-- Dynamic accent slash. -->
+    <path
+        android:fillColor="#FB4312"
+        android:pathData="M200,244 L215,244 L249,289 L234,289 Z" />
+</vector>
