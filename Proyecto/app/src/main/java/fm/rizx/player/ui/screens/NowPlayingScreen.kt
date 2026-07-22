@@ -393,7 +393,7 @@ fun NowPlayingScreen(
                     }
 
                     Column(
-                        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
@@ -434,7 +434,17 @@ fun NowPlayingScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        GlassButton(RizxIcons.PlaylistAdd, "Add to playlist", onAddToPlaylist, c.isDark, size = 48.dp, iconSize = 24.dp)
+                        // Shuffle and repeat flank the transport in the order every player uses. They used to
+                        // sit in the footer's opposite corners, split by the artist text — playback *modes*
+                        // divorced from the playback controls, which made them easy to miss.
+                        ModeButton(
+                            icon = RizxIcons.Shuffle,
+                            contentDescription = if (shuffleOn) "Shuffle on — tap to play in order" else "Shuffle off — tap to shuffle",
+                            active = shuffleOn,
+                            onClick = onToggleShuffle,
+                            accent = c.redAccent,
+                            isDark = c.isDark,
+                        )
                         GlassButton(RizxIcons.SkipPrevious, "Previous", onPrevious, c.isDark, size = 50.dp, iconSize = 32.dp)
                         PulsingPlayButton(
                             isPlaying = isPlaying,
@@ -450,13 +460,38 @@ fun NowPlayingScreen(
                             loading = loading,
                         )
                         GlassButton(RizxIcons.SkipNext, "Next", onNext, c.isDark, size = 50.dp, iconSize = 32.dp)
+                        ModeButton(
+                            icon = if (repeatMode == RepeatMode.ONE) RizxIcons.RepeatOne else RizxIcons.Repeat,
+                            contentDescription = when (repeatMode) {
+                                RepeatMode.OFF -> "Repeat off — tap to repeat the queue"
+                                RepeatMode.ALL -> "Repeating the queue — tap to repeat this song"
+                                RepeatMode.ONE -> "Repeating this song — tap to turn repeat off"
+                            },
+                            active = repeatMode != RepeatMode.OFF,
+                            onClick = onToggleRepeat,
+                            accent = c.redAccent,
+                            isDark = c.isDark,
+                        )
+                    }
+
+                    // Track actions sit in their own row so the transport above stays purely playback. Same
+                    // horizontal padding and SpaceBetween as that row, and the same 46.dp button, so these
+                    // land squarely under shuffle (left) and repeat (right) instead of floating loose.
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        GlassButton(RizxIcons.PlaylistAdd, "Add to playlist", onAddToPlaylist, c.isDark, size = 46.dp, iconSize = 22.dp)
                         GlassButton(
                             if (liked) RizxIcons.Favorite else RizxIcons.FavoriteBorder,
-                            "Like",
+                            // State-aware: the old constant "Like" told a screen-reader user nothing about
+                            // whether the song was already liked.
+                            if (liked) "Remove from liked" else "Like",
                             onToggleLike,
                             c.isDark,
-                            size = 48.dp,
-                            iconSize = 24.dp,
+                            size = 46.dp,
+                            iconSize = 22.dp,
                             tint = if (liked) c.redAccent else null,
                         )
                     }
@@ -477,6 +512,8 @@ fun NowPlayingScreen(
             }
 
             // ---- Footer ----
+            // Now purely the "what am I listening to" readout: repeat and shuffle moved up into the
+            // transport row, where playback modes belong.
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -486,19 +523,6 @@ fun NowPlayingScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                FooterChip(
-                    // Repeat-one gets its own glyph; the accent fill is already spent saying "on".
-                    icon = if (repeatMode == RepeatMode.ONE) RizxIcons.RepeatOne else RizxIcons.Repeat,
-                    contentDescription = when (repeatMode) {
-                        RepeatMode.OFF -> "Repeat off — tap to repeat the queue"
-                        RepeatMode.ALL -> "Repeating the queue — tap to repeat this song"
-                        RepeatMode.ONE -> "Repeating this song — tap to turn repeat off"
-                    },
-                    isDark = c.isDark,
-                    active = repeatMode != RepeatMode.OFF,
-                    accent = c.redAccent,
-                    onClick = onToggleRepeat,
-                )
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(artist, style = mr(13, FontWeight.Bold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (album.isNotBlank()) {
@@ -512,14 +536,6 @@ fun NowPlayingScreen(
                         )
                     }
                 }
-                FooterChip(
-                    RizxIcons.Shuffle,
-                    if (shuffleOn) "Shuffle on — tap to play in order" else "Shuffle off — tap to shuffle",
-                    c.isDark,
-                    active = shuffleOn,
-                    accent = c.redAccent,
-                    onClick = onToggleShuffle,
-                )
             }
         }
 
@@ -662,14 +678,20 @@ private fun GlassButton(
     tint: Color? = null,
 ) {
     val c = RizxTheme.colors
-    val bg = if (isDark) Color(0xFF0A0A0D).copy(alpha = 0.34f) else Color.Transparent
-    val line = if (isDark) Color.White.copy(alpha = 0.16f) else Color.Transparent
+    // Light theme used to get a fully transparent background *and* border, leaving bare glyphs floating with
+    // nothing to say they were tappable. Both themes now get a container.
+    val bg = if (isDark) Color(0xFF0A0A0D).copy(alpha = 0.34f) else c.inset
+    val line = if (isDark) Color.White.copy(alpha = 0.16f) else c.hardLine
     val iconTint = tint ?: if (isDark) Color.White.copy(alpha = 0.85f) else c.text
     RizxIconButton(icon, contentDescription, onClick, size = size, iconSize = iconSize, tint = iconTint, background = bg, border = line)
 }
 
+/**
+ * Shuffle / repeat: a playback **mode**, so it shows its on/off state by filling with the accent rather than
+ * just changing glyph. Sized to sit either side of the transport row without competing with the play button.
+ */
 @Composable
-private fun FooterChip(
+private fun ModeButton(
     icon: ImageVector,
     contentDescription: String?,
     isDark: Boolean,

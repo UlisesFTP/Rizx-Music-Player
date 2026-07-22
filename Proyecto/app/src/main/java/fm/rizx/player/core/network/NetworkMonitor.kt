@@ -22,7 +22,16 @@ class NetworkMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     /** A point-in-time read of the active network. */
-    data class Snapshot(val isCellular: Boolean, val downstreamKbps: Int) {
+    data class Snapshot(
+        val isCellular: Boolean,
+        val downstreamKbps: Int,
+        /**
+         * The system says this connection costs nothing to use. Deliberately **not** "is Wi-Fi": a phone
+         * hotspot reports Wi-Fi transport while billing the user's data plan, so background fetching must
+         * key on the metered flag, not the radio.
+         */
+        val isUnmetered: Boolean = false,
+    ) {
         /** A low (but known) downstream-bandwidth estimate — treat as a weak signal. 0/unknown ⇒ false. */
         val isBadSignal: Boolean get() = downstreamKbps in 1 until BAD_SIGNAL_KBPS
     }
@@ -34,11 +43,15 @@ class NetworkMonitor @Inject constructor(
         Snapshot(
             isCellular = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR),
             downstreamKbps = caps.linkDownstreamBandwidthKbps,
+            isUnmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
         )
     }.getOrDefault(UNKNOWN)
 
     private companion object {
-        /** No/unknown network: not cellular, unknown bandwidth (0 ⇒ never flagged as bad signal). */
-        val UNKNOWN = Snapshot(isCellular = false, downstreamKbps = 0)
+        /**
+         * No/unknown network: not cellular, unknown bandwidth, and **not** treated as unmetered — an
+         * unknown connection must never authorise background downloading.
+         */
+        val UNKNOWN = Snapshot(isCellular = false, downstreamKbps = 0, isUnmetered = false)
     }
 }

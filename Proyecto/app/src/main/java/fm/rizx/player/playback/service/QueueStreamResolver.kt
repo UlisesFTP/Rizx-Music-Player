@@ -13,6 +13,7 @@ import fm.rizx.player.domain.repository.LocalLibraryRepository
 import fm.rizx.player.domain.repository.QueueRepository
 import fm.rizx.player.domain.usecase.CandidateResult
 import fm.rizx.player.domain.usecase.StreamingResolver
+import fm.rizx.player.playback.cache.AudioCache
 import fm.rizx.player.playback.queueItemIdFromPlaceholder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +52,8 @@ class QueueStreamResolver @Inject constructor(
     private val settings: PlaybackResolverSettings,
     private val downloads: DownloadRepository,
     private val library: LocalLibraryRepository,
+    /** The streamed-byte cache. Null in unit tests, which exercise the URL-resolution core only. */
+    private val audioCache: AudioCache? = null,
 ) : ResolvingDataSource.Resolver {
 
     private data class CachedStream(val stream: Stream, val resolvedAtMs: Long)
@@ -66,6 +69,13 @@ class QueueStreamResolver @Inject constructor(
     /** Content keys the background prefetch is currently resolving, so we never double-fetch one. */
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
 
+    /**
+     * Keys whose "play straight from the byte cache" shortcut failed once (evicted mid-read, corrupt
+     * entry). Without this the retry would take the same broken shortcut and loop; with it, the song
+     * falls back to a normal network resolve.
+     */
+    private val cacheBypassed = ConcurrentHashMap.newKeySet<String>()
+
     /** Background scope for [warm]; off the ExoPlayer loader thread. Cancelled in [release]. */
     private val prefetchScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -75,6 +85,15 @@ class QueueStreamResolver @Inject constructor(
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
         val id = queueItemIdFromPlaceholder(dataSpec.uri.toString()) ?: return dataSpec
         val item = queue.state.value.items.firstOrNull { it.id == id } ?: return dataSpec
+        val key = item.track.source.identityKey
+
+        // Every byte already on disk? Then don't resolve at all. Skipping that round trip is what makes a
+        // cached song play offline — resolving first would fail with no network and the cache would only
+        // ever have saved bandwidth, not enabled playback.
+        if (key !in cacheBypassed && audioCache?.isFullyCached(key) == true) {
+            queue.updateItemState(id, QueueItemStatus.SUCCESS)
+            return dataSpec.buildUpon().setUri(cachedUri(key)).setKey(key).build()
+        }
 
         // Show LOADING only for a genuine cold miss — a cache hit (prior resolve or prefetch) is instant,
         // and a downloaded file is never a miss at all.
@@ -88,8 +107,18 @@ class QueueStreamResolver @Inject constructor(
         }
         resolvedStreams[id] = stream
         queue.updateItemState(id, QueueItemStatus.SUCCESS)
-        return dataSpec.withUri(Uri.parse(stream.url))
+        // The key is what makes the byte cache work at all. Media3 keys on the URI by default, and ours
+        // are ephemeral — the same song resolves to a different URL tomorrow, so a URI-keyed cache would
+        // miss every time and fill the disk with bytes it could never reuse.
+        return dataSpec.buildUpon().setUri(Uri.parse(stream.url)).setKey(key).build()
     }
+
+    /**
+     * Stand-in URI for a fully-cached song. Never fetched — [androidx.media3.datasource.cache.CacheDataSource]
+     * serves the whole read from disk and only consults the upstream on a miss — but it has to be an
+     * `https` URI so `DefaultDataSource` routes it to the cache-wrapped source rather than the file path.
+     */
+    private fun cachedUri(key: String): Uri = Uri.parse("https://cached.rizx.invalid/${Uri.encode(key)}")
 
     /**
      * Cache-aware resolution and the **testable core** (no Android/Media3 deps): returns the downloaded
@@ -143,9 +172,14 @@ class QueueStreamResolver @Inject constructor(
         }
     }
 
-    /** Drops a content key's cached URL (e.g. after a playback error from an expired URL) so it re-resolves. */
+    /**
+     * Drops a content key's cached URL (e.g. after a playback error from an expired URL) so it
+     * re-resolves, and stops trusting the byte cache for it — a playback error is exactly the signal that
+     * the "it's all on disk" shortcut was wrong.
+     */
     fun invalidate(key: String) {
         streamCache.remove(key)
+        cacheBypassed.add(key)
     }
 
     /** Cancels the background prefetch scope. Call from the service's `onDestroy`. */

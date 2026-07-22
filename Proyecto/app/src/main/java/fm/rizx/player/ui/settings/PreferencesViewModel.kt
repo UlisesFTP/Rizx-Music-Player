@@ -4,10 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.cache.CacheManager
+import fm.rizx.player.data.local.settings.SettingsRepositoryImpl.Companion.DEFAULT_AUDIO_CACHE_BYTES
 import fm.rizx.player.domain.playback.AudioEffectsController
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.playback.AudioOutputCapabilities
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +45,10 @@ class PreferencesViewModel @Inject constructor(
     private val _audioOutputLabel = MutableStateFlow(runCatching { audioOutput.describe() }.getOrDefault(""))
     val audioOutputLabel: StateFlow<String> = _audioOutputLabel.asStateFlow()
 
+    /** The offline-cache ceiling, as a label ("512 MB"). */
+    val audioCacheLimitLabel: StateFlow<String> =
+        settings.audioCacheBytes.map(::cacheLimitLabel).asState(cacheLimitLabel(DEFAULT_AUDIO_CACHE_BYTES))
+
     fun setDataSaver(enabled: Boolean) { viewModelScope.launch { settings.setDataSaver(enabled) } }
     fun setCrossfade(enabled: Boolean) { viewModelScope.launch { settings.setCrossfade(enabled) } }
     fun setGapless(enabled: Boolean) { viewModelScope.launch { settings.setGapless(enabled) } }
@@ -59,6 +66,33 @@ class PreferencesViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Steps to the next cache ceiling, wrapping around. A cycling row beats a dialog for four values,
+     * and the size only takes effect at the next playback session anyway — the cache takes its limit
+     * when it opens.
+     */
+    fun cycleAudioCacheLimit() {
+        viewModelScope.launch {
+            val current = settings.audioCacheBytes.first()
+            val next = CACHE_LIMITS.firstOrNull { it > current } ?: CACHE_LIMITS.first()
+            settings.setAudioCacheBytes(next)
+        }
+    }
+
     private fun <T> Flow<T>.asState(initial: T): StateFlow<T> =
         stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
+
+    private companion object {
+        val CACHE_LIMITS = listOf(
+            256L * 1024 * 1024,
+            512L * 1024 * 1024,
+            1024L * 1024 * 1024,
+            2048L * 1024 * 1024,
+        )
+
+        fun cacheLimitLabel(bytes: Long): String {
+            val mb = bytes / (1024 * 1024)
+            return if (mb >= 1024) "${mb / 1024} GB" else "$mb MB"
+        }
+    }
 }

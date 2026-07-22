@@ -1,5 +1,6 @@
 package fm.rizx.player.data.repository
 
+import fm.rizx.player.data.download.AudioTagWriter
 import fm.rizx.player.data.download.DownloadNotifier
 import fm.rizx.player.data.download.MediaStoreExporter
 import fm.rizx.player.data.download.NotDownloadableException
@@ -9,10 +10,15 @@ import fm.rizx.player.data.local.store.DownloadIndexStore
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadStatus
 import fm.rizx.player.domain.model.DownloadedTrack
+import fm.rizx.player.domain.model.SearchParams
 import fm.rizx.player.domain.model.Stream
 import fm.rizx.player.domain.model.StreamProtocol
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.stripResolutionState
+import fm.rizx.player.domain.model.DetailCapability
+import fm.rizx.player.domain.provider.MetadataProvider
+import fm.rizx.player.domain.provider.ProviderKind
+import fm.rizx.player.domain.provider.ProviderRegistry
 import fm.rizx.player.domain.repository.DownloadRepository
 import fm.rizx.player.domain.usecase.CandidateResult
 import fm.rizx.player.domain.usecase.StreamingResolver
@@ -52,6 +58,10 @@ class DownloadRepositoryImpl(
     private val resolver: StreamingResolver,
     private val exporter: MediaStoreExporter,
     private val notifier: DownloadNotifier,
+    /** Embeds cover/artist/album/date into the finished file. Null in tests that don't exercise tagging. */
+    private val tagWriter: AudioTagWriter? = null,
+    /** Supplies album detail for the release date. Null when no metadata provider is available. */
+    private val registry: ProviderRegistry? = null,
     private val now: () -> Instant = { Instant.now() },
     /** Injectable so tests drive the queue deterministically instead of hopping to a real IO thread. */
     io: CoroutineDispatcher = Dispatchers.IO,
@@ -60,6 +70,9 @@ class DownloadRepositoryImpl(
     private val scope = CoroutineScope(SupervisorJob() + io)
     private val fetchLock = Mutex() // FIFO-fair ⇒ this *is* the queue
     private val jobs = ConcurrentHashMap<String, Job>()
+
+    /** Album identityKey → its tagging info; one lookup per album, not per track. */
+    private val albumInfo = ConcurrentHashMap<String, AlbumInfo>()
 
     private val _index = MutableStateFlow<Map<String, DownloadedTrack>>(emptyMap())
     private val _transient = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
@@ -166,6 +179,46 @@ class DownloadRepositoryImpl(
 
     // ---- Internals ----
 
+    /** Album title + release date for tagging. */
+    private data class AlbumInfo(val title: String?, val releaseDateIso: String?, val year: Int?)
+
+    /**
+     * Album name and release date for [track], or null when unknown.
+     *
+     * A `Track` only carries a light `AlbumRef`, so the date always needs the provider's album detail. And
+     * some sources carry no album at all — a Spotify import's rows give just title/artists/duration — so
+     * when the ref is missing the album is recovered by matching artist+title on the metadata provider,
+     * the same way cover art is. Memoised per album: downloading a whole album must not repeat the lookup
+     * for every track.
+     */
+    private suspend fun albumInfoFor(track: Track): AlbumInfo? {
+        val provider = registry?.list(ProviderKind.METADATA)
+            ?.filterIsInstance<MetadataProvider>()
+            ?.firstOrNull { DetailCapability.ALBUM_DETAIL in it.detailCapabilities }
+            ?: return null
+
+        var albumSource = track.album?.source
+        var title = track.album?.title
+        if (albumSource == null) {
+            val query = listOfNotNull(track.artists.firstOrNull()?.name, track.title)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+                .ifBlank { return null }
+            val match = runCatching {
+                provider.search(SearchParams(query = query, limit = 1)).tracks.firstOrNull()
+            }.getOrNull()
+            albumSource = match?.album?.source
+            title = match?.album?.title ?: title
+        }
+
+        val key = albumSource?.identityKey ?: return title?.let { AlbumInfo(it, null, null) }
+        albumInfo[key]?.let { return it }
+        val album = runCatching { provider.albumDetail(albumSource) }.getOrNull()
+        val info = AlbumInfo(album?.title ?: title, album?.releaseDateIso, album?.year)
+        albumInfo[key] = info
+        return info
+    }
+
     private suspend fun fetch(track: Track, key: String) {
         setTransient(key, DownloadState(DownloadStatus.DOWNLOADING))
         val stream = resolveStream(track) ?: throw NotDownloadableException("No playable source found")
@@ -174,6 +227,13 @@ class DownloadRepositoryImpl(
         }
         val done = downloader.download(key, stream) { percent ->
             setTransient(key, DownloadState(DownloadStatus.DOWNLOADING, progressPercent = percent))
+        }
+        // Embed the metadata *into* the file so the song carries its cover, artist, album and date into any
+        // other player. Best-effort by design: the bytes on disk are already a valid, playable download, so
+        // a tagging failure must not fail it.
+        tagWriter?.let { writer ->
+            val info = runCatching { albumInfoFor(track) }.getOrNull()
+            runCatching { writer.tag(done.file, track, info?.title, info?.releaseDateIso, info?.year) }
         }
         val entry = DownloadedTrack(
             // Keep only the durable half: the resolved URL that fetched these bytes is ephemeral.

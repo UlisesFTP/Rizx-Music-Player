@@ -12,6 +12,8 @@ data class Album(
     val title: String,
     val artists: List<ArtistRef> = emptyList(),
     val year: Int? = null,
+    /** Full release date (`YYYY-MM-DD`) when the provider gives one; [year] is the coarse fallback. */
+    val releaseDateIso: String? = null,
     val artwork: ArtworkSet? = null,
     val tracks: List<Track> = emptyList(),
     val totalTracks: Int? = null,

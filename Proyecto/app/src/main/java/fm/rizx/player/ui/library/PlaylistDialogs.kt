@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import fm.rizx.player.domain.model.PlaylistSummary
+import androidx.compose.ui.graphics.RectangleShape
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.mr
@@ -44,59 +45,43 @@ fun CreatePlaylistDialog(onCreate: (String) -> Unit, onDismiss: () -> Unit) {
     )
 }
 
-/** Prompts for a playlist URL (Deezer / Rizx export) and imports it read-only (Phase 22). */
+/**
+ * Imports a playlist, from a link **or** a file, in one step.
+ *
+ * Previously this was two dialogs — one asking *where from*, another asking *what* — so pasting a link cost
+ * three taps. The link field is by far the common case, so it's here immediately and the file picker is a
+ * secondary row underneath; nobody has to answer a question before they can start.
+ */
 @Composable
-fun ImportUrlDialog(onImport: (String) -> Unit, onDismiss: () -> Unit) {
+fun ImportPlaylistDialog(onImport: (String) -> Unit, onFile: () -> Unit, onDismiss: () -> Unit) {
     var url by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Import playlist from URL") },
+        shape = RectangleShape,
+        title = { Text("Import a playlist") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
                     singleLine = true,
-                    placeholder = { Text("Paste a playlist URL…") },
+                    placeholder = { Text("Paste a playlist link…") },
                 )
                 Text(
-                    "Spotify · YouTube Music · YouTube · Deezer, or a link to an exported playlist file.",
+                    "Spotify · YouTube Music · YouTube · Deezer",
                     style = mr(12, FontWeight.Medium),
                     color = RizxTheme.colors.muted,
                 )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onImport(url); onDismiss() }, enabled = url.isNotBlank()) { Text("Import from URL") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}
-
-/**
- * Asks *where* to import from. One "Import" entry point beats two look-alike icons in the header — the
- * user picks a source in words instead of decoding 🔗 vs ⬇.
- */
-@Composable
-fun ImportSourceDialog(onUrl: () -> Unit, onFile: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Import a playlist") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ImportSourceOption(
-                    title = "From a link",
-                    subtitle = "Spotify · YouTube Music · YouTube · Deezer",
-                    onClick = onUrl,
-                )
-                ImportSourceOption(
-                    title = "From a file",
+                    title = "Import from a file instead",
                     subtitle = "A Rizx, Nuclear or Exportify export",
                     onClick = onFile,
                 )
             }
         },
-        confirmButton = {},
+        confirmButton = {
+            TextButton(onClick = { onImport(url); onDismiss() }, enabled = url.isNotBlank()) { Text("Import") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

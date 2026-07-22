@@ -111,6 +111,12 @@ class PreferencesViewModelTest {
         private val canvasFlow = MutableStateFlow(false)
         override val canvasEnabled = canvasFlow
         override suspend fun setCanvasEnabled(enabled: Boolean) { canvasFlow.value = enabled }
+        private val syncedLyricsFlow = MutableStateFlow(true)
+        override val syncedLyricsMode = syncedLyricsFlow
+        override suspend fun setSyncedLyricsMode(enabled: Boolean) { syncedLyricsFlow.value = enabled }
+        val audioCacheFlow = MutableStateFlow(512L * 1024 * 1024)
+        override val audioCacheBytes = audioCacheFlow
+        override suspend fun setAudioCacheBytes(bytes: Long) { audioCacheFlow.value = bytes }
 
         override val darkTheme = flowOf(true)
         override suspend fun setDarkTheme(dark: Boolean) {}

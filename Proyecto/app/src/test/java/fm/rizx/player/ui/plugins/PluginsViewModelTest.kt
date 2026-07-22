@@ -73,6 +73,10 @@ class PluginsViewModelTest {
         override suspend fun setHiResOutput(enabled: Boolean) {}
         override val canvasEnabled: Flow<Boolean> = flowOf(false)
         override suspend fun setCanvasEnabled(enabled: Boolean) {}
+        override val syncedLyricsMode: Flow<Boolean> = flowOf(true)
+        override suspend fun setSyncedLyricsMode(enabled: Boolean) {}
+        override val audioCacheBytes: Flow<Long> = flowOf(0L)
+        override suspend fun setAudioCacheBytes(bytes: Long) {}
     }
 
     private class NoopPlugins : PluginRepository {

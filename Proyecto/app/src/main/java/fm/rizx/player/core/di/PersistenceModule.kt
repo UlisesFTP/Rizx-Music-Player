@@ -19,6 +19,7 @@ import fm.rizx.player.data.local.db.RecentlyPlayedDao
 import fm.rizx.player.data.local.db.RizxDatabase
 import fm.rizx.player.data.local.settings.EnabledProviderStoreImpl
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
+import fm.rizx.player.data.local.store.LyricsStore
 import fm.rizx.player.data.repository.FavoritesRepositoryImpl
 import fm.rizx.player.data.repository.PlaylistRepositoryImpl
 import fm.rizx.player.data.repository.RecentlyPlayedRepositoryImpl
@@ -29,6 +30,7 @@ import fm.rizx.player.domain.repository.PlaylistRepository
 import fm.rizx.player.domain.repository.RecentlyPlayedRepository
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.domain.usecase.ProviderHealthProbe
+import java.io.File
 import javax.inject.Singleton
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -78,6 +80,15 @@ object PersistenceModule {
     @Singleton
     fun provideRecentlyPlayedRepository(dao: RecentlyPlayedDao): RecentlyPlayedRepository =
         RecentlyPlayedRepositoryImpl(dao)
+
+    /**
+     * Cached lyrics. A plain JSON file rather than a Room table: it is a lookup by track identity with no
+     * queries, no relations and no migrations worth owning — the same call the download index makes.
+     */
+    @Provides
+    @Singleton
+    fun provideLyricsStore(@ApplicationContext context: Context): LyricsStore =
+        LyricsStore(File(context.filesDir, "lyrics.json"))
 
     @Provides
     @Singleton

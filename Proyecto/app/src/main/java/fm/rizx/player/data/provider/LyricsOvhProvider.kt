@@ -2,6 +2,7 @@ package fm.rizx.player.data.provider
 
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.remote.lyricsovh.LyricsOvhApi
+import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.LyricsProvider
 import fm.rizx.player.domain.provider.ProviderKind
@@ -16,6 +17,10 @@ import java.io.IOException
  * Real lyrics provider backed by the keyless lyrics.ovh API (Phase 15). A 404 (no lyrics for the
  * track) is a normal `null` result, not a failure; connectivity problems surface as a typed
  * [AppError] so the UI shows an offline/error state instead of crashing.
+ *
+ * **Prose only** — this API has no timestamps and no search endpoint, so it can't drive the synced
+ * view. It stays registered below [LrcLibProvider] as the plain-text fallback for songs LRCLIB's
+ * community hasn't transcribed.
  */
 class LyricsOvhProvider(
     private val api: LyricsOvhApi,
@@ -26,11 +31,16 @@ class LyricsOvhProvider(
     override val kind: ProviderKind = ProviderKind.LYRICS
     override val name: String = "lyrics.ovh"
 
-    override suspend fun getLyrics(track: Track): String? {
+    override suspend fun getLyrics(track: Track): Lyrics? {
         val artist = track.artists.firstOrNull()?.name?.takeIf { it.isNotBlank() } ?: return null
         val title = track.title.takeIf { it.isNotBlank() } ?: return null
         return try {
-            withContext(io) { api.getLyrics(artist, title).lyrics?.trim()?.takeIf { it.isNotEmpty() } }
+            withContext(io) {
+                api.getLyrics(artist, title).lyrics
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { Lyrics(plain = it, sourceName = name) }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: HttpException) {

@@ -54,6 +54,11 @@ class MediaStoreExporterImpl(
                         ?.let { put(MediaStore.Audio.Media.ARTIST, it) }
                     entry.track.album?.title?.let { put(MediaStore.Audio.Media.ALBUM, it) }
                     entry.track.durationMs?.let { put(MediaStore.Audio.Media.DURATION, it.toInt()) }
+                    // These columns only describe the row in MediaStore's own database — the cover art and
+                    // the authoritative metadata live in the file's embedded tags (AudioTagWriter), which is
+                    // what any other device or player actually reads.
+                    entry.track.trackNumber?.takeIf { it > 0 }
+                        ?.let { put(MediaStore.Audio.Media.TRACK, it) }
                     put(MediaStore.Audio.Media.IS_MUSIC, 1)
                     put(MediaStore.Audio.Media.IS_PENDING, 1)
                 }

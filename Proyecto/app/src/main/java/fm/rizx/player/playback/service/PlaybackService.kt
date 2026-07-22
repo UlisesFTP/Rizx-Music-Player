@@ -11,7 +11,9 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -62,6 +64,8 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var sessionStore: PlaybackSessionStore
     @Inject lateinit var radioTracks: fm.rizx.player.domain.usecase.GetRadioTracksUseCase
     @Inject lateinit var settings: SettingsRepository
+    @Inject lateinit var audioCache: fm.rizx.player.playback.cache.AudioCache
+    @Inject lateinit var cacheCompleter: fm.rizx.player.playback.cache.CacheCompleter
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var player: ExoPlayer
@@ -93,10 +97,25 @@ class PlaybackService : MediaSessionService() {
     /** Queue-item ids already retried as HLS, so a genuinely-broken HLS stream can't loop. */
     private val hlsRetried = mutableSetOf<String>()
 
+    /** Player buffering state, mirrored for off-main-thread readers (see [startCacheCompletion]). */
+    @Volatile
+    private var buffering = false
+
     override fun onCreate() {
         super.onCreate()
 
-        val dataSourceFactory = ResolvingDataSource.Factory(DefaultDataSource.Factory(this), streamResolver)
+        // Streamed audio is cached to disk as it plays, so a replay costs no network and works offline.
+        // The cache wraps *only* the HTTP source: `DefaultDataSource` routes file:// itself, which keeps
+        // downloaded and on-device songs from being copied a second time into the cache.
+        val cachingHttpFactory = CacheDataSource.Factory()
+            .setCache(audioCache.cache)
+            .setUpstreamDataSourceFactory(DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true))
+            // A corrupt or unreadable cache entry falls through to the network instead of failing the song.
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        val dataSourceFactory = ResolvingDataSource.Factory(
+            DefaultDataSource.Factory(this, cachingHttpFactory),
+            streamResolver,
+        )
         // Hi-Res output (opt-in): force the 32-bit float PCM output path so high-resolution local files
         // aren't truncated to 16-bit. Read once here because the sink is built once — the setting therefore
         // applies to this playback session (a live toggle takes effect on the next service start). It's a
@@ -150,6 +169,8 @@ class PlaybackService : MediaSessionService() {
 
         // Bind the equalizer to the player's audio session and restore persisted settings (Phase 15).
         audioEffects.attach(player.audioSessionId)
+
+        startCacheCompletion()
 
         // Restore the last session (queue + cursor + position) before wiring the queue→player sync, so
         // the app resumes on the same song at the same second after the process was killed. Thereafter,
@@ -225,6 +246,27 @@ class PlaybackService : MediaSessionService() {
         if (pendingRestore != null) return
         val snapshot = currentSnapshot()
         runCatching { runBlocking { sessionStore.save(snapshot) } }
+    }
+
+    /**
+     * Tops up half-cached songs on an unmetered connection, so a track you skipped near the end stops
+     * needing the network forever.
+     *
+     * Runs on the service's own scope: this process is already alive and already foreground while music
+     * plays, which is exactly when the user is on a network they chose. The first pass waits a while so it
+     * can't compete with the song that just started, and it pauses whenever the player is buffering —
+     * finishing an old download must never make the current one stutter.
+     */
+    private fun startCacheCompletion() {
+        scope.launch {
+            delay(FIRST_COMPLETION_DELAY_MS)
+            while (true) {
+                // `buffering` rather than `player.playbackState`: this runs off the main thread, and
+                // ExoPlayer throws when its state is read from the wrong one.
+                runCatching { cacheCompleter.completePending(shouldWait = { buffering }) }
+                delay(COMPLETION_INTERVAL_MS)
+            }
+        }
     }
 
     private fun startSaveTicker() {
@@ -406,6 +448,12 @@ class PlaybackService : MediaSessionService() {
     // ---- Player truth → queue cursor + item status ----
 
     private val playerListener = object : Player.Listener {
+        override fun onPlaybackStateChanged(state: Int) {
+            // Mirrored into a field because the cache completer runs on an IO thread, and ExoPlayer
+            // throws if its state is read from anywhere but the thread that owns it.
+            buffering = state == Player.STATE_BUFFERING
+        }
+
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (applyingQueue) return
             // Arm a fade-in only for a natural transition (track ended → next, or repeat) — never a manual
@@ -480,6 +528,12 @@ class PlaybackService : MediaSessionService() {
     private companion object {
         /** How often to snapshot the position while playing (bounds resume drift after a process kill). */
         const val SAVE_INTERVAL_MS = 5_000L
+
+        /** Long enough that the song the user just pressed play on owns the bandwidth it needs. */
+        const val FIRST_COMPLETION_DELAY_MS = 90_000L
+
+        /** Re-check periodically: songs become half-cached as the session goes on. */
+        const val COMPLETION_INTERVAL_MS = 10 * 60_000L
 
         /** Refill the radio when the cursor is within this many items of the end. */
         const val RADIO_REFILL_AHEAD = 2

@@ -1,10 +1,16 @@
 package fm.rizx.player.ui.screens
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +34,7 @@ import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +44,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,10 +90,43 @@ fun LocalLibraryScreen(
 ) {
     val c = RizxTheme.colors
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
     var granted by remember { mutableStateOf(hasAudioPermission(context)) }
+    // True once Android has stopped offering the dialog (declined twice). From then on only Settings works.
+    var blocked by remember { mutableStateOf(false) }
+    // Survives rotation so a config change can't re-prompt on top of an open dialog.
+    var asked by rememberSaveable { mutableStateOf(false) }
+
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         granted = ok
+        // `shouldShowRequestPermissionRationale` is false both before the first ask and after the
+        // permanent denial; checking it here — right after a refusal — separates the two.
+        blocked = !ok && activity?.let { !it.shouldShowRequestPermissionRationale(Manifest.permission.READ_MEDIA_AUDIO) } == true
     }
+
+    // Opening this screen *is* the request: the user came here to see their own music, so making them
+    // tap a second button first is a step with no decision in it.
+    LaunchedEffect(Unit) {
+        if (!granted && !asked) {
+            asked = true
+            launcher.launch(Manifest.permission.READ_MEDIA_AUDIO)
+        }
+    }
+
+    // Granting from Settings happens outside the app, so re-check when we come back rather than leaving
+    // the gate up over a permission the user just allowed.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && !granted && hasAudioPermission(context)) {
+                granted = true
+                blocked = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     LaunchedEffect(granted) { if (granted) vm.refresh() }
 
     val songs by vm.songs.collectAsStateWithLifecycle()
@@ -112,7 +155,14 @@ fun LocalLibraryScreen(
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (!granted) {
-                PermissionGate { launcher.launch(Manifest.permission.READ_MEDIA_AUDIO) }
+                PermissionGate(
+                    blocked = blocked,
+                    onGrant = {
+                        // Once Android has stopped showing the dialog, launching it again does nothing at
+                        // all — the only route left is the app's settings page.
+                        if (blocked) context.openAppSettings() else launcher.launch(Manifest.permission.READ_MEDIA_AUDIO)
+                    },
+                )
             } else {
                 when (view) {
                     LocalView.Songs -> SongsList(songs, onPlay = vm::playAll)
@@ -125,25 +175,54 @@ fun LocalLibraryScreen(
 }
 
 @Composable
-private fun PermissionGate(onGrant: () -> Unit) {
+private fun PermissionGate(blocked: Boolean, onGrant: () -> Unit) {
     val c = RizxTheme.colors
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Outlined.LibraryMusic, null, tint = c.muted, modifier = Modifier.size(44.dp))
             Text("Play your own music", style = sg(18, FontWeight.Bold), color = c.text, modifier = Modifier.padding(top = 14.dp))
             Text(
-                "Allow access to the audio on this device to browse and play your local songs.",
+                if (blocked) {
+                    "Audio access is turned off for Rizx. Turn it on in Settings to browse and play your local songs."
+                } else {
+                    "Allow access to the audio on this device to browse and play your local songs."
+                },
                 style = mr(13, FontWeight.Medium), color = c.muted, textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 6.dp, start = 12.dp, end = 12.dp),
             )
+            // The label used c.onFill — the colour for text *on* a filled button — with no fill behind it,
+            // so on the light theme it was pale ink on pale paper and read as disabled, or as nothing at all.
             Text(
-                "Allow access",
+                if (blocked) "Open settings" else "Allow access",
                 style = sg(14, FontWeight.Bold), color = c.onFill,
                 modifier = Modifier.padding(top = 18.dp)
+                    .background(c.fill)
                     .clickableScale(scale = 0.94f, onClick = onGrant)
                     .padding(horizontal = 24.dp, vertical = 11.dp),
             )
         }
+    }
+}
+
+/** Unwraps the Activity from Compose's context, which is a ContextWrapper chain, not the Activity itself. */
+private fun Context.findActivity(): Activity? {
+    var ctx: Context? = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
+
+/** Opens this app's system settings page — the only way back once the permission dialog is exhausted. */
+private fun Context.openAppSettings() {
+    runCatching {
+        startActivity(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", packageName, null),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 }
 

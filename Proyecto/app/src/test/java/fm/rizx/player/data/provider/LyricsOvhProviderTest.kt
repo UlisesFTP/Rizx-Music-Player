@@ -13,6 +13,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -50,12 +51,14 @@ class LyricsOvhProviderTest {
     )
 
     @Test
-    fun `returns lyrics text on success`() = runBlocking {
+    fun `returns prose on success, never timed lines`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"lyrics":"Look at the stars\nHow they shine for you"}"""))
 
         val lyrics = provider().getLyrics(track())
 
-        assertTrue(lyrics!!.contains("Look at the stars"))
+        assertTrue(lyrics!!.plain!!.contains("Look at the stars"))
+        // This API has no timestamps: the synced view must never think it does.
+        assertFalse(lyrics.isSynced)
     }
 
     @Test

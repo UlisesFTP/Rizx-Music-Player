@@ -118,6 +118,43 @@ fun RizxIconButton(
  */
 fun tintFor(key: String): Int = (key.hashCode() and Int.MAX_VALUE) % 7
 
+/**
+ * A **labelled** action: icon plus a short word, sharp-cornered.
+ *
+ * Exists because an unlabelled glyph in a crowded header makes the user guess — the same reasoning already
+ * written into [DownloadAllButton]. Prefer this over a bare [RizxIconButton] whenever an action isn't
+ * self-evident from its icon alone (creating, importing, exporting…).
+ *
+ * [prominent] fills it as the primary call to action; otherwise it reads as an outlined secondary action.
+ * The 10.dp vertical padding around a 15.dp glyph keeps the touch target comfortable without the 48.dp
+ * square an icon button needs.
+ */
+@Composable
+fun RizxActionButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
+    prominent: Boolean = false,
+) {
+    val c = RizxTheme.colors
+    Row(
+        modifier
+            .clip(RectangleShape)
+            .background(if (prominent) c.fill else c.elev)
+            .then(if (prominent) Modifier else Modifier.border(1.dp, c.hardLine, RectangleShape))
+            .clickableScale(scale = 0.95f, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        val tint = if (prominent) c.onFill else c.text
+        Icon(icon, contentDescription ?: label, tint = tint, modifier = Modifier.size(15.dp))
+        Text(label.uppercase(), style = code(11, FontWeight.Bold), color = tint, maxLines = 1)
+    }
+}
+
 /** Filter pill (sharp-cornered) — active fills with the accent, inactive is an outlined chip. */
 @Composable
 fun RizxChip(

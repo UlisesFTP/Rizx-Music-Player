@@ -9,6 +9,7 @@ import fm.rizx.player.data.remote.audius.AudiusApi
 import fm.rizx.player.data.remote.audius.AudiusHostProvider
 import fm.rizx.player.data.remote.deezer.DeezerApi
 import fm.rizx.player.data.remote.itunes.ItunesApi
+import fm.rizx.player.data.remote.lrclib.LrcLibApi
 import fm.rizx.player.data.remote.lyricsovh.LyricsOvhApi
 import fm.rizx.player.data.remote.soundcloud.NewPipeSoundcloudExtractorClient
 import fm.rizx.player.data.remote.soundcloud.SoundcloudExtractorClient
@@ -39,6 +40,7 @@ object NetworkModule {
 
     private const val ITUNES_BASE_URL = "https://itunes.apple.com/"
     private const val LYRICS_OVH_BASE_URL = "https://api.lyrics.ovh/"
+    private const val LRCLIB_BASE_URL = "https://lrclib.net/"
     private const val AUDIUS_BASE_URL = "https://api.audius.co/"
     private const val DEEZER_BASE_URL = "https://api.deezer.com/"
     private const val USER_AGENT = "RizxPlayer/0.1 (+https://github.com/nukeop/nuclear)"
@@ -87,6 +89,17 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(LyricsOvhApi::class.java)
+
+    /** Timed (LRC) lyrics — keyless. The descriptive User-Agent LRCLIB asks for is set above. */
+    @Provides
+    @Singleton
+    fun provideLrcLibApi(client: OkHttpClient, json: Json): LrcLibApi =
+        Retrofit.Builder()
+            .baseUrl(LRCLIB_BASE_URL)
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(LrcLibApi::class.java)
 
     @Provides
     @Singleton

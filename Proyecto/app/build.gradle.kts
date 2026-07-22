@@ -144,6 +144,11 @@ dependencies {
     // this project's 2.0.21 compiler + Hilt's metadata parser cannot read.
     implementation("io.github.dokar3:quickjs-kt:1.0.0-alpha13")
 
+    // EVALUATION ONLY — audio tag writing (cover art / artist / album / year into the downloaded file).
+    // Being checked for Android compatibility: the stock build reaches for java.awt / javax.imageio in its
+    // artwork path, neither of which exists on Android. Remove if it doesn't hold up.
+    implementation("net.jthink:jaudiotagger:3.0.1")
+
     // Unit tests
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.13")

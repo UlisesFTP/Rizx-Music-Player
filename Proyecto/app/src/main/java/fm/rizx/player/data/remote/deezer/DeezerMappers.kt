@@ -91,6 +91,8 @@ fun DeezerAlbumDto.toAlbum(): Album? {
         title = name,
         artists = listOfNotNull(artist?.toArtistRef()),
         year = yearOf(releaseDate),
+        // Deezer already reports "YYYY-MM-DD"; keep it whole so a tag can carry the exact date.
+        releaseDateIso = releaseDate?.takeIf { it.isNotBlank() },
         artwork = coverSet(coverXl, coverMedium),
         tracks = tracks?.data?.mapNotNull { it.toTrackOrNull() }.orEmpty(),
         totalTracks = nbTracks,

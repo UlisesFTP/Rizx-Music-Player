@@ -103,6 +103,20 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.CANVAS] = enabled }
     }
 
+    // On by default: when a track has timings, the synced view is the point of the feature.
+    override val syncedLyricsMode: Flow<Boolean> = dataStore.data.map { it[Keys.SYNCED_LYRICS] ?: true }
+
+    override suspend fun setSyncedLyricsMode(enabled: Boolean) {
+        dataStore.edit { it[Keys.SYNCED_LYRICS] = enabled }
+    }
+
+    override val audioCacheBytes: Flow<Long> =
+        dataStore.data.map { it[Keys.AUDIO_CACHE_BYTES] ?: DEFAULT_AUDIO_CACHE_BYTES }
+
+    override suspend fun setAudioCacheBytes(bytes: Long) {
+        dataStore.edit { it[Keys.AUDIO_CACHE_BYTES] = bytes }
+    }
+
     // `core.*` namespacing leaves room for future `plugin.*` settings (§7.4).
     private object Keys {
         val DARK_THEME = booleanPreferencesKey("core.ui.darkTheme")
@@ -118,13 +132,18 @@ class SettingsRepositoryImpl(
         val NORMALIZE_VOLUME = booleanPreferencesKey("core.audio.normalizeVolume")
         val HI_RES_OUTPUT = booleanPreferencesKey("core.audio.hiResOutput")
         val CANVAS = booleanPreferencesKey("core.ui.canvas")
+        val SYNCED_LYRICS = booleanPreferencesKey("core.ui.syncedLyrics")
+        val AUDIO_CACHE_BYTES = longPreferencesKey("core.cache.audioBytes")
     }
 
-    private companion object {
-        val DEFAULTS = PlaybackResolverSettings()
+    companion object {
+        /** 512 MB ≈ 100 full songs at 3-8 MB each. */
+        const val DEFAULT_AUDIO_CACHE_BYTES = 512L * 1024 * 1024
+
+        private val DEFAULTS = PlaybackResolverSettings()
 
         /** Parses the comma-separated millibel band levels; ignores malformed entries. */
-        fun decodeLevels(csv: String?): List<Int> =
+        private fun decodeLevels(csv: String?): List<Int> =
             csv?.takeIf { it.isNotBlank() }?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: emptyList()
     }
 }

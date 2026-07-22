@@ -335,7 +335,25 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                 EqualizerScreen(onBack = { nav.popBackStack() })
             }
             composable(Routes.LYRICS) {
-                LyricsScreen(onBack = { nav.popBackStack() })
+                // Position is passed as a lambda, not a value: the 4 Hz ticker would otherwise recompose
+                // the whole lyric list instead of just the line that changed.
+                LyricsScreen(
+                    onBack = { nav.popBackStack() },
+                    positionMs = { playbackState.positionMs },
+                    durationMs = playbackState.durationMs.takeIf { it > 0L }
+                        ?: (currentItem?.track?.durationMs ?: 0L),
+                    isPlaying = playbackState.isPlaying,
+                    onTogglePlay = playbackViewModel::toggle,
+                    onNext = playbackViewModel::next,
+                    onPrevious = playbackViewModel::previous,
+                    onSeekMs = { ms ->
+                        val total = playbackState.durationMs.takeIf { it > 0L }
+                            ?: currentItem?.track?.durationMs
+                        if (total != null && total > 0L) {
+                            playbackViewModel.seekToFraction(ms.toFloat() / total)
+                        }
+                    },
+                )
             }
         }
 
@@ -343,7 +361,12 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
         val showNav = route in Routes.withBottomNav
         // The mini-player follows real playback: it shows wherever something is loaded, except on the
         // full player and the queue list themselves.
-        val showMini = currentItem != null && route != Routes.NOW_PLAYING && route != Routes.QUEUE
+        // Lyrics is excluded alongside them: it carries its own transport, and two stacked sets of play
+        // controls is worse than none.
+        val showMini = currentItem != null &&
+            route != Routes.NOW_PLAYING &&
+            route != Routes.QUEUE &&
+            route != Routes.LYRICS
         if (showNav || showMini) {
             Column(
                 Modifier

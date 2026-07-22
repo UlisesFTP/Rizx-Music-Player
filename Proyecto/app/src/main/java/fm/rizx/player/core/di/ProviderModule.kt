@@ -15,6 +15,7 @@ import fm.rizx.player.data.provider.DeezerMetadataProvider
 import fm.rizx.player.data.provider.DeezerPlaylistProvider
 import fm.rizx.player.data.provider.ItunesMetadataProvider
 import fm.rizx.player.data.provider.ItunesStreamingProvider
+import fm.rizx.player.data.provider.LrcLibProvider
 import fm.rizx.player.data.provider.LyricsOvhProvider
 import fm.rizx.player.data.provider.RizxUrlPlaylistProvider
 import fm.rizx.player.data.provider.SpotifyPlaylistProvider
@@ -27,8 +28,10 @@ import fm.rizx.player.data.remote.audius.AudiusHostProvider
 import fm.rizx.player.data.remote.deezer.DeezerApi
 import fm.rizx.player.data.remote.deezer.DeezerIds
 import fm.rizx.player.data.remote.itunes.ItunesApi
+import fm.rizx.player.data.remote.lrclib.LrcLibApi
 import fm.rizx.player.data.remote.lyricsovh.LyricsOvhApi
 import fm.rizx.player.core.network.NetworkMonitor
+import fm.rizx.player.data.local.store.LyricsStore
 import fm.rizx.player.data.remote.youtube.YoutubeExtractorClient
 import fm.rizx.player.data.remote.youtube.YoutubeIds
 import fm.rizx.player.data.repository.DashboardRepositoryImpl
@@ -63,6 +66,7 @@ object ProviderModule {
         settings: SettingsRepository,
         networkMonitor: NetworkMonitor,
         itunes: ItunesApi,
+        lrcLib: LrcLibApi,
         lyricsOvh: LyricsOvhApi,
         audius: AudiusApi,
         audiusHosts: AudiusHostProvider,
@@ -94,7 +98,11 @@ object ProviderModule {
             register(SoundcloudStreamingProvider(soundcloud, networkMonitor, settings))
             register(AudiusStreamingProvider(audius, audiusHosts))
             register(ItunesStreamingProvider(itunes))
-            // Lyrics provider (Phase 15): keyless lyrics.ovh; single-active for its kind.
+            // Lyrics providers, in fallback order. LRCLIB registers FIRST because activation is
+            // first-wins: it is the only keyless source with **timed** lyrics, so it has to be the active
+            // one for the synced view to work at all. lyrics.ovh stays behind it as the prose fallback for
+            // songs LRCLIB's community hasn't transcribed (LyricsRepositoryImpl walks the chain).
+            register(LrcLibProvider(lrcLib))
             register(LyricsOvhProvider(lyricsOvh))
             // Playlist import-by-URL providers (Phase 22). Service-specific first; the file provider is
             // last because its canHandle is broad (any http URL ending .json/.csv, gist/pastebin/raw).
@@ -133,8 +141,8 @@ object ProviderModule {
 
     @Provides
     @Singleton
-    fun provideLyricsRepository(registry: ProviderRegistry): LyricsRepository =
-        LyricsRepositoryImpl(registry)
+    fun provideLyricsRepository(registry: ProviderRegistry, store: LyricsStore): LyricsRepository =
+        LyricsRepositoryImpl(registry, store)
 
     @Provides
     @Singleton

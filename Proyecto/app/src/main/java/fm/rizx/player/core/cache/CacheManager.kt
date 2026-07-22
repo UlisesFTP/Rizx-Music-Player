@@ -3,7 +3,9 @@ package fm.rizx.player.core.cache
 import android.content.Context
 import coil.annotation.ExperimentalCoilApi
 import coil.imageLoader
+import androidx.media3.common.util.UnstableApi
 import dagger.hilt.android.qualifiers.ApplicationContext
+import fm.rizx.player.playback.cache.AudioCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -11,20 +13,29 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Clears and measures the app's image cache (Coil memory + disk). This is the only user-clearable
- * cache: the playback-session JSON (filesDir), Room (`rizx.db`) and DataStore (`settings`) are durable
- * state and are intentionally never touched here. Every call is guarded so a clear can't crash the UI.
+ * Clears and measures the app's throwaway caches: cover art (Coil) **and** the streamed-audio cache.
+ * These are the only user-clearable stores — the playback-session JSON (filesDir), Room (`rizx.db`),
+ * DataStore (`settings`) and downloaded files are durable state and are intentionally never touched
+ * here. Every call is guarded so a clear can't crash the UI.
+ *
+ * Audio dominates the number by an order of magnitude (songs are megabytes, thumbnails kilobytes), so
+ * the two are reported as one total: what the user wants to know is how much space the app is holding.
  */
+@UnstableApi
 @Singleton
 class CacheManager @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val audioCache: AudioCache,
 ) {
-    /** Human-readable on-disk size of the image cache (e.g. "12.4 MB"); "0 B" when empty/unavailable. */
+    /** Human-readable size of the cached audio + artwork (e.g. "312.4 MB"); "0 B" when empty. */
     @OptIn(ExperimentalCoilApi::class)
-    fun diskSizeLabel(): String =
-        formatBytes(runCatching { context.imageLoader.diskCache?.size ?: 0L }.getOrDefault(0L))
+    fun diskSizeLabel(): String {
+        val images = runCatching { context.imageLoader.diskCache?.size ?: 0L }.getOrDefault(0L)
+        val audio = runCatching { audioCache.sizeBytes() }.getOrDefault(0L)
+        return formatBytes(images + audio)
+    }
 
-    /** Drops the in-memory and on-disk image caches. Safe to call repeatedly. */
+    /** Drops the cached audio and images. Safe to call repeatedly. */
     @OptIn(ExperimentalCoilApi::class)
     suspend fun clear() {
         withContext(Dispatchers.IO) {
@@ -33,6 +44,7 @@ class CacheManager @Inject constructor(
                 loader.memoryCache?.clear()
                 loader.diskCache?.clear()
             }
+            runCatching { audioCache.clear() }
         }
     }
 

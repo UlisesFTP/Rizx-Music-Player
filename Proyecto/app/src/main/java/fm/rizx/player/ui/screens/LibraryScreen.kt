@@ -29,7 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.DriveFileMove
-import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material3.Icon
@@ -66,6 +66,7 @@ import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.CodeLabel
 import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.DownloadButton
+import fm.rizx.player.ui.components.RizxActionButton
 import fm.rizx.player.ui.components.RizxChip
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.SectionHeader
@@ -74,8 +75,7 @@ import fm.rizx.player.ui.components.tintFor
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.library.ConfirmDialog
 import fm.rizx.player.ui.library.CreatePlaylistDialog
-import fm.rizx.player.ui.library.ImportSourceDialog
-import fm.rizx.player.ui.library.ImportUrlDialog
+import fm.rizx.player.ui.library.ImportPlaylistDialog
 import fm.rizx.player.ui.library.LibraryViewModel
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.mr
@@ -120,8 +120,7 @@ fun LibraryScreen(
 
     var tab by rememberSaveable { mutableStateOf(initialTab) }
     var creating by remember { mutableStateOf(false) }
-    var choosingImport by remember { mutableStateOf(false) }
-    var importingUrl by remember { mutableStateOf(false) }
+    var importing by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var confirmDeleteDownload by remember { mutableStateOf<DownloadedTrack?>(null) }
     var confirmDeleteAllDownloads by remember { mutableStateOf(false) }
@@ -178,15 +177,12 @@ fun LibraryScreen(
         }
     }
 
-    if (choosingImport) {
-        ImportSourceDialog(
-            onUrl = { choosingImport = false; importingUrl = true },
-            onFile = { choosingImport = false; importer.launch(arrayOf("application/json", "text/csv", "*/*")) },
-            onDismiss = { choosingImport = false },
+    if (importing) {
+        ImportPlaylistDialog(
+            onImport = { vm.importFromUrl(it, reportImport) },
+            onFile = { importing = false; importer.launch(arrayOf("application/json", "text/csv", "*/*")) },
+            onDismiss = { importing = false },
         )
-    }
-    if (importingUrl) {
-        ImportUrlDialog(onImport = { vm.importFromUrl(it, reportImport) }, onDismiss = { importingUrl = false })
     }
     if (creating) {
         CreatePlaylistDialog(onCreate = vm::createPlaylist, onDismiss = { creating = false })
@@ -229,11 +225,20 @@ fun LibraryScreen(
                 Row(
                     Modifier.fillMaxWidth().padding(top = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text("Your Library", style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
-                    // One "Import" (it asks URL-or-file) instead of two icons the user has to tell apart.
-                    RizxIconButton(Icons.Filled.FileDownload, "Import a playlist", onClick = { choosingImport = true }, iconSize = 22.dp)
-                    RizxIconButton(RizxIcons.Add, "New playlist", onClick = { creating = true }, iconSize = 24.dp)
+                    // Labelled, not bare glyphs: "new" and "import" are not guessable from an icon, and the
+                    // old import icon was a download arrow — which this screen also uses for its Downloads
+                    // tab, so it read as "download" rather than "import".
+                    RizxActionButton(
+                        RizxIcons.Add, "New", onClick = { creating = true },
+                        contentDescription = "New playlist", prominent = true,
+                    )
+                    RizxActionButton(
+                        Icons.Filled.AddLink, "Import", onClick = { importing = true },
+                        contentDescription = "Import a playlist",
+                    )
                 }
             }
 

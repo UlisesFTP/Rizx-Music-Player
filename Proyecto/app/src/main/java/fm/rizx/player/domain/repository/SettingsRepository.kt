@@ -71,4 +71,21 @@ interface SettingsRepository {
      */
     val canvasEnabled: Flow<Boolean>
     suspend fun setCanvasEnabled(enabled: Boolean)
+
+    /**
+     * Show lyrics as a karaoke-style timed view (**on by default**) rather than plain scrolling prose.
+     * Toggled from the lyrics screen itself, and persisted so it survives the next song: the timings come
+     * from a community database and are occasionally wrong, and someone who has decided they'd rather
+     * just read the text shouldn't have to say so again on every track.
+     */
+    val syncedLyricsMode: Flow<Boolean>
+    suspend fun setSyncedLyricsMode(enabled: Boolean)
+
+    /**
+     * How many bytes of streamed audio to keep on disk so replays are instant and work offline.
+     * Defaults to 512 MB (~100 songs). Read once when the cache is opened, so a change takes effect
+     * from the next playback session — the audio cache takes its size limit at construction.
+     */
+    val audioCacheBytes: Flow<Long>
+    suspend fun setAudioCacheBytes(bytes: Long)
 }

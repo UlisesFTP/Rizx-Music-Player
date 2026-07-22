@@ -48,6 +48,7 @@ fun PreferencesScreen(
     val audioOutputLabel by vm.audioOutputLabel.collectAsStateWithLifecycle()
     val dataSaver by vm.dataSaver.collectAsStateWithLifecycle()
     val cacheSize by vm.cacheSize.collectAsStateWithLifecycle()
+    val cacheLimit by vm.audioCacheLimitLabel.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -81,6 +82,16 @@ fun PreferencesScreen(
 
         SectionLabel("Data & storage")
         ToggleRow("Data saver", dataSaver) { vm.setDataSaver(!dataSaver) }
+        // Tapping cycles the limit rather than opening a dialog: four values, and this row already sits
+        // next to "Clear cache", which is where someone worried about space is looking.
+        SettingRow(
+            "Offline cache",
+            buildString {
+                append(cacheLimit)
+                append(" · songs you play are kept for instant, offline replay")
+            },
+            onClick = vm::cycleAudioCacheLimit,
+        )
         SettingRow("Clear cache", cacheSize, onClick = vm::clearCache)
 
         SectionLabel("About")

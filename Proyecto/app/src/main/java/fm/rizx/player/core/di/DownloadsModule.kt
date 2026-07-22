@@ -7,6 +7,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import fm.rizx.player.data.download.AudioTagWriter
 import fm.rizx.player.data.download.DownloadNotifier
 import fm.rizx.player.data.download.MediaStoreExporter
 import fm.rizx.player.data.download.MediaStoreExporterImpl
@@ -17,6 +18,7 @@ import fm.rizx.player.data.download.TrackDownloader
 import fm.rizx.player.data.local.store.DownloadIndexStore
 import fm.rizx.player.data.remote.youtube.YoutubeExtractorClient
 import fm.rizx.player.data.repository.DownloadRepositoryImpl
+import fm.rizx.player.domain.provider.ProviderRegistry
 import fm.rizx.player.domain.repository.DownloadRepository
 import fm.rizx.player.domain.usecase.StreamingResolver
 import okhttp3.OkHttpClient
@@ -77,6 +79,11 @@ object DownloadsModule {
     @Singleton
     fun provideCanvasSource(youtube: YoutubeExtractorClient): CanvasSource = YoutubeCanvasSource(youtube)
 
+    /** Embeds cover/artist/album/date into finished downloads so they carry metadata to any other player. */
+    @Provides
+    @Singleton
+    fun provideAudioTagWriter(client: OkHttpClient): AudioTagWriter = AudioTagWriter(client)
+
     @Provides
     @Singleton
     fun provideDownloadRepository(
@@ -85,7 +92,10 @@ object DownloadsModule {
         resolver: StreamingResolver,
         exporter: MediaStoreExporter,
         notifier: DownloadNotifier,
-    ): DownloadRepository = DownloadRepositoryImpl(store, downloader, resolver, exporter, notifier)
+        tagWriter: AudioTagWriter,
+        registry: ProviderRegistry,
+    ): DownloadRepository =
+        DownloadRepositoryImpl(store, downloader, resolver, exporter, notifier, tagWriter, registry)
 }
 
 /** The app-private folder holding downloaded audio. */
