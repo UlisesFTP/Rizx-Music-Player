@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fm.rizx.player.R
 import fm.rizx.player.core.formatClock
 import fm.rizx.player.data.lyrics.activeIndexAt
 import fm.rizx.player.domain.model.LyricLine
@@ -118,15 +120,15 @@ fun LyricsScreen(
                     label = "lyricsBody",
                 ) { (content, synced) ->
                     when (content) {
-                        LyricsContent.NoTrack -> Centered("Nothing is playing.")
+                        LyricsContent.NoTrack -> Centered(stringResource(R.string.lyrics_no_track))
                         LyricsContent.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             DotMatrixSpinner(color = c.accent, diameter = 34.dp)
                         }
-                        LyricsContent.Offline -> Centered("You're offline. Connect and try again.")
+                        LyricsContent.Offline -> Centered(stringResource(R.string.lyrics_offline))
                         is LyricsContent.Empty -> NoLyrics(content.title, onSearch = vm::openSearch)
                         is LyricsContent.Error -> Centered(content.message)
                         is LyricsContent.Ready -> when {
-                            content.lyrics.instrumental && content.lyrics.isEmpty -> Centered("Instrumental — no words.")
+                            content.lyrics.instrumental && content.lyrics.isEmpty -> Centered(stringResource(R.string.lyrics_instrumental))
                             synced -> SyncedLyrics(
                                 lines = content.lyrics.lines,
                                 offsetMs = content.offsetMs,
@@ -189,7 +191,7 @@ private fun LyricsHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        RizxIconButton(RizxIcons.Back, "Back", onBack, size = 44.dp, iconSize = 24.dp, tint = c.text)
+        RizxIconButton(RizxIcons.Back, stringResource(R.string.lyrics_back_cd), onBack, size = 44.dp, iconSize = 24.dp, tint = c.text)
         if (state.title.isNotBlank()) {
             CoverArt(
                 tintFor(state.title), initial = null, Modifier.size(40.dp),
@@ -198,14 +200,19 @@ private fun LyricsHeader(
         }
         Column(Modifier.weight(1f)) {
             Text(
-                state.title.ifBlank { "Lyrics" },
+                state.title.ifBlank { stringResource(R.string.lyrics_title_fallback) },
                 style = sg(17, FontWeight.Bold, -0.01f),
                 color = c.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                sourceLine(state),
+                sourceLine(
+                    state,
+                    chosenLabel = stringResource(R.string.lyrics_source_chosen),
+                    viaTemplate = stringResource(R.string.lyrics_source_via),
+                    notSyncedLabel = stringResource(R.string.lyrics_source_not_synced),
+                ),
                 style = mr(11, FontWeight.Medium),
                 color = c.muted,
                 maxLines = 1,
@@ -213,14 +220,14 @@ private fun LyricsHeader(
             )
         }
         RizxIconButton(
-            RizxIcons.Search, "Search for other lyrics", onSearch,
+            RizxIcons.Search, stringResource(R.string.lyrics_search_other_cd), onSearch,
             size = 44.dp, iconSize = 21.dp, tint = c.text,
         )
         // The mode switch shows its state by filling, like the shuffle/repeat buttons in the player.
         if (hasTimings) {
             RizxIconButton(
                 RizxIcons.Lyrics,
-                if (state.syncedMode) "Synced lyrics on — tap for plain text" else "Plain text — tap to sync",
+                if (state.syncedMode) stringResource(R.string.lyrics_synced_on_cd) else stringResource(R.string.lyrics_synced_off_cd),
                 onToggleSynced,
                 size = 44.dp,
                 iconSize = 21.dp,
@@ -233,12 +240,17 @@ private fun LyricsHeader(
 }
 
 /** The byline under the title: who wrote these words down, and whether the user chose them. */
-private fun sourceLine(state: LyricsUiState): String {
+private fun sourceLine(
+    state: LyricsUiState,
+    chosenLabel: String,
+    viaTemplate: String,
+    notSyncedLabel: String,
+): String {
     val ready = state.content as? LyricsContent.Ready ?: return state.artist
     val bits = buildList {
         add(state.artist)
-        if (ready.pinned) add("chosen") else ready.lyrics.sourceName.takeIf { it.isNotBlank() }?.let { add("via $it") }
-        if (!ready.lyrics.isSynced) add("not synced")
+        if (ready.pinned) add(chosenLabel) else ready.lyrics.sourceName.takeIf { it.isNotBlank() }?.let { add(viaTemplate.format(it)) }
+        if (!ready.lyrics.isSynced) add(notSyncedLabel)
     }
     return bits.filter { it.isNotBlank() }.joinToString(" · ")
 }
@@ -371,7 +383,7 @@ private fun NoLyrics(title: String, onSearch: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            "No lyrics found for “$title”.",
+            stringResource(R.string.lyrics_no_results_for, title),
             style = mr(14, FontWeight.Medium),
             color = c.muted,
             textAlign = TextAlign.Center,
@@ -386,7 +398,7 @@ private fun NoLyrics(title: String, onSearch: () -> Unit) {
                 .clickableScale(scale = 0.95f, onClick = onSearch)
                 .padding(horizontal = 16.dp, vertical = 11.dp),
         ) {
-            CodeLabel("SEARCH BY HAND", color = c.text, size = 11)
+            CodeLabel(stringResource(R.string.lyrics_search_by_hand), color = c.text, size = 11)
         }
     }
 }
@@ -422,21 +434,21 @@ private fun OffsetStrip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        NudgeButton("−0.5s", "Lyrics half a second earlier") { onNudge(-OFFSET_STEP_MS) }
+        NudgeButton("−0.5s", stringResource(R.string.lyrics_nudge_earlier_cd)) { onNudge(-OFFSET_STEP_MS) }
         Box(
             Modifier
                 .clickableScale(scale = 0.94f, onClick = if (pinned) onResetToAutomatic else onReset)
                 .padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             Text(
-                if (offsetMs == 0L && !pinned) "IN SYNC" else formatOffset(offsetMs),
+                if (offsetMs == 0L && !pinned) stringResource(R.string.lyrics_in_sync).uppercase() else formatOffset(offsetMs),
                 style = dot(12, FontWeight.Bold),
                 color = if (offsetMs == 0L) c.muted else c.redAccent,
             )
         }
-        NudgeButton("+0.5s", "Lyrics half a second later") { onNudge(OFFSET_STEP_MS) }
+        NudgeButton("+0.5s", stringResource(R.string.lyrics_nudge_later_cd)) { onNudge(OFFSET_STEP_MS) }
         Spacer(Modifier.weight(1f))
-        CodeLabel(if (pinned) "TAP TO UNPIN" else "TIMING", size = 10)
+        CodeLabel(if (pinned) stringResource(R.string.lyrics_tap_to_unpin) else stringResource(R.string.lyrics_timing_label), size = 10)
     }
 }
 
@@ -522,7 +534,7 @@ private fun LyricsTransport(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
-            RizxIconButton(RizxIcons.SkipPrevious, "Previous", onPrevious, size = 48.dp, iconSize = 28.dp, tint = c.text)
+            RizxIconButton(RizxIcons.SkipPrevious, stringResource(R.string.lyrics_previous_cd), onPrevious, size = 48.dp, iconSize = 28.dp, tint = c.text)
             Spacer(Modifier.size(14.dp))
             PulsingPlayButton(
                 isPlaying = isPlaying,
@@ -532,7 +544,7 @@ private fun LyricsTransport(
                 glow = false,
             )
             Spacer(Modifier.size(14.dp))
-            RizxIconButton(RizxIcons.SkipNext, "Next", onNext, size = 48.dp, iconSize = 28.dp, tint = c.text)
+            RizxIconButton(RizxIcons.SkipNext, stringResource(R.string.lyrics_next_cd), onNext, size = 48.dp, iconSize = 28.dp, tint = c.text)
         }
     }
 }
@@ -582,15 +594,15 @@ private fun LyricsSearchOverlay(
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Find lyrics", style = sg(20, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.weight(1f))
-            RizxIconButton(RizxIcons.Close, "Close", onDismiss, size = 40.dp, iconSize = 20.dp, tint = c.text)
+            Text(stringResource(R.string.lyrics_find_title), style = sg(20, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.weight(1f))
+            RizxIconButton(RizxIcons.Close, stringResource(R.string.action_close), onDismiss, size = 40.dp, iconSize = 20.dp, tint = c.text)
         }
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             singleLine = true,
             shape = RectangleShape,
-            placeholder = { Text("Artist and song title", style = mr(13, FontWeight.Medium)) },
+            placeholder = { Text(stringResource(R.string.lyrics_search_placeholder), style = mr(13, FontWeight.Medium)) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
@@ -602,7 +614,7 @@ private fun LyricsSearchOverlay(
                 .clickableScale(scale = 0.96f, onClick = { onSearch(query) })
                 .padding(horizontal = 16.dp, vertical = 10.dp),
         ) {
-            CodeLabel("SEARCH", color = c.onFill, size = 11)
+            CodeLabel(stringResource(R.string.action_search), color = c.onFill, size = 11)
         }
 
         Box(Modifier.fillMaxWidth().weight(1f).padding(top = 12.dp)) {
@@ -611,7 +623,7 @@ private fun LyricsSearchOverlay(
                 LyricsSearchState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     DotMatrixSpinner(color = c.accent, diameter = 30.dp)
                 }
-                LyricsSearchState.NoResults -> Centered("Nothing found. Try just the song title.")
+                LyricsSearchState.NoResults -> Centered(stringResource(R.string.lyrics_search_no_results))
                 is LyricsSearchState.Error -> Centered(state.message)
                 is LyricsSearchState.Results -> LazyColumn(
                     contentPadding = PaddingValues(bottom = 24.dp),
@@ -641,7 +653,7 @@ private fun CandidateRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                candidate.title.ifBlank { "Untitled" },
+                candidate.title.ifBlank { stringResource(R.string.lyrics_untitled) },
                 style = mr(14, FontWeight.SemiBold),
                 color = c.text,
                 maxLines = 1,
@@ -662,7 +674,7 @@ private fun CandidateRow(
         // The badge is the deciding factor between two otherwise identical rows.
         if (candidate.lyrics.isSynced) {
             Box(Modifier.background(c.redAccent).padding(horizontal = 7.dp, vertical = 3.dp)) {
-                CodeLabel("SYNCED", color = c.onRed, size = 9)
+                CodeLabel(stringResource(R.string.lyrics_synced_badge), color = c.onRed, size = 9)
             }
         }
     }

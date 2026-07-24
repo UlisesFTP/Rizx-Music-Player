@@ -1,0 +1,39 @@
+<resources>
+    <!-- Now Playing screen: hero header actions -->
+    <string name="player_album_artwork">Capa do álbum</string>
+    <string name="player_back">Voltar</string>
+    <string name="player_lyrics">Letra</string>
+    <string name="player_more_options">Mais opções</string>
+
+    <!-- Now Playing screen: transport + playback modes -->
+    <string name="player_shuffle_on_desc">Aleatório ativado — toque para reproduzir em ordem</string>
+    <string name="player_shuffle_off_desc">Aleatório desativado — toque para ativar o aleatório</string>
+    <string name="player_previous">Anterior</string>
+    <string name="player_next">Próxima</string>
+    <string name="player_repeat_off_desc">Repetir desativado — toque para repetir a fila</string>
+    <string name="player_repeat_all_desc">Repetindo a fila — toque para repetir esta música</string>
+    <string name="player_repeat_one_desc">Repetindo esta música — toque para desativar a repetição</string>
+
+    <!-- Now Playing screen: track actions -->
+    <string name="player_add_to_playlist">Adicionar à playlist</string>
+    <string name="player_like">Curtir</string>
+    <string name="player_remove_from_liked">Remover das curtidas</string>
+
+    <!-- Now Playing screen: bottom bar + up-next drawer -->
+    <string name="player_nearby_devices">Dispositivos próximos</string>
+    <string name="player_start_radio">Iniciar rádio</string>
+    <string name="player_up_next_count">A SEGUIR · %1$d</string>
+    <string name="player_up_next">A seguir</string>
+    <string name="player_hide_queue">Ocultar fila</string>
+    <string name="player_remove_from_queue">Remover da fila</string>
+    <string name="player_reorder">Reordenar</string>
+
+    <!-- Now Playing overflow menu -->
+    <string name="player_queued_for_download">Na fila para baixar</string>
+    <string name="player_downloading_percent">Baixando %1$d%%</string>
+    <string name="player_downloaded_remove">Baixado — remover</string>
+    <string name="player_download_failed_retry">Falha no download — tentar novamente</string>
+    <string name="player_video_preview_on_none">Prévia de vídeo ativada — indisponível para esta música</string>
+    <string name="player_video_preview_turn_off">Desativar prévia de vídeo</string>
+    <string name="player_video_preview">Prévia de vídeo</string>
+</resources>

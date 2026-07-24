@@ -21,11 +21,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fm.rizx.player.R
 import fm.rizx.player.core.formatDuration
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
@@ -50,8 +52,8 @@ fun LocalAlbumScreen(albumId: String, onBack: () -> Unit, vm: LocalLibraryViewMo
         songs.filter { it.album?.source?.id == "album:$albumId" }.sortedBy { it.trackNumber ?: Int.MAX_VALUE }
     }
     LocalDetail(
-        kind = "ALBUM",
-        title = tracks.firstOrNull()?.album?.title ?: "Album",
+        kind = stringResource(R.string.local_kind_album),
+        title = tracks.firstOrNull()?.album?.title ?: stringResource(R.string.local_untitled_album),
         subtitle = tracks.firstOrNull()?.artists?.firstOrNull()?.name,
         artworkUrl = tracks.firstOrNull()?.artwork.coverUrl(),
         circle = false,
@@ -71,9 +73,12 @@ fun LocalArtistScreen(artistId: String, onBack: () -> Unit, vm: LocalLibraryView
         songs.filter { track -> track.artists.any { it.source?.id == "artist:$artistId" } }
     }
     LocalDetail(
-        kind = "ARTIST",
-        title = tracks.firstOrNull()?.artists?.firstOrNull()?.name ?: "Artist",
-        subtitle = "${tracks.size} ${if (tracks.size == 1) "song" else "songs"}",
+        kind = stringResource(R.string.local_kind_artist),
+        title = tracks.firstOrNull()?.artists?.firstOrNull()?.name ?: stringResource(R.string.local_untitled_artist),
+        subtitle = stringResource(
+            if (tracks.size == 1) R.string.local_count_song_one else R.string.local_count_song_other,
+            tracks.size,
+        ),
         artworkUrl = tracks.firstOrNull()?.artwork.coverUrl(),
         circle = true,
         tracks = tracks,
@@ -102,7 +107,7 @@ private fun LocalDetail(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            RizxIconButton(RizxIcons.Back, "Back", onBack, tint = c.text)
+            RizxIconButton(RizxIcons.Back, stringResource(R.string.local_back), onBack, tint = c.text)
         }
         Row(
             Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 4.dp, bottom = 8.dp),
@@ -116,7 +121,7 @@ private fun LocalDetail(
                 subtitle?.let { Text(it, style = mr(13, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp)) }
             }
         }
-        Text("TRACKS", style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(start = 22.dp, top = 8.dp, bottom = 2.dp))
+        Text(stringResource(R.string.local_tracks_heading), style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(start = 22.dp, top = 8.dp, bottom = 2.dp))
         LazyColumn {
             itemsIndexed(tracks, key = { _, t -> "locd-${t.source.id}" }) { index, track ->
                 Box(Modifier.staggeredReveal(index.coerceAtMost(12))) {
@@ -145,7 +150,7 @@ private fun LocalDetailRow(position: Int, showNumber: Boolean, track: Track, onP
         }
         Column(Modifier.weight(1f)) {
             Text(track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(track.artists.joinToString { it.name }.ifEmpty { "Unknown artist" }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            Text(track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.unknown_artist) }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
         Text(formatDuration(track.durationMs), style = mr(12, FontWeight.Medium), color = c.muted)
     }

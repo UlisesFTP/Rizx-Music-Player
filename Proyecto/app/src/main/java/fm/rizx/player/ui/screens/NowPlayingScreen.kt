@@ -73,6 +73,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -272,18 +273,19 @@ fun NowPlayingScreen(
                 // Album artwork on top of the gradient base — real cover when available, else the sample.
                 // Crossfaded on track change so next/prev dissolves instead of hard-cutting. Only the base
                 // image fades; the scrim, canvas video and HUD above stay put (fading them would flicker).
+                val albumArtworkDesc = stringResource(R.string.player_album_artwork)
                 Crossfade(targetState = artworkUrl, animationSpec = tween(320), label = "coverArt", modifier = Modifier.fillMaxSize()) { url ->
                     if (url != null) {
                         coil.compose.AsyncImage(
                             model = url,
-                            contentDescription = "Album artwork",
+                            contentDescription = albumArtworkDesc,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
                         Image(
                             painter = painterResource(R.drawable.velvet_asphalt),
-                            contentDescription = "Album artwork",
+                            contentDescription = albumArtworkDesc,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -331,12 +333,12 @@ fun NowPlayingScreen(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    RizxIconButton(RizxIcons.Back, "Back", onBack, background = heroBtnBg, border = heroBtnLine, tint = if (c.isDark) Color.White else c.heroText)
+                    RizxIconButton(RizxIcons.Back, stringResource(R.string.player_back), onBack, background = heroBtnBg, border = heroBtnLine, tint = if (c.isDark) Color.White else c.heroText)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        RizxIconButton(RizxIcons.Lyrics, "Lyrics", onOpenLyrics, background = heroBtnBg, border = heroBtnLine, tint = if (c.isDark) Color.White else c.heroText)
+                        RizxIconButton(RizxIcons.Lyrics, stringResource(R.string.player_lyrics), onOpenLyrics, background = heroBtnBg, border = heroBtnLine, tint = if (c.isDark) Color.White else c.heroText)
                         Box {
                             RizxIconButton(
-                                RizxIcons.MoreVert, "More options", { menuOpen = true },
+                                RizxIcons.MoreVert, stringResource(R.string.player_more_options), { menuOpen = true },
                                 background = heroBtnBg, border = heroBtnLine,
                                 tint = if (c.isDark) Color.White else c.heroText,
                             )
@@ -550,13 +552,13 @@ fun NowPlayingScreen(
                         // divorced from the playback controls, which made them easy to miss.
                         ModeButton(
                             icon = RizxIcons.Shuffle,
-                            contentDescription = if (shuffleOn) "Shuffle on — tap to play in order" else "Shuffle off — tap to shuffle",
+                            contentDescription = if (shuffleOn) stringResource(R.string.player_shuffle_on_desc) else stringResource(R.string.player_shuffle_off_desc),
                             active = shuffleOn,
                             onClick = onToggleShuffle,
                             accent = c.redAccent,
                             isDark = c.isDark,
                         )
-                        GlassButton(RizxIcons.SkipPrevious, "Previous", onPrevious, c.isDark, size = 50.dp, iconSize = 32.dp)
+                        GlassButton(RizxIcons.SkipPrevious, stringResource(R.string.player_previous), onPrevious, c.isDark, size = 50.dp, iconSize = 32.dp)
                         PulsingPlayButton(
                             isPlaying = isPlaying,
                             onClick = onTogglePlay,
@@ -570,13 +572,13 @@ fun NowPlayingScreen(
                             glow = false,
                             loading = loading,
                         )
-                        GlassButton(RizxIcons.SkipNext, "Next", onNext, c.isDark, size = 50.dp, iconSize = 32.dp)
+                        GlassButton(RizxIcons.SkipNext, stringResource(R.string.player_next), onNext, c.isDark, size = 50.dp, iconSize = 32.dp)
                         ModeButton(
                             icon = if (repeatMode == RepeatMode.ONE) RizxIcons.RepeatOne else RizxIcons.Repeat,
                             contentDescription = when (repeatMode) {
-                                RepeatMode.OFF -> "Repeat off — tap to repeat the queue"
-                                RepeatMode.ALL -> "Repeating the queue — tap to repeat this song"
-                                RepeatMode.ONE -> "Repeating this song — tap to turn repeat off"
+                                RepeatMode.OFF -> stringResource(R.string.player_repeat_off_desc)
+                                RepeatMode.ALL -> stringResource(R.string.player_repeat_all_desc)
+                                RepeatMode.ONE -> stringResource(R.string.player_repeat_one_desc)
                             },
                             active = repeatMode != RepeatMode.OFF,
                             onClick = onToggleRepeat,
@@ -593,12 +595,12 @@ fun NowPlayingScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        GlassButton(RizxIcons.PlaylistAdd, "Add to playlist", onAddToPlaylist, c.isDark, size = 46.dp, iconSize = 22.dp)
+                        GlassButton(RizxIcons.PlaylistAdd, stringResource(R.string.player_add_to_playlist), onAddToPlaylist, c.isDark, size = 46.dp, iconSize = 22.dp)
                         GlassButton(
                             if (liked) RizxIcons.Favorite else RizxIcons.FavoriteBorder,
                             // State-aware: the old constant "Like" told a screen-reader user nothing about
                             // whether the song was already liked.
-                            if (liked) "Remove from liked" else "Like",
+                            if (liked) stringResource(R.string.player_remove_from_liked) else stringResource(R.string.player_like),
                             onToggleLike,
                             c.isDark,
                             size = 46.dp,
@@ -712,7 +714,7 @@ private fun NowPlayingBottomBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // Left: opens the system audio-output switcher (speaker · Bluetooth · Cast/nearby devices).
-        GlassButton(RizxIcons.Devices, "Nearby devices", onOpenDevices, c.isDark, size = 42.dp, iconSize = 21.dp)
+        GlassButton(RizxIcons.Devices, stringResource(R.string.player_nearby_devices), onOpenDevices, c.isDark, size = 42.dp, iconSize = 21.dp)
         // Center: the up-next peek — tap or swipe up to open the queue drawer. Only when something's queued;
         // otherwise the two buttons just sit at the strip's ends.
         if (upcomingCount > 0) {
@@ -721,7 +723,7 @@ private fun NowPlayingBottomBar(
             Spacer(Modifier.weight(1f))
         }
         // Right: start an endless radio seeded from this song.
-        GlassButton(RizxIcons.Radio, "Start radio", onStartRadio, c.isDark, size = 42.dp, iconSize = 21.dp)
+        GlassButton(RizxIcons.Radio, stringResource(R.string.player_start_radio), onStartRadio, c.isDark, size = 42.dp, iconSize = 21.dp)
     }
 }
 
@@ -746,7 +748,7 @@ private fun UpNextHandle(count: Int, onOpen: () -> Unit, modifier: Modifier = Mo
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(RizxIcons.ChevronUp, null, tint = c.text2, modifier = Modifier.size(15.dp))
-            CodeLabel("UP NEXT · $count", size = 11)
+            CodeLabel(stringResource(R.string.player_up_next_count, count), size = 11)
         }
     }
 }
@@ -794,8 +796,8 @@ private fun UpNextPanel(
                 Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Up next", style = sg(20, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.weight(1f))
-                Icon(RizxIcons.ChevronDown, "Hide queue", tint = c.text2, modifier = Modifier.size(22.dp))
+                Text(stringResource(R.string.player_up_next), style = sg(20, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.weight(1f))
+                Icon(RizxIcons.ChevronDown, stringResource(R.string.player_hide_queue), tint = c.text2, modifier = Modifier.size(22.dp))
             }
         }
         LazyColumn(
@@ -874,7 +876,7 @@ private fun UpNextRow(
             Column(Modifier.weight(1f)) {
                 Text(item.track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    item.track.artists.joinToString { it.name }.ifEmpty { "Unknown artist" },
+                    item.track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.unknown_artist) },
                     style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -884,7 +886,7 @@ private fun UpNextRow(
             Modifier.size(34.dp).clickableScale(scale = 0.9f, onClick = onRemove),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(RizxIcons.Close, "Remove from queue", tint = c.muted, modifier = Modifier.size(17.dp))
+            Icon(RizxIcons.Close, stringResource(R.string.player_remove_from_queue), tint = c.muted, modifier = Modifier.size(17.dp))
         }
         // Drag handle — long-press, then drag to reorder. Its own pointer node so a normal list scroll and
         // the tap-to-play above are untouched.
@@ -901,7 +903,7 @@ private fun UpNextRow(
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(RizxIcons.Grip, "Reorder", tint = if (isDragging) c.text else c.muted, modifier = Modifier.size(20.dp))
+            Icon(RizxIcons.Grip, stringResource(R.string.player_reorder), tint = if (isDragging) c.text else c.muted, modifier = Modifier.size(20.dp))
         }
     }
 }

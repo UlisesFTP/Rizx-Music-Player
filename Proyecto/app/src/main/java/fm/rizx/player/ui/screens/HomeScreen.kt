@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,12 +70,12 @@ import fm.rizx.player.ui.theme.sg
 import fm.rizx.player.ui.theme.staggeredReveal
 
 /** What the Home feed is showing: [All] is the overview, the rest are one full category each. */
-enum class HomeTab(val label: String) {
-    All("All"),
-    Songs("Songs"),
-    ForYou("For you"),
-    Albums("Albums"),
-    Artists("Artists"),
+enum class HomeTab(val labelRes: Int) {
+    All(R.string.home_tab_all),
+    Songs(R.string.home_tab_songs),
+    ForYou(R.string.home_tab_for_you),
+    Albums(R.string.home_tab_albums),
+    Artists(R.string.home_tab_artists),
 }
 
 /** How many items a carousel previews on the [HomeTab.All] overview before "See all". */
@@ -101,6 +102,12 @@ fun HomeScreen(
     val c = RizxTheme.colors
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(HomeTab.All) }
+    // Hoisted here because `tabContent`/`carousel` below are plain LazyListScope builders, not
+    // @Composable functions — stringResource() can only be called from this composable scope.
+    val topSongsTitle = stringResource(R.string.home_top_songs)
+    val madeForYouTitle = stringResource(R.string.home_made_for_you)
+    val topAlbumsTitle = stringResource(R.string.home_top_albums)
+    val popularArtistsTitle = stringResource(R.string.home_popular_artists)
 
     Box(Modifier.fillMaxSize()) {
         Text(
@@ -129,18 +136,18 @@ fun HomeScreen(
                         ) {
                             Image(
                                 painter = painterResource(R.drawable.ic_launcher_foreground),
-                                contentDescription = "Rizx logo",
+                                contentDescription = stringResource(R.string.home_logo_cd),
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
                         Text("Rizx", style = sg(13, FontWeight.Bold, -0.05f), color = c.text)
                     }
                     Column(Modifier.weight(1f)) {
-                        Text("Good evening", style = mr(12, FontWeight.SemiBold), color = c.muted)
-                        Text("Charts & discovery", style = sg(19, FontWeight.Bold, -0.01f), color = c.text)
+                        Text(stringResource(R.string.home_greeting), style = mr(12, FontWeight.SemiBold), color = c.muted)
+                        Text(stringResource(R.string.home_subtitle), style = sg(19, FontWeight.Bold, -0.01f), color = c.text)
                     }
-                    RizxIconButton(RizxIcons.Search, "Search", onOpenSearch, background = c.elev, border = c.line, iconSize = 21.dp)
-                    RizxIconButton(RizxIcons.Favorite, "Liked songs", onOpenLikes, background = c.elev, border = c.line, iconSize = 20.dp, tint = c.redAccent)
+                    RizxIconButton(RizxIcons.Search, stringResource(R.string.action_search), onOpenSearch, background = c.elev, border = c.line, iconSize = 21.dp)
+                    RizxIconButton(RizxIcons.Favorite, stringResource(R.string.home_liked_songs_cd), onOpenLikes, background = c.elev, border = c.line, iconSize = 20.dp, tint = c.redAccent)
                 }
             }
 
@@ -156,13 +163,17 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             HomeTab.entries.forEach { entry ->
-                                RizxChip(entry.label, active = tab == entry, onClick = { tab = entry })
+                                RizxChip(stringResource(entry.labelRes), active = tab == entry, onClick = { tab = entry })
                             }
                         }
                     }
                     tabContent(
                         s.feed, tab, onOpenAlbum, onOpenArtist, onOpenEditorialPlaylist, vm::playTrack,
                         onSeeAll = { tab = it },
+                        topSongsTitle = topSongsTitle,
+                        madeForYouTitle = madeForYouTitle,
+                        topAlbumsTitle = topAlbumsTitle,
+                        popularArtistsTitle = popularArtistsTitle,
                     )
                 }
 
@@ -171,7 +182,7 @@ fun HomeScreen(
                         DotMatrixSpinner(color = c.accent, diameter = 34.dp)
                     }
                 }
-                HomeUiState.Offline -> item { HomeMessage("You're offline. Connect and pull the feed again.", vm::load) }
+                HomeUiState.Offline -> item { HomeMessage(stringResource(R.string.home_offline_message), vm::load) }
                 is HomeUiState.Error -> item { HomeMessage(s.message, vm::load) }
             }
 
@@ -188,6 +199,10 @@ private fun LazyListScope.tabContent(
     onOpenEditorialPlaylist: (PlaylistRef) -> Unit,
     onPlay: (Track) -> Unit,
     onSeeAll: (HomeTab) -> Unit,
+    topSongsTitle: String,
+    madeForYouTitle: String,
+    topAlbumsTitle: String,
+    popularArtistsTitle: String,
 ) {
     when (tab) {
         HomeTab.All -> {
@@ -196,10 +211,10 @@ private fun LazyListScope.tabContent(
             val artists = feed.topArtists.flatMap { it.items }
             val playlists = feed.editorialPlaylists.flatMap { it.items }
             if (tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() && playlists.isEmpty()) {
-                item { HomeEmpty("Nothing in the charts right now.") }
+                item { HomeEmpty(stringResource(R.string.home_empty_charts)) }
             }
 
-            carousel("Top songs", tracks, HomeTab.Songs, onSeeAll) { track ->
+            carousel(topSongsTitle, tracks, HomeTab.Songs, onSeeAll) { track ->
                 CarouselCell(onClick = { onPlay(track) }) {
                     CoverArt(
                         tintFor(track.source.id), initial = null,
@@ -211,7 +226,7 @@ private fun LazyListScope.tabContent(
                 }
             }
 
-            carousel("Made for you", playlists, HomeTab.ForYou, onSeeAll) { playlist ->
+            carousel(madeForYouTitle, playlists, HomeTab.ForYou, onSeeAll) { playlist ->
                 CarouselCell(onClick = { onOpenEditorialPlaylist(playlist) }) {
                     CoverArt(
                         tintFor(playlist.source.id), initial = playlist.name.take(1),
@@ -219,11 +234,11 @@ private fun LazyListScope.tabContent(
                         imageUrl = playlist.artwork.coverUrl(),
                     )
                     CellTitle(playlist.name)
-                    CellSubtitle("Editorial")
+                    CellSubtitle(stringResource(R.string.home_editorial))
                 }
             }
 
-            carousel("Top albums", albums, HomeTab.Albums, onSeeAll) { album ->
+            carousel(topAlbumsTitle, albums, HomeTab.Albums, onSeeAll) { album ->
                 CarouselCell(onClick = { onOpenAlbum(album.source) }) {
                     CoverArt(
                         tintFor(album.source.id), initial = album.title.take(1),
@@ -231,11 +246,11 @@ private fun LazyListScope.tabContent(
                         imageUrl = album.artwork.coverUrl(),
                     )
                     CellTitle(album.title)
-                    CellSubtitle(album.artists.firstOrNull()?.name ?: "Album")
+                    CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
                 }
             }
 
-            carousel("Popular artists", artists, HomeTab.Artists, onSeeAll) { artist ->
+            carousel(popularArtistsTitle, artists, HomeTab.Artists, onSeeAll) { artist ->
                 CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
                     CoverArt(
                         tintFor(artist.source.id), initial = artist.name.take(1),
@@ -249,7 +264,7 @@ private fun LazyListScope.tabContent(
 
         HomeTab.Songs -> {
             val tracks = feed.topTracks.flatMap { it.items }
-            if (tracks.isEmpty()) item { HomeEmpty("No songs in the charts right now.") }
+            if (tracks.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_songs)) }
             browseGrid(tracks, key = { "tr-${it.source.identityKey}" }) { track, index ->
                 GridCell(index, onClick = { onPlay(track) }) {
                     CoverArt(
@@ -269,13 +284,13 @@ private fun LazyListScope.tabContent(
             // implying these were chosen for you.
             item {
                 Text(
-                    "Editorial picks for now — personalized recommendations are coming.",
+                    stringResource(R.string.home_for_you_notice),
                     style = mr(12, FontWeight.Medium),
                     color = RizxTheme.colors.muted,
                     modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 12.dp),
                 )
             }
-            if (playlists.isEmpty()) item { HomeEmpty("No picks right now.") }
+            if (playlists.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_picks)) }
             browseGrid(playlists, key = { "pl-${it.source.identityKey}" }) { playlist, index ->
                 GridCell(index, onClick = { onOpenEditorialPlaylist(playlist) }) {
                     CoverArt(
@@ -290,7 +305,7 @@ private fun LazyListScope.tabContent(
 
         HomeTab.Albums -> {
             val albums = feed.topAlbums.flatMap { it.items }
-            if (albums.isEmpty()) item { HomeEmpty("No albums in the charts right now.") }
+            if (albums.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_albums)) }
             browseGrid(albums, key = { "al-${it.source.identityKey}" }) { album, index ->
                 GridCell(index, onClick = { onOpenAlbum(album.source) }) {
                     CoverArt(
@@ -299,14 +314,14 @@ private fun LazyListScope.tabContent(
                         imageUrl = album.artwork.coverUrl(),
                     )
                     CellTitle(album.title)
-                    CellSubtitle(album.artists.firstOrNull()?.name ?: "Album")
+                    CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
                 }
             }
         }
 
         HomeTab.Artists -> {
             val artists = feed.topArtists.flatMap { it.items }
-            if (artists.isEmpty()) item { HomeEmpty("No artists in the charts right now.") }
+            if (artists.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_artists)) }
             browseGrid(artists, key = { "ar-${it.source.identityKey}" }) { artist, index ->
                 GridCell(index, onClick = { onOpenArtist(artist.source) }, centered = true) {
                     CoverArt(
@@ -343,7 +358,7 @@ private fun <T> LazyListScope.carousel(
         SectionHeader(
             title,
             Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 8.dp),
-            action = "See all",
+            action = stringResource(R.string.action_see_all),
             onAction = { onSeeAll(tab) },
         )
     }
@@ -433,7 +448,7 @@ private fun HomeMessage(text: String, onRetry: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text, style = mr(14, FontWeight.Medium), color = c.muted, textAlign = TextAlign.Center)
             Text(
-                "Retry", style = sg(14, FontWeight.Bold), color = c.onFill,
+                stringResource(R.string.action_retry), style = sg(14, FontWeight.Bold), color = c.onFill,
                 modifier = Modifier.padding(top = 16.dp).background(c.fill).clickableScale(scale = 0.94f, onClick = onRetry).padding(horizontal = 22.dp, vertical = 10.dp),
             )
         }

@@ -21,8 +21,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import fm.rizx.player.R
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.RizxTheme
@@ -49,30 +51,29 @@ fun LicensesScreen(onBack: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(
-                RizxIcons.Back, "Back", tint = c.text,
+                RizxIcons.Back, stringResource(R.string.licenses_cd_back), tint = c.text,
                 modifier = Modifier.size(26.dp).clickableScale(scale = 0.88f, onClick = onBack),
             )
-            Text("Open-source licenses", style = sg(24, FontWeight.Bold, -0.02f), color = c.text)
+            Text(stringResource(R.string.licenses_title), style = sg(24, FontWeight.Bold, -0.02f), color = c.text)
         }
 
         Text(
-            "Rizx Player is licensed under AGPL-3.0. It bundles the open-source libraries below, " +
-                "each under its own license.",
+            stringResource(R.string.licenses_intro),
             style = mr(14, FontWeight.Medium),
             color = c.text2,
             modifier = Modifier.padding(top = 14.dp),
         )
 
-        Section("Bundled in the app")
+        Section(stringResource(R.string.licenses_section_bundled))
         LicenseData.runtime.forEach { LicenseRow(it.name, it.version, it.license) }
 
-        Section("Test-only (not shipped)")
+        Section(stringResource(R.string.licenses_section_test_only))
         LicenseData.testOnly.forEach { LicenseRow(it.name, it.version, it.license) }
 
-        Section("License texts")
+        Section(stringResource(R.string.licenses_section_license_texts))
         LinkBody("Apache-2.0 — apache.org/licenses/LICENSE-2.0")
         LinkBody("EPL-1.0 — eclipse.org/legal/epl-v10.html")
-        LinkBody("AGPL-3.0 (this app) — gnu.org/licenses/agpl-3.0.html")
+        LinkBody(stringResource(R.string.licenses_agpl_this_app))
 
         Spacer(Modifier.height(60.dp))
     }

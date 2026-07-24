@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -54,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fm.rizx.player.R
 import fm.rizx.player.core.formatDuration
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
@@ -71,7 +74,11 @@ import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.sg
 import fm.rizx.player.ui.theme.staggeredReveal
 
-private enum class LocalView(val label: String) { Songs("Songs"), Albums("Albums"), Artists("Artists") }
+private enum class LocalView(@StringRes val labelRes: Int) {
+    Songs(R.string.local_tab_songs),
+    Albums(R.string.local_tab_albums),
+    Artists(R.string.local_tab_artists),
+}
 
 /** True if READ_MEDIA_AUDIO is granted (minSdk 34 — no version guard needed). */
 private fun hasAudioPermission(context: Context): Boolean =
@@ -141,8 +148,8 @@ fun LocalLibraryScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            RizxIconButton(RizxIcons.Back, "Back", onBack, tint = c.text)
-            Text("Local music", style = sg(24, FontWeight.Bold, -0.02f), color = c.text)
+            RizxIconButton(RizxIcons.Back, stringResource(R.string.local_back), onBack, tint = c.text)
+            Text(stringResource(R.string.local_title), style = sg(24, FontWeight.Bold, -0.02f), color = c.text)
         }
 
         if (granted) {
@@ -150,7 +157,7 @@ fun LocalLibraryScreen(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                LocalView.entries.forEach { v -> RizxChip(v.label, active = view == v, onClick = { view = v }) }
+                LocalView.entries.forEach { v -> RizxChip(stringResource(v.labelRes), active = view == v, onClick = { view = v }) }
             }
         }
 
@@ -181,20 +188,18 @@ private fun PermissionGate(blocked: Boolean, onGrant: () -> Unit) {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Outlined.LibraryMusic, null, tint = c.muted, modifier = Modifier.size(44.dp))
-            Text("Play your own music", style = sg(18, FontWeight.Bold), color = c.text, modifier = Modifier.padding(top = 14.dp))
+            Text(stringResource(R.string.local_permission_title), style = sg(18, FontWeight.Bold), color = c.text, modifier = Modifier.padding(top = 14.dp))
             Text(
-                if (blocked) {
-                    "Audio access is turned off for Rizx. Turn it on in Settings to browse and play your local songs."
-                } else {
-                    "Allow access to the audio on this device to browse and play your local songs."
-                },
+                stringResource(
+                    if (blocked) R.string.local_permission_body_blocked else R.string.local_permission_body_default,
+                ),
                 style = mr(13, FontWeight.Medium), color = c.muted, textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 6.dp, start = 12.dp, end = 12.dp),
             )
             // The label used c.onFill — the colour for text *on* a filled button — with no fill behind it,
             // so on the light theme it was pale ink on pale paper and read as disabled, or as nothing at all.
             Text(
-                if (blocked) "Open settings" else "Allow access",
+                stringResource(if (blocked) R.string.local_permission_cta_blocked else R.string.local_permission_cta_default),
                 style = sg(14, FontWeight.Bold), color = c.onFill,
                 modifier = Modifier.padding(top = 18.dp)
                     .background(c.fill)
@@ -230,7 +235,7 @@ private fun Context.openAppSettings() {
 @Composable
 private fun SongsList(songs: List<Track>, onPlay: (Int) -> Unit) {
     if (songs.isEmpty()) {
-        EmptyLocal("No music found", "Nothing on this device yet. Copy some songs to your phone and pull to refresh.")
+        EmptyLocal(stringResource(R.string.local_no_music_title), stringResource(R.string.local_no_music_body))
         return
     }
     LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = LocalBottomInset.current + 16.dp)) {
@@ -251,7 +256,7 @@ private fun LocalSongRow(track: Track, onPlay: () -> Unit) {
         CoverArt(tintFor(track.source.id), initial = track.title.take(1), Modifier.size(46.dp), imageUrl = track.artwork.coverUrl())
         Column(Modifier.weight(1f)) {
             Text(track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(track.artists.joinToString { it.name }.ifEmpty { "Unknown artist" }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            Text(track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.unknown_artist) }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
         Text(formatDuration(track.durationMs), style = mr(12, FontWeight.Medium), color = c.muted)
     }
@@ -260,7 +265,7 @@ private fun LocalSongRow(track: Track, onPlay: () -> Unit) {
 @Composable
 private fun AlbumsGrid(albums: List<LocalAlbum>, onOpen: (String) -> Unit) {
     if (albums.isEmpty()) {
-        EmptyLocal("No albums", "Your local songs don't carry album info yet.")
+        EmptyLocal(stringResource(R.string.local_no_albums_title), stringResource(R.string.local_no_albums_body))
         return
     }
     LazyVerticalGrid(
@@ -283,14 +288,22 @@ private fun LocalAlbumCard(album: LocalAlbum, onClick: () -> Unit) {
     Column(Modifier.clickableScale(scale = 0.98f, onClick = onClick)) {
         CoverArt(tintFor(album.id), initial = album.title.take(1), Modifier.fillMaxWidth().aspectRatio(1f), initialSize = 40, imageUrl = album.artworkUrl)
         Text(album.title, style = mr(13, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
-        Text(album.artist.ifEmpty { "${album.trackCount} tracks" }, style = mr(11, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
+        Text(
+            album.artist.ifEmpty {
+                stringResource(
+                    if (album.trackCount == 1) R.string.local_track_count_one else R.string.local_track_count_other,
+                    album.trackCount,
+                )
+            },
+            style = mr(11, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp),
+        )
     }
 }
 
 @Composable
 private fun ArtistsGrid(artists: List<LocalArtist>, onOpen: (String) -> Unit) {
     if (artists.isEmpty()) {
-        EmptyLocal("No artists", "Your local songs don't carry artist info yet.")
+        EmptyLocal(stringResource(R.string.local_no_artists_title), stringResource(R.string.local_no_artists_body))
         return
     }
     LazyVerticalGrid(
@@ -314,7 +327,13 @@ private fun LocalArtistCard(artist: LocalArtist, onClick: () -> Unit) {
     ) {
         CoverArt(tintFor(artist.id), initial = artist.name.take(1), Modifier.size(96.dp), initialSize = 34, circle = true)
         Text(artist.name, style = mr(13, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
-        Text("${artist.trackCount} ${if (artist.trackCount == 1) "song" else "songs"}", style = mr(11, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 1.dp))
+        Text(
+            stringResource(
+                if (artist.trackCount == 1) R.string.local_count_song_one else R.string.local_count_song_other,
+                artist.trackCount,
+            ),
+            style = mr(11, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 1.dp),
+        )
     }
 }
 

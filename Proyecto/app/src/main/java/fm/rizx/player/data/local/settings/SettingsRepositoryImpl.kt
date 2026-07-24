@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import fm.rizx.player.domain.model.PlaybackResolverSettings
+import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -21,10 +22,23 @@ class SettingsRepositoryImpl(
     private val dataStore: DataStore<Preferences>,
 ) : SettingsRepository {
 
-    override val darkTheme: Flow<Boolean> = dataStore.data.map { it[Keys.DARK_THEME] ?: true }
+    // A stored themeMode wins; otherwise migrate the legacy darkTheme boolean (true→DARK, false→LIGHT);
+    // a brand-new install has neither → SYSTEM (follow the device), the new default.
+    override val themeMode: Flow<ThemeMode> = dataStore.data.map { prefs ->
+        when (prefs[Keys.THEME_MODE]) {
+            "light" -> ThemeMode.LIGHT
+            "dark" -> ThemeMode.DARK
+            "system" -> ThemeMode.SYSTEM
+            else -> when (prefs[Keys.DARK_THEME]) {
+                true -> ThemeMode.DARK
+                false -> ThemeMode.LIGHT
+                null -> ThemeMode.SYSTEM
+            }
+        }
+    }
 
-    override suspend fun setDarkTheme(dark: Boolean) {
-        dataStore.edit { it[Keys.DARK_THEME] = dark }
+    override suspend fun setThemeMode(mode: ThemeMode) {
+        dataStore.edit { it[Keys.THEME_MODE] = mode.name.lowercase() }
     }
 
     override val activeMetadataProviderId: Flow<String?> = dataStore.data.map { it[Keys.ACTIVE_METADATA] }
@@ -119,7 +133,9 @@ class SettingsRepositoryImpl(
 
     // `core.*` namespacing leaves room for future `plugin.*` settings (§7.4).
     private object Keys {
+        // DARK_THEME is legacy — kept only so an existing install's old choice migrates into THEME_MODE.
         val DARK_THEME = booleanPreferencesKey("core.ui.darkTheme")
+        val THEME_MODE = stringPreferencesKey("core.ui.themeMode")
         val ACTIVE_METADATA = stringPreferencesKey("core.providers.active.metadata")
         val ACTIVE_STREAMING = stringPreferencesKey("core.providers.active.streaming")
         val STREAM_EXPIRY_MS = longPreferencesKey("core.playback.streamExpiryMs")

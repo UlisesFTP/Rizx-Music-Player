@@ -1,0 +1,40 @@
+<resources>
+    <!-- LyricsScreen -->
+    <string name="lyrics_back_cd">Back</string>
+    <string name="lyrics_title_fallback">Lyrics</string>
+    <string name="lyrics_search_other_cd">Search for other lyrics</string>
+    <string name="lyrics_synced_on_cd">Synced lyrics on — tap for plain text</string>
+    <string name="lyrics_synced_off_cd">Plain text — tap to sync</string>
+    <string name="lyrics_source_chosen">chosen</string>
+    <string name="lyrics_source_via">via %1$s</string>
+    <string name="lyrics_source_not_synced">not synced</string>
+    <string name="lyrics_no_track">Nothing is playing.</string>
+    <string name="lyrics_offline">You\'re offline. Connect and try again.</string>
+    <string name="lyrics_instrumental">Instrumental — no words.</string>
+    <string name="lyrics_no_results_for">No lyrics found for “%1$s”.</string>
+    <string name="lyrics_search_by_hand">Search by hand</string>
+    <string name="lyrics_nudge_earlier_cd">Lyrics half a second earlier</string>
+    <string name="lyrics_nudge_later_cd">Lyrics half a second later</string>
+    <string name="lyrics_in_sync">In sync</string>
+    <string name="lyrics_tap_to_unpin">Tap to unpin</string>
+    <string name="lyrics_timing_label">Timing</string>
+    <string name="lyrics_previous_cd">Previous</string>
+    <string name="lyrics_next_cd">Next</string>
+    <string name="lyrics_find_title">Find lyrics</string>
+    <string name="lyrics_search_placeholder">Artist and song title</string>
+    <string name="lyrics_search_no_results">Nothing found. Try just the song title.</string>
+    <string name="lyrics_untitled">Untitled</string>
+    <string name="lyrics_synced_badge">Synced</string>
+
+    <!-- QueueScreen -->
+    <string name="queue_back_cd">Back</string>
+    <string name="queue_title">Queue</string>
+    <string name="queue_save_as_playlist_cd">Save as playlist</string>
+    <string name="queue_nothing_queued">Nothing queued</string>
+    <string name="queue_track_count_one">%1$d track</string>
+    <string name="queue_track_count_other">%1$d tracks</string>
+    <string name="queue_empty_title">Your queue is empty</string>
+    <string name="queue_empty_subtitle">Add songs from Search to line them up here.</string>
+    <string name="queue_now_current_cd">Now current</string>
+    <string name="queue_remove_cd">Remove from queue</string>
+</resources>

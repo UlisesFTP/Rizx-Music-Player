@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import fm.rizx.player.R
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.PlaylistItem
 import fm.rizx.player.domain.model.coverUrl
@@ -91,26 +93,26 @@ fun PlaylistDetailScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(
-                RizxIcons.Back, "Back", tint = c.text,
+                RizxIcons.Back, stringResource(R.string.detail_back), tint = c.text,
                 modifier = Modifier.size(26.dp).clickableScale(scale = 0.88f, onClick = onBack),
             )
             Text(
-                playlist?.name ?: "Playlist",
+                playlist?.name ?: stringResource(R.string.detail_playlist_fallback_name),
                 style = sg(24, FontWeight.Bold, -0.02f), color = c.text,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
             )
             Icon(
-                Icons.Filled.FileUpload, "Export playlist", tint = c.text2,
+                Icons.Filled.FileUpload, stringResource(R.string.detail_export_playlist), tint = c.text2,
                 modifier = Modifier.size(24.dp).clickableScale(scale = 0.86f, onClick = { exporter.launch("${playlist?.name ?: "playlist"}.json") }),
             )
             if (!readOnly) {
                 Icon(
-                    Icons.Filled.Edit, "Rename", tint = c.text2,
+                    Icons.Filled.Edit, stringResource(R.string.detail_rename), tint = c.text2,
                     modifier = Modifier.size(24.dp).clickableScale(scale = 0.86f, onClick = { renaming = true }),
                 )
             }
             Icon(
-                Icons.Filled.DeleteOutline, "Delete playlist", tint = c.text2,
+                Icons.Filled.DeleteOutline, stringResource(R.string.detail_delete_playlist), tint = c.text2,
                 modifier = Modifier.size(24.dp).clickableScale(scale = 0.86f, onClick = { vm.delete(onDeleted = onBack) }),
             )
         }
@@ -123,7 +125,11 @@ fun PlaylistDetailScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CodeLabel(
-                "${items.size} ${if (items.size == 1) "TRACK" else "TRACKS"}",
+                if (items.size == 1) {
+                    stringResource(R.string.detail_track_count_caps_one, items.size)
+                } else {
+                    stringResource(R.string.detail_track_count_caps_other, items.size)
+                },
                 modifier = Modifier.weight(1f),
                 color = c.muted,
                 size = 11,
@@ -137,7 +143,7 @@ fun PlaylistDetailScreen(
 
         if (items.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Text("This playlist is empty.", style = mr(14, FontWeight.Medium), color = c.muted)
+                Text(stringResource(R.string.detail_playlist_empty), style = mr(14, FontWeight.Medium), color = c.muted)
             }
         } else {
             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
@@ -187,14 +193,14 @@ private fun PlaylistItemRow(
         CoverArt(tintFor(item.track.source.id), initial = null, Modifier.size(44.dp), imageUrl = item.track.artwork.coverUrl())
         Column(Modifier.weight(1f)) {
             Text(item.track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(item.track.artists.joinToString { it.name }.ifEmpty { "Unknown artist" }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.unknown_artist) }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         // The duration gave way to the download control: with a position, a cover and a remove button
         // already on the row, three trailing items is one too many, and the runtime is the least useful.
         DownloadButton(state = downloadState, onDownload = onDownload, onCancel = onCancelDownload)
         if (removable) {
             Icon(
-                RizxIcons.Close, "Remove", tint = c.text2,
+                RizxIcons.Close, stringResource(R.string.action_remove), tint = c.text2,
                 modifier = Modifier.size(22.dp).clickableScale(scale = 0.84f, onClick = onRemove),
             )
         }

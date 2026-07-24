@@ -15,8 +15,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import fm.rizx.player.R
 import fm.rizx.player.domain.model.PlaylistSummary
 import androidx.compose.ui.graphics.RectangleShape
 import fm.rizx.player.ui.components.clickableScale
@@ -29,19 +31,19 @@ fun CreatePlaylistDialog(onCreate: (String) -> Unit, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New playlist") },
+        title = { Text(stringResource(R.string.dialog_new_playlist)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 singleLine = true,
-                placeholder = { Text("Playlist name") },
+                placeholder = { Text(stringResource(R.string.dialog_playlist_name_hint)) },
             )
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(name); onDismiss() }, enabled = name.isNotBlank()) { Text("Create") }
+            TextButton(onClick = { onCreate(name); onDismiss() }, enabled = name.isNotBlank()) { Text(stringResource(R.string.action_create)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
 
@@ -58,14 +60,14 @@ fun ImportPlaylistDialog(onImport: (String) -> Unit, onFile: () -> Unit, onDismi
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RectangleShape,
-        title = { Text("Import a playlist") },
+        title = { Text(stringResource(R.string.dialog_import_playlist_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
                     singleLine = true,
-                    placeholder = { Text("Paste a playlist link…") },
+                    placeholder = { Text(stringResource(R.string.dialog_paste_playlist_link_hint)) },
                 )
                 Text(
                     "Spotify · YouTube Music · YouTube · Deezer",
@@ -73,16 +75,16 @@ fun ImportPlaylistDialog(onImport: (String) -> Unit, onFile: () -> Unit, onDismi
                     color = RizxTheme.colors.muted,
                 )
                 ImportSourceOption(
-                    title = "Import from a file instead",
-                    subtitle = "A Rizx, Nuclear or Exportify export",
+                    title = stringResource(R.string.dialog_import_from_file_title),
+                    subtitle = stringResource(R.string.dialog_import_from_file_subtitle),
                     onClick = onFile,
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onImport(url); onDismiss() }, enabled = url.isNotBlank()) { Text("Import") }
+            TextButton(onClick = { onImport(url); onDismiss() }, enabled = url.isNotBlank()) { Text(stringResource(R.string.action_import)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
 
@@ -114,7 +116,7 @@ fun ConfirmDialog(
         title = { Text(title) },
         text = { Text(body) },
         confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text(confirmLabel) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
 
@@ -131,7 +133,7 @@ fun AddToPlaylistDialog(
     var name by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (creating) "New playlist" else "Add to playlist") },
+        title = { Text(if (creating) stringResource(R.string.dialog_new_playlist) else stringResource(R.string.dialog_add_to_playlist_title)) },
         text = {
             Column {
                 if (creating) {
@@ -139,10 +141,10 @@ fun AddToPlaylistDialog(
                         value = name,
                         onValueChange = { name = it },
                         singleLine = true,
-                        placeholder = { Text("Playlist name") },
+                        placeholder = { Text(stringResource(R.string.dialog_playlist_name_hint)) },
                     )
                 } else if (playlists.isEmpty()) {
-                    Text("No playlists yet — create one below.", style = mr(14, FontWeight.Medium), color = c.muted)
+                    Text(stringResource(R.string.dialog_no_playlists_yet), style = mr(14, FontWeight.Medium), color = c.muted)
                 } else {
                     playlists.forEach { playlist ->
                         Text(
@@ -160,11 +162,11 @@ fun AddToPlaylistDialog(
         },
         confirmButton = {
             if (creating) {
-                TextButton(onClick = { onCreateNew(name); onDismiss() }, enabled = name.isNotBlank()) { Text("Create & add") }
+                TextButton(onClick = { onCreateNew(name); onDismiss() }, enabled = name.isNotBlank()) { Text(stringResource(R.string.dialog_create_and_add)) }
             } else {
-                TextButton(onClick = { creating = true }) { Text("New playlist") }
+                TextButton(onClick = { creating = true }) { Text(stringResource(R.string.dialog_new_playlist)) }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }

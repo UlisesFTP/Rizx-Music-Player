@@ -1,0 +1,32 @@
+<resources>
+    <!-- EqualizerScreen -->
+    <string name="eq_cd_back">Atrás</string>
+    <string name="eq_title">Ecualizador</string>
+    <string name="eq_unavailable_message">Reproduce una canción para usar el ecualizador.</string>
+    <string name="eq_section_presets">PREAJUSTES</string>
+    <string name="eq_section_bands">BANDAS</string>
+
+    <!-- AboutScreen -->
+    <string name="about_cd_back">Atrás</string>
+    <string name="about_title">Acerca de</string>
+    <string name="about_version_label">Versión %1$s (%2$s)</string>
+    <string name="about_label_based_on">Basado en</string>
+    <string name="about_body_based_on">Rizx reimplementa la lógica de negocio de Nuclear, el reproductor de música de escritorio de código abierto creado por nukeop y colaboradores. Rizx es un fork independiente y no está afiliado ni respaldado por el proyecto Nuclear.</string>
+    <string name="about_label_source">Source (Corresponding Source, AGPL §6)</string>
+    <string name="about_body_source_intro">El código fuente completo de esta app —etiquetado para coincidir con esta versión— y el proyecto original son públicos:</string>
+    <string name="about_body_source_nuclear">• Nuclear original: github.com/nukeop/nuclear</string>
+    <string name="about_label_license">Licencia</string>
+    <string name="about_body_license">Nuclear is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). As a derived work Rizx is also AGPL-3.0: its source and modifications are made available under the same terms and copyright notices are retained.</string>
+    <string name="about_cd_open_licenses">Abrir licencias</string>
+    <string name="about_label_open_source_licenses">Licencias de código abierto</string>
+    <string name="about_body_third_party">Dependencias de terceros incluidas en esta app</string>
+
+    <!-- LicensesScreen -->
+    <string name="licenses_cd_back">Atrás</string>
+    <string name="licenses_title">Licencias de código abierto</string>
+    <string name="licenses_intro">Rizx Player está licenciado bajo AGPL-3.0. Incluye las siguientes bibliotecas de código abierto, cada una bajo su propia licencia.</string>
+    <string name="licenses_section_bundled">Incluido en la app</string>
+    <string name="licenses_section_test_only">Solo para pruebas (no incluido)</string>
+    <string name="licenses_section_license_texts">Textos de las licencias</string>
+    <string name="licenses_agpl_this_app">AGPL-3.0 (esta app) — gnu.org/licenses/agpl-3.0.html</string>
+</resources>

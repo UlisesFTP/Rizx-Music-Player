@@ -2,6 +2,7 @@ package fm.rizx.player.ui.player
 
 import app.cash.turbine.test
 import fm.rizx.player.MainDispatcherRule
+import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -26,9 +27,9 @@ class PlayerViewModelTest {
 
     /** Minimal [SettingsRepository] backing only the theme (the rest return inert defaults). */
     private class FakeSettings : SettingsRepository {
-        val dark = MutableStateFlow(true)
-        override val darkTheme: Flow<Boolean> = dark
-        override suspend fun setDarkTheme(dark: Boolean) { this.dark.value = dark }
+        val mode = MutableStateFlow(ThemeMode.SYSTEM)
+        override val themeMode: Flow<ThemeMode> = mode
+        override suspend fun setThemeMode(mode: ThemeMode) { this.mode.value = mode }
         override val activeMetadataProviderId: Flow<String?> = flowOf(null)
         override suspend fun setActiveMetadataProviderId(id: String?) {}
         override val activeStreamingProviderId: Flow<String?> = flowOf(null)
@@ -71,10 +72,9 @@ class PlayerViewModelTest {
     // --- Synchronous state/setters: `_state` updates are immediate, no time advancement needed. ---
 
     @Test
-    fun `starts playing in the dark theme`() {
-        val s = vm.state.value
-        assertTrue(s.isPlaying)
-        assertTrue(s.isDark)
+    fun `starts playing, theme follows the system by default`() {
+        assertTrue(vm.state.value.isPlaying)
+        assertEquals(ThemeMode.SYSTEM, vm.themeMode.value)
     }
 
     @Test
@@ -87,16 +87,16 @@ class PlayerViewModelTest {
     }
 
     @Test
-    fun `toggleTheme persists and mirrors the stored theme`() =
+    fun `setThemeMode persists and mirrors the stored theme`() =
         runTest(mainDispatcherRule.dispatcher.scheduler) {
-            advanceUntilIdle() // let the initial darkTheme collection settle (true)
-            assertTrue(vm.state.value.isDark)
+            advanceUntilIdle() // let the initial themeMode collection settle (SYSTEM)
+            assertEquals(ThemeMode.SYSTEM, vm.themeMode.value)
 
-            vm.toggleTheme()
+            vm.setThemeMode(ThemeMode.DARK)
             advanceUntilIdle()
 
-            assertFalse(vm.state.value.isDark)
-            assertFalse(settings.dark.value) // persisted
+            assertEquals(ThemeMode.DARK, vm.themeMode.value)
+            assertEquals(ThemeMode.DARK, settings.mode.value) // persisted
         }
 
     @Test

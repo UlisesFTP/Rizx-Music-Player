@@ -1,0 +1,39 @@
+<resources>
+    <!-- Now Playing screen: hero header actions -->
+    <string name="player_album_artwork">Album artwork</string>
+    <string name="player_back">Back</string>
+    <string name="player_lyrics">Lyrics</string>
+    <string name="player_more_options">More options</string>
+
+    <!-- Now Playing screen: transport + playback modes -->
+    <string name="player_shuffle_on_desc">Shuffle on — tap to play in order</string>
+    <string name="player_shuffle_off_desc">Shuffle off — tap to shuffle</string>
+    <string name="player_previous">Previous</string>
+    <string name="player_next">Next</string>
+    <string name="player_repeat_off_desc">Repeat off — tap to repeat the queue</string>
+    <string name="player_repeat_all_desc">Repeating the queue — tap to repeat this song</string>
+    <string name="player_repeat_one_desc">Repeating this song — tap to turn repeat off</string>
+
+    <!-- Now Playing screen: track actions -->
+    <string name="player_add_to_playlist">Add to playlist</string>
+    <string name="player_like">Like</string>
+    <string name="player_remove_from_liked">Remove from liked</string>
+
+    <!-- Now Playing screen: bottom bar + up-next drawer -->
+    <string name="player_nearby_devices">Nearby devices</string>
+    <string name="player_start_radio">Start radio</string>
+    <string name="player_up_next_count">UP NEXT · %1$d</string>
+    <string name="player_up_next">Up next</string>
+    <string name="player_hide_queue">Hide queue</string>
+    <string name="player_remove_from_queue">Remove from queue</string>
+    <string name="player_reorder">Reorder</string>
+
+    <!-- Now Playing overflow menu -->
+    <string name="player_queued_for_download">Queued for download</string>
+    <string name="player_downloading_percent">Downloading %1$d%%</string>
+    <string name="player_downloaded_remove">Downloaded — remove</string>
+    <string name="player_download_failed_retry">Download failed — retry</string>
+    <string name="player_video_preview_on_none">Video preview on — none for this song</string>
+    <string name="player_video_preview_turn_off">Turn off video preview</string>
+    <string name="player_video_preview">Video preview</string>
+</resources>

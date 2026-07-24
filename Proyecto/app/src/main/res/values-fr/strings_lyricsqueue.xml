@@ -1,0 +1,40 @@
+<resources>
+    <!-- LyricsScreen -->
+    <string name="lyrics_back_cd">Retour</string>
+    <string name="lyrics_title_fallback">Paroles</string>
+    <string name="lyrics_search_other_cd">Rechercher d\'autres paroles</string>
+    <string name="lyrics_synced_on_cd">Paroles synchronisées activées — touchez pour le texte brut</string>
+    <string name="lyrics_synced_off_cd">Texte brut — touchez pour synchroniser</string>
+    <string name="lyrics_source_chosen">choisies</string>
+    <string name="lyrics_source_via">via %1$s</string>
+    <string name="lyrics_source_not_synced">non synchronisées</string>
+    <string name="lyrics_no_track">Rien n\'est en lecture.</string>
+    <string name="lyrics_offline">Vous êtes hors ligne. Connectez-vous et réessayez.</string>
+    <string name="lyrics_instrumental">Instrumental — sans paroles.</string>
+    <string name="lyrics_no_results_for">Aucune parole trouvée pour « %1$s ».</string>
+    <string name="lyrics_search_by_hand">Rechercher manuellement</string>
+    <string name="lyrics_nudge_earlier_cd">Paroles une demi-seconde plus tôt</string>
+    <string name="lyrics_nudge_later_cd">Paroles une demi-seconde plus tard</string>
+    <string name="lyrics_in_sync">Synchronisées</string>
+    <string name="lyrics_tap_to_unpin">Touchez pour désépingler</string>
+    <string name="lyrics_timing_label">Synchronisation</string>
+    <string name="lyrics_previous_cd">Précédent</string>
+    <string name="lyrics_next_cd">Suivant</string>
+    <string name="lyrics_find_title">Rechercher des paroles</string>
+    <string name="lyrics_search_placeholder">Artiste et titre de la chanson</string>
+    <string name="lyrics_search_no_results">Aucun résultat. Essayez seulement le titre de la chanson.</string>
+    <string name="lyrics_untitled">Sans titre</string>
+    <string name="lyrics_synced_badge">Synchronisées</string>
+
+    <!-- QueueScreen -->
+    <string name="queue_back_cd">Retour</string>
+    <string name="queue_title">File d\'attente</string>
+    <string name="queue_save_as_playlist_cd">Enregistrer comme playlist</string>
+    <string name="queue_nothing_queued">Aucun titre en file</string>
+    <string name="queue_track_count_one">%1$d titre</string>
+    <string name="queue_track_count_other">%1$d titres</string>
+    <string name="queue_empty_title">Votre file d\'attente est vide</string>
+    <string name="queue_empty_subtitle">Ajoutez des titres depuis Rechercher pour les mettre en file d\'attente ici.</string>
+    <string name="queue_now_current_cd">Lecture en cours</string>
+    <string name="queue_remove_cd">Retirer de la file</string>
+</resources>

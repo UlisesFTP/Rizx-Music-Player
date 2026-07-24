@@ -1,0 +1,79 @@
+<resources>
+    <!-- Home screen: header -->
+    <string name="home_logo_cd">Logo Rizx</string>
+    <string name="home_greeting">Bonsoir</string>
+    <string name="home_subtitle">Classements et découvertes</string>
+    <string name="home_liked_songs_cd">Aimés</string>
+
+    <!-- Home screen: tabs -->
+    <string name="home_tab_all">Tout</string>
+    <string name="home_tab_songs">Titres</string>
+    <string name="home_tab_for_you">Pour vous</string>
+    <string name="home_tab_albums">Albums</string>
+    <string name="home_tab_artists">Artistes</string>
+
+    <!-- Home screen: loading / offline / empty states -->
+    <string name="home_offline_message">Vous êtes hors ligne. Connectez-vous et actualisez le contenu.</string>
+    <string name="home_empty_charts">Rien dans les classements pour le moment.</string>
+    <string name="home_empty_songs">Aucun titre dans les classements pour le moment.</string>
+    <string name="home_empty_picks">Aucune sélection pour le moment.</string>
+    <string name="home_empty_albums">Aucun album dans les classements pour le moment.</string>
+    <string name="home_empty_artists">Aucun artiste dans les classements pour le moment.</string>
+
+    <!-- Home screen: carousels + cells -->
+    <string name="home_top_songs">Meilleurs titres</string>
+    <string name="home_made_for_you">Fait pour vous</string>
+    <string name="home_top_albums">Meilleurs albums</string>
+    <string name="home_popular_artists">Artistes populaires</string>
+    <string name="home_editorial">Éditorial</string>
+    <string name="home_generic_album">Album</string>
+    <string name="home_for_you_notice">Sélections éditoriales pour l\'instant — les recommandations personnalisées arrivent bientôt.</string>
+
+    <!-- Search screen: header + field -->
+    <string name="search_open_queue">Ouvrir la file d\'attente</string>
+    <string name="search_hint">Titres, artistes, ambiances…</string>
+
+    <!-- Search screen: tabs -->
+    <string name="search_tab_songs">Titres</string>
+    <string name="search_tab_artists">Artistes</string>
+    <string name="search_tab_albums">Albums</string>
+    <string name="search_tab_playlists">Playlists</string>
+    <string name="search_tab_underground">Underground</string>
+
+    <!-- Search screen: loading / offline / error / empty states -->
+    <string name="search_offline_title">Vous êtes hors ligne</string>
+    <string name="search_offline_message">Impossible d\'accéder à la source. Vérifiez votre connexion et réessayez.</string>
+    <string name="search_error_title">Recherche impossible</string>
+    <string name="search_no_results_title">Aucun résultat</string>
+    <string name="search_no_results_message">Aucun résultat pour « %1$s ».</string>
+
+    <!-- Search screen: result rows -->
+    <string name="search_like">Aimer</string>
+    <string name="search_remove_from_liked">Retirer des titres aimés</string>
+    <string name="search_add_to_queue">Ajouter à la file</string>
+    <string name="search_play_next">Lire ensuite</string>
+    <string name="search_result_artist_label">Artiste</string>
+    <string name="search_album_fallback">Album</string>
+    <string name="search_track_count">%1$d titres</string>
+    <string name="search_playlist_label">Playlist</string>
+
+    <!-- Search screen: idle state (suggestions + genre tiles) -->
+    <string name="search_try_searching">Essayez de rechercher</string>
+    <string name="search_browse_genres">Explorer les genres</string>
+    <string name="search_genre_pop">Pop</string>
+    <string name="search_genre_hiphop">Hip-Hop</string>
+    <string name="search_genre_rock">Rock</string>
+    <string name="search_genre_electronic">Électronique</string>
+    <string name="search_genre_rnb">R&amp;B</string>
+    <string name="search_genre_jazz">Jazz</string>
+    <string name="search_genre_latin">Latino</string>
+    <string name="search_genre_classical">Classique</string>
+    <string name="search_genre_metal">Metal</string>
+    <string name="search_genre_reggaeton">Reggaeton</string>
+    <string name="search_genre_reggae">Reggae</string>
+    <string name="search_genre_soul_funk">Soul &amp; Funk</string>
+    <string name="search_genre_blues">Blues</string>
+    <string name="search_genre_country">Country</string>
+    <string name="search_genre_folk">Folk</string>
+    <string name="search_genre_dance">Dance</string>
+</resources>

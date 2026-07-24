@@ -4,15 +4,18 @@ package fm.rizx.player.ui.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.ui.model.SampleData
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -24,7 +27,6 @@ import javax.inject.Inject
  * track duration, matching the interactive prototype.
  */
 data class PlayerUiState(
-    val isDark: Boolean = true,
     val isPlaying: Boolean = true,
     val progress: Float = 0.42f,
     val likedNp: Boolean = true,
@@ -38,15 +40,14 @@ class PlayerViewModel @Inject constructor(
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
+    /** Light / dark / system (default). SYSTEM is resolved to the device dark-mode at render time in the
+     *  Activity via `isSystemInDarkTheme()` — the ViewModel only carries the *choice*, which persists. */
+    val themeMode: StateFlow<ThemeMode> =
+        settings.themeMode.stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.SYSTEM)
+
     val durationSec: Int = SampleData.TRACK_DURATION_SEC
 
     init {
-        // The theme now persists (DataStore): mirror the stored value into state, and toggling writes
-        // it back so the choice survives restart.
-        viewModelScope.launch {
-            settings.darkTheme.collect { dark -> _state.update { it.copy(isDark = dark) } }
-        }
-
         // Advance progress ~1 Hz, but only while the UI is actually observing `state`. Gating on
         // the subscriber count keeps the ticker deterministically testable (no unbounded loop in
         // construction) and avoids doing work when nothing is collecting (e.g. app backgrounded).
@@ -71,8 +72,8 @@ class PlayerViewModel @Inject constructor(
 
     fun togglePlay() = _state.update { it.copy(isPlaying = !it.isPlaying) }
 
-    fun toggleTheme() {
-        viewModelScope.launch { settings.setDarkTheme(!_state.value.isDark) }
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { settings.setThemeMode(mode) }
     }
 
     fun toggleLikeNp() = _state.update { it.copy(likedNp = !it.likedNp) }

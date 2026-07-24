@@ -11,6 +11,7 @@ import fm.rizx.player.domain.plugin.PluginRepository
 import fm.rizx.player.domain.plugin.RegistryPlugin
 import fm.rizx.player.domain.provider.EnabledProviderStore
 import fm.rizx.player.domain.provider.ProviderKind
+import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.domain.usecase.ProviderHealthProbe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -47,8 +48,8 @@ class PluginsViewModelTest {
     }
 
     private class NoopSettings : SettingsRepository {
-        override val darkTheme: Flow<Boolean> = flowOf(true)
-        override suspend fun setDarkTheme(dark: Boolean) {}
+        override val themeMode: Flow<ThemeMode> = flowOf(ThemeMode.SYSTEM)
+        override suspend fun setThemeMode(mode: ThemeMode) {}
         override val activeMetadataProviderId: Flow<String?> = flowOf(null)
         override suspend fun setActiveMetadataProviderId(id: String?) {}
         override val activeStreamingProviderId: Flow<String?> = flowOf(null)

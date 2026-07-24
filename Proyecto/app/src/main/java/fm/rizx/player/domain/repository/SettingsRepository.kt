@@ -1,5 +1,6 @@
 package fm.rizx.player.domain.repository
 
+import fm.rizx.player.domain.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -10,8 +11,9 @@ import kotlinx.coroutines.flow.Flow
  */
 interface SettingsRepository {
 
-    val darkTheme: Flow<Boolean>
-    suspend fun setDarkTheme(dark: Boolean)
+    /** Light / dark / system. [ThemeMode.SYSTEM] (the default) follows the device's dark-mode setting. */
+    val themeMode: Flow<ThemeMode>
+    suspend fun setThemeMode(mode: ThemeMode)
 
     val activeMetadataProviderId: Flow<String?>
     suspend fun setActiveMetadataProviderId(id: String?)

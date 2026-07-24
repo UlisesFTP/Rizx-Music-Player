@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
@@ -24,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.ui.RizxApp
 import fm.rizx.player.ui.player.PlayerViewModel
 import fm.rizx.player.ui.screens.RizxSplash
@@ -38,11 +40,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             // The activity-scoped PlayerViewModel drives both the live theme and playback.
             val playerViewModel: PlayerViewModel = hiltViewModel()
-            val state by playerViewModel.state.collectAsStateWithLifecycle()
+            val themeMode by playerViewModel.themeMode.collectAsStateWithLifecycle()
+            // SYSTEM (the default) follows the device; isSystemInDarkTheme() re-reads on a device dark-mode
+            // change, so the app flips automatically when the phone does.
+            val isDark = when (themeMode) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
 
             AskForNotificationsOnce()
 
-            RizxTheme(darkTheme = state.isDark) {
+            RizxTheme(darkTheme = isDark) {
                 // The brand splash sits over the app while it wakes up, then dissolves into it. Saved
                 // across configuration changes so a rotation doesn't replay it.
                 var splashVisible by rememberSaveable { mutableStateOf(true) }

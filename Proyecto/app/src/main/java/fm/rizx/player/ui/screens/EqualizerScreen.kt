@@ -27,10 +27,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fm.rizx.player.R
 import fm.rizx.player.domain.model.EqPreset
 import fm.rizx.player.domain.model.EqualizerState
 import fm.rizx.player.ui.components.clickableScale
@@ -55,10 +57,10 @@ fun EqualizerScreen(onBack: () -> Unit, vm: EqualizerViewModel = hiltViewModel()
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(
-                RizxIcons.Back, "Back", tint = c.text,
+                RizxIcons.Back, stringResource(R.string.eq_cd_back), tint = c.text,
                 modifier = Modifier.size(26.dp).clickableScale(scale = 0.88f, onClick = onBack),
             )
-            Text("Equalizer", style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.eq_title), style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
             if (state.available) {
                 Switch(checked = state.enabled, onCheckedChange = vm::setEnabled)
             }
@@ -67,7 +69,7 @@ fun EqualizerScreen(onBack: () -> Unit, vm: EqualizerViewModel = hiltViewModel()
         if (!state.available) {
             Box(Modifier.fillMaxWidth().padding(top = 60.dp), contentAlignment = Alignment.Center) {
                 Text(
-                    "Play a track to use the equalizer.",
+                    stringResource(R.string.eq_unavailable_message),
                     style = mr(14, FontWeight.Medium), color = c.muted,
                 )
             }
@@ -84,7 +86,7 @@ fun EqualizerScreen(onBack: () -> Unit, vm: EqualizerViewModel = hiltViewModel()
 @Composable
 private fun Presets(enabled: Boolean, onPreset: (EqPreset) -> Unit) {
     val c = RizxTheme.colors
-    Text("PRESETS", style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+    Text(stringResource(R.string.eq_section_presets), style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         EqPreset.entries.forEach { preset ->
             Text(
@@ -105,7 +107,7 @@ private fun Presets(enabled: Boolean, onPreset: (EqPreset) -> Unit) {
 @Composable
 private fun Bands(state: EqualizerState, onBand: (Int, Int) -> Unit) {
     val c = RizxTheme.colors
-    Text("BANDS", style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+    Text(stringResource(R.string.eq_section_bands), style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
     state.bands.forEach { band ->
         Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

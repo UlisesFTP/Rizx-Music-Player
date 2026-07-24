@@ -30,10 +30,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fm.rizx.player.R
 import fm.rizx.player.domain.provider.ProviderHealth
 import fm.rizx.player.domain.provider.ProviderKind
 import fm.rizx.player.ui.components.clickableScale
@@ -57,21 +59,22 @@ fun PluginsScreen(vm: PluginsViewModel = hiltViewModel()) {
     Column(
         Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
     ) {
-        Text("Plugins", style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.padding(top = 12.dp))
-        Text("Built-in providers Rizx searches, streams, and gets charts from.", style = mr(13, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 2.dp))
+        Text(stringResource(R.string.plugins_title), style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.padding(top = 12.dp))
+        Text(stringResource(R.string.plugins_subtitle), style = mr(13, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 2.dp))
 
         Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Tab("Installed", !storeTab) { storeTab = false }
-            Tab("Store", storeTab) { storeTab = true }
+            Tab(stringResource(R.string.plugins_tab_installed), !storeTab) { storeTab = false }
+            Tab(stringResource(R.string.plugins_tab_store), storeTab) { storeTab = true }
         }
 
         if (storeTab) {
+            // state.storeError is sourced from the ViewModel; left as a raw literal there (not localized here).
             state.storeError?.let { Text(it, style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 12.dp)) }
-            Section("Nuclear plugin store")
+            Section(stringResource(R.string.plugins_section_nuclear_store))
             state.store.forEach { row -> StoreRow(row, onInstall = { vm.install(row.id) }) }
         } else {
             if (state.installedPlugins.isNotEmpty()) {
-                Section("Installed plugins")
+                Section(stringResource(R.string.plugins_section_installed_plugins))
                 state.installedPlugins.forEach { p ->
                     InstalledPluginRow(
                         p,
@@ -139,11 +142,11 @@ private fun InstalledRow(row: PluginRow, onSelect: () -> Unit, onToggle: (Boolea
             }
             Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HealthBadge(row.health)
-                if (row.singleActive) Text(if (row.active) "Active" else "Tap to use", style = mr(12, FontWeight.Medium), color = c.muted)
+                if (row.singleActive) Text(if (row.active) stringResource(R.string.plugins_active) else stringResource(R.string.plugins_tap_to_use), style = mr(12, FontWeight.Medium), color = c.muted)
             }
         }
         if (row.singleActive) {
-            if (row.active) Icon(RizxIcons.Check, "Active", tint = c.redAccent, modifier = Modifier.size(22.dp))
+            if (row.active) Icon(RizxIcons.Check, stringResource(R.string.plugins_active), tint = c.redAccent, modifier = Modifier.size(22.dp))
         } else {
             Switch(checked = row.enabled, onCheckedChange = onToggle)
         }
@@ -165,10 +168,10 @@ private fun StoreRow(row: StoreRow, onInstall: () -> Unit) {
             }
         }
         val (label, actionable) = when (row.status) {
-            StoreStatus.AVAILABLE -> "Install" to true
-            StoreStatus.INSTALLING -> "Installing…" to false
-            StoreStatus.INSTALLED -> "Installed" to false
-            StoreStatus.ERROR -> "Retry" to true
+            StoreStatus.AVAILABLE -> stringResource(R.string.plugins_install) to true
+            StoreStatus.INSTALLING -> stringResource(R.string.plugins_installing) to false
+            StoreStatus.INSTALLED -> stringResource(R.string.plugins_installed) to false
+            StoreStatus.ERROR -> stringResource(R.string.action_retry) to true
         }
         Text(
             label,
@@ -193,10 +196,10 @@ private fun InstalledPluginRow(row: InstalledPluginRow, onToggle: (Boolean) -> U
     ) {
         Column(Modifier.weight(1f)) {
             Text("${row.name}  ·  v${row.version}", style = mr(15, FontWeight.SemiBold), color = c.text)
-            Text("Plugin · ${row.category}", style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 2.dp))
+            Text(stringResource(R.string.plugins_plugin_category, row.category), style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 2.dp))
         }
         Icon(
-            Icons.Filled.DeleteOutline, "Uninstall", tint = c.text2,
+            Icons.Filled.DeleteOutline, stringResource(R.string.plugins_uninstall), tint = c.text2,
             modifier = Modifier.size(22.dp).clickableScale(scale = 0.86f, onClick = onUninstall),
         )
         Switch(checked = row.enabled, onCheckedChange = onToggle)
@@ -208,7 +211,7 @@ private fun HealthBadge(health: ProviderHealth) {
     val c = RizxTheme.colors
     val (text, dot) = when (health) {
         is ProviderHealth.Ok -> "${health.latencyMs} ms" to c.accent
-        is ProviderHealth.Down -> "Down" to c.redAccent
+        is ProviderHealth.Down -> stringResource(R.string.plugins_health_down) to c.redAccent
         ProviderHealth.Unknown -> "…" to c.muted
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {

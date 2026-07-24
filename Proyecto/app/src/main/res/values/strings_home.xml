@@ -1,0 +1,79 @@
+<resources>
+    <!-- Home screen: header -->
+    <string name="home_logo_cd">Rizx logo</string>
+    <string name="home_greeting">Good evening</string>
+    <string name="home_subtitle">Charts &amp; discovery</string>
+    <string name="home_liked_songs_cd">Liked songs</string>
+
+    <!-- Home screen: tabs -->
+    <string name="home_tab_all">All</string>
+    <string name="home_tab_songs">Songs</string>
+    <string name="home_tab_for_you">For you</string>
+    <string name="home_tab_albums">Albums</string>
+    <string name="home_tab_artists">Artists</string>
+
+    <!-- Home screen: loading / offline / empty states -->
+    <string name="home_offline_message">You\'re offline. Connect and pull the feed again.</string>
+    <string name="home_empty_charts">Nothing in the charts right now.</string>
+    <string name="home_empty_songs">No songs in the charts right now.</string>
+    <string name="home_empty_picks">No picks right now.</string>
+    <string name="home_empty_albums">No albums in the charts right now.</string>
+    <string name="home_empty_artists">No artists in the charts right now.</string>
+
+    <!-- Home screen: carousels + cells -->
+    <string name="home_top_songs">Top songs</string>
+    <string name="home_made_for_you">Made for you</string>
+    <string name="home_top_albums">Top albums</string>
+    <string name="home_popular_artists">Popular artists</string>
+    <string name="home_editorial">Editorial</string>
+    <string name="home_generic_album">Album</string>
+    <string name="home_for_you_notice">Editorial picks for now — personalized recommendations are coming.</string>
+
+    <!-- Search screen: header + field -->
+    <string name="search_open_queue">Open queue</string>
+    <string name="search_hint">Songs, artists, moods…</string>
+
+    <!-- Search screen: tabs -->
+    <string name="search_tab_songs">Songs</string>
+    <string name="search_tab_artists">Artists</string>
+    <string name="search_tab_albums">Albums</string>
+    <string name="search_tab_playlists">Playlists</string>
+    <string name="search_tab_underground">Underground</string>
+
+    <!-- Search screen: loading / offline / error / empty states -->
+    <string name="search_offline_title">You\'re offline</string>
+    <string name="search_offline_message">Couldn\'t reach the source. Check your connection and try again.</string>
+    <string name="search_error_title">Couldn\'t search</string>
+    <string name="search_no_results_title">No results</string>
+    <string name="search_no_results_message">Nothing matched “%1$s”.</string>
+
+    <!-- Search screen: result rows -->
+    <string name="search_like">Like</string>
+    <string name="search_remove_from_liked">Remove from liked</string>
+    <string name="search_add_to_queue">Add to queue</string>
+    <string name="search_play_next">Play next</string>
+    <string name="search_result_artist_label">Artist</string>
+    <string name="search_album_fallback">Album</string>
+    <string name="search_track_count">%1$d tracks</string>
+    <string name="search_playlist_label">Playlist</string>
+
+    <!-- Search screen: idle state (suggestions + genre tiles) -->
+    <string name="search_try_searching">Try searching</string>
+    <string name="search_browse_genres">Browse genres</string>
+    <string name="search_genre_pop">Pop</string>
+    <string name="search_genre_hiphop">Hip-Hop</string>
+    <string name="search_genre_rock">Rock</string>
+    <string name="search_genre_electronic">Electronic</string>
+    <string name="search_genre_rnb">R&amp;B</string>
+    <string name="search_genre_jazz">Jazz</string>
+    <string name="search_genre_latin">Latin</string>
+    <string name="search_genre_classical">Classical</string>
+    <string name="search_genre_metal">Metal</string>
+    <string name="search_genre_reggaeton">Reggaeton</string>
+    <string name="search_genre_reggae">Reggae</string>
+    <string name="search_genre_soul_funk">Soul &amp; Funk</string>
+    <string name="search_genre_blues">Blues</string>
+    <string name="search_genre_country">Country</string>
+    <string name="search_genre_folk">Folk</string>
+    <string name="search_genre_dance">Dance</string>
+</resources>

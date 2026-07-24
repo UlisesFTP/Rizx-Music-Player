@@ -1,0 +1,39 @@
+<resources>
+    <!-- Now Playing screen: hero header actions -->
+    <string name="player_album_artwork">Portada del álbum</string>
+    <string name="player_back">Atrás</string>
+    <string name="player_lyrics">Letra</string>
+    <string name="player_more_options">Más opciones</string>
+
+    <!-- Now Playing screen: transport + playback modes -->
+    <string name="player_shuffle_on_desc">Aleatorio activado — toca para reproducir en orden</string>
+    <string name="player_shuffle_off_desc">Aleatorio desactivado — toca para activar el aleatorio</string>
+    <string name="player_previous">Anterior</string>
+    <string name="player_next">Siguiente</string>
+    <string name="player_repeat_off_desc">Repetir desactivado — toca para repetir la cola</string>
+    <string name="player_repeat_all_desc">Repitiendo la cola — toca para repetir esta canción</string>
+    <string name="player_repeat_one_desc">Repitiendo esta canción — toca para desactivar la repetición</string>
+
+    <!-- Now Playing screen: track actions -->
+    <string name="player_add_to_playlist">Añadir a playlist</string>
+    <string name="player_like">Me gusta</string>
+    <string name="player_remove_from_liked">Quitar de Me gusta</string>
+
+    <!-- Now Playing screen: bottom bar + up-next drawer -->
+    <string name="player_nearby_devices">Dispositivos cercanos</string>
+    <string name="player_start_radio">Iniciar radio</string>
+    <string name="player_up_next_count">A CONTINUACIÓN · %1$d</string>
+    <string name="player_up_next">A continuación</string>
+    <string name="player_hide_queue">Ocultar cola</string>
+    <string name="player_remove_from_queue">Quitar de la cola</string>
+    <string name="player_reorder">Reordenar</string>
+
+    <!-- Now Playing overflow menu -->
+    <string name="player_queued_for_download">En cola para descargar</string>
+    <string name="player_downloading_percent">Descargando %1$d%%</string>
+    <string name="player_downloaded_remove">Descargado — quitar</string>
+    <string name="player_download_failed_retry">Error de descarga — reintentar</string>
+    <string name="player_video_preview_on_none">Vista previa de video activada — no disponible para esta canción</string>
+    <string name="player_video_preview_turn_off">Desactivar vista previa de video</string>
+    <string name="player_video_preview">Vista previa de video</string>
+</resources>

@@ -22,12 +22,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fm.rizx.player.R
 import fm.rizx.player.core.formatDuration
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
@@ -61,9 +63,9 @@ fun EditorialPlaylistScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                RizxIconButton(RizxIcons.Back, "Back", onBack, background = c.elev, border = c.line, iconSize = 20.dp)
+                RizxIconButton(RizxIcons.Back, stringResource(R.string.detail_back), onBack, background = c.elev, border = c.line, iconSize = 20.dp)
                 Column(Modifier.weight(1f)) {
-                    Text("PLAYLIST", style = code(11, FontWeight.Bold), color = c.muted)
+                    Text(stringResource(R.string.detail_playlist_eyebrow), style = code(11, FontWeight.Bold), color = c.muted)
                     Text(vm.playlistName, style = sg(24, FontWeight.Bold, -0.02f), color = c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 Icon(RizxIcons.QueueMusic, null, tint = c.accent, modifier = Modifier.size(24.dp))
@@ -71,11 +73,15 @@ fun EditorialPlaylistScreen(
 
             when (val s = state) {
                 EditorialPlaylistUiState.Loading -> Centered { DotMatrixSpinner(color = c.accent, diameter = 34.dp) }
-                EditorialPlaylistUiState.Offline -> Message("You're offline. Connect and try again.", vm::load)
+                EditorialPlaylistUiState.Offline -> Message(stringResource(R.string.detail_offline_message), vm::load)
                 is EditorialPlaylistUiState.Error -> Message(s.message, vm::load)
                 is EditorialPlaylistUiState.Content -> {
                     Text(
-                        "${s.tracks.size} ${if (s.tracks.size == 1) "TRACK" else "TRACKS"}",
+                        if (s.tracks.size == 1) {
+                            stringResource(R.string.detail_track_count_caps_one, s.tracks.size)
+                        } else {
+                            stringResource(R.string.detail_track_count_caps_other, s.tracks.size)
+                        },
                         style = code(11, FontWeight.Bold), color = c.muted,
                         modifier = Modifier.padding(top = 14.dp, bottom = 2.dp),
                     )
@@ -107,7 +113,7 @@ private fun PlaylistTrackRow(position: Int, track: Track, onPlay: () -> Unit) {
         CoverArt(tintFor(track.source.id), initial = null, Modifier.size(46.dp), imageUrl = track.artwork.coverUrl())
         Column(Modifier.weight(1f)) {
             Text(track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(track.artists.joinToString { it.name }.ifEmpty { "Unknown artist" }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.unknown_artist) }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Text(formatDuration(track.durationMs), style = mr(12, FontWeight.Medium), color = c.muted)
     }
@@ -125,7 +131,7 @@ private fun Message(text: String, onRetry: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text, style = mr(14, FontWeight.Medium), color = c.muted, textAlign = TextAlign.Center)
             Text(
-                "Retry", style = sg(14, FontWeight.Bold), color = c.onFill,
+                stringResource(R.string.action_retry), style = sg(14, FontWeight.Bold), color = c.onFill,
                 modifier = Modifier.padding(top = 16.dp).background(c.fill).clickableScale(scale = 0.94f, onClick = onRetry).padding(horizontal = 22.dp, vertical = 10.dp),
             )
         }

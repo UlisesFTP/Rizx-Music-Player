@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.core.cache.CacheManager
 import fm.rizx.player.domain.playback.AudioEffectsController
+import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.playback.AudioOutputCapabilities
 import io.mockk.coEvery
@@ -118,8 +119,8 @@ class PreferencesViewModelTest {
         override val audioCacheBytes = audioCacheFlow
         override suspend fun setAudioCacheBytes(bytes: Long) { audioCacheFlow.value = bytes }
 
-        override val darkTheme = flowOf(true)
-        override suspend fun setDarkTheme(dark: Boolean) {}
+        override val themeMode = flowOf(ThemeMode.SYSTEM)
+        override suspend fun setThemeMode(mode: ThemeMode) {}
         override val activeMetadataProviderId = flowOf<String?>(null)
         override suspend fun setActiveMetadataProviderId(id: String?) {}
         override val activeStreamingProviderId = flowOf<String?>(null)

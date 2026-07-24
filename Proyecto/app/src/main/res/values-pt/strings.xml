@@ -1,0 +1,60 @@
+<resources>
+    <!-- Bottom navigation -->
+    <string name="nav_home">Início</string>
+    <string name="nav_search">Pesquisar</string>
+    <string name="nav_library">Biblioteca</string>
+    <string name="nav_settings">Configurações</string>
+
+    <!-- Settings / Preferences -->
+    <string name="settings_title">Configurações</string>
+    <string name="settings_playback">Reprodução</string>
+    <string name="settings_appearance">Aparência</string>
+    <string name="settings_data_storage">Dados e armazenamento</string>
+    <string name="settings_about_section">Sobre</string>
+    <string name="settings_language_section">Idioma</string>
+    <string name="pref_plugins">Plugins e fontes</string>
+    <string name="pref_plugins_v">Gerenciar</string>
+    <string name="pref_equalizer">Equalizador</string>
+    <string name="pref_equalizer_v">Presets · bandas</string>
+    <string name="pref_crossfade">Transição cruzada</string>
+    <string name="pref_gapless">Reprodução sem intervalos</string>
+    <string name="pref_normalize">Normalizar volume</string>
+    <string name="pref_hires">Saída Hi-Res</string>
+    <string name="pref_hires_best">Melhor com arquivos locais sem perdas</string>
+    <string name="pref_hires_applies">aplica-se na próxima reprodução</string>
+    <string name="pref_theme">Tema</string>
+    <string name="theme_system">Sistema</string>
+    <string name="theme_dark">Escuro</string>
+    <string name="theme_light">Claro</string>
+    <string name="pref_data_saver">Economia de dados</string>
+    <string name="pref_offline_cache">Cache offline</string>
+    <string name="pref_offline_cache_cap">Guarda as músicas reproduzidas para ouvir offline</string>
+    <string name="pref_clear_cache">Limpar cache</string>
+    <string name="pref_about">Sobre o Rizx</string>
+    <string name="pref_about_v">Licença · fontes</string>
+    <string name="pref_language">Idioma</string>
+    <string name="language_system">Padrão do sistema</string>
+
+    <!-- Common actions / labels -->
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_save">Salvar</string>
+    <string name="action_delete">Excluir</string>
+    <string name="action_remove">Remover</string>
+    <string name="action_add">Adicionar</string>
+    <string name="action_retry">Tentar novamente</string>
+    <string name="action_close">Fechar</string>
+    <string name="action_share">Compartilhar</string>
+    <string name="action_create">Criar</string>
+    <string name="action_download">Baixar</string>
+    <string name="action_import">Importar</string>
+    <string name="action_clear">Limpar</string>
+    <string name="action_undo">Desfazer</string>
+    <string name="action_see_all">Ver tudo</string>
+    <string name="action_play">Reproduzir</string>
+    <string name="action_pause">Pausar</string>
+    <string name="action_search">Pesquisar</string>
+    <string name="action_done">Concluído</string>
+    <string name="unknown_artist">Artista desconhecido</string>
+    <string name="unknown_album">Álbum desconhecido</string>
+    <string name="now_playing_empty">Nada em reprodução</string>
+</resources>

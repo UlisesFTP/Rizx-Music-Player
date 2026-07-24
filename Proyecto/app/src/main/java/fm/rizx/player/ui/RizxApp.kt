@@ -5,6 +5,7 @@ import fm.rizx.player.ui.player.openAudioOutputSwitcher
 import fm.rizx.player.ui.player.NowPlayingMenu
 import fm.rizx.player.ui.player.CanvasViewModel
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -84,7 +85,7 @@ import fm.rizx.player.ui.theme.blueprintGrid
 fun RizxApp(playerViewModel: PlayerViewModel) {
     val c = RizxTheme.colors
     val nav = rememberNavController()
-    val state by playerViewModel.state.collectAsStateWithLifecycle()
+    val themeMode by playerViewModel.themeMode.collectAsStateWithLifecycle()
     // Activity-scoped queue shared by the search actions and the queue screen (repo is a singleton).
     val queueViewModel: QueueViewModel = hiltViewModel()
     val queue by queueViewModel.queue.collectAsStateWithLifecycle()
@@ -261,7 +262,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     0f
                 }
                 NowPlayingScreen(
-                    title = np?.track?.title ?: "Nothing playing",
+                    title = np?.track?.title ?: stringResource(fm.rizx.player.R.string.now_playing_empty),
                     artist = np?.track?.artists?.joinToString { it.name }?.ifEmpty { "—" } ?: "—",
                     artworkUrl = np?.track?.artwork?.coverUrl(),
                     isPlaying = playbackState.isPlaying,
@@ -337,8 +338,8 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
             }
             composable(Routes.SETTINGS) {
                 PreferencesScreen(
-                    isDark = state.isDark,
-                    onToggleTheme = playerViewModel::toggleTheme,
+                    themeMode = themeMode,
+                    onSetThemeMode = playerViewModel::setThemeMode,
                     onOpenSources = { nav.navigate(Routes.SOURCES) },
                     onOpenEqualizer = { nav.navigate(Routes.EQUALIZER) },
                     onOpenAbout = { nav.navigate(Routes.ABOUT) },

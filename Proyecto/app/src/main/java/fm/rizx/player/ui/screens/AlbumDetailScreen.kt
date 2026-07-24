@@ -24,12 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fm.rizx.player.R
 import fm.rizx.player.core.formatDuration
 import fm.rizx.player.domain.model.Album
 import fm.rizx.player.domain.model.DownloadState
@@ -68,14 +70,14 @@ fun AlbumDetailScreen(
     Box(Modifier.fillMaxSize()) {
         when (val s = state) {
             AlbumUiState.Loading -> CenteredSpinner()
-            AlbumUiState.Offline -> DetailMessage("You're offline. Connect and try again.", onRetry = vm::load)
+            AlbumUiState.Offline -> DetailMessage(stringResource(R.string.detail_offline_message), onRetry = vm::load)
             is AlbumUiState.Error -> DetailMessage(s.message, onRetry = vm::load)
             is AlbumUiState.Content -> AlbumContent(s.album, onBack, onOpenArtist, vm, downloadStates)
         }
         // Back button floats over every state so the user is never stuck.
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
             RizxIconButton(
-                RizxIcons.Back, "Back", onBack,
+                RizxIcons.Back, stringResource(R.string.detail_back), onBack,
                 background = if (c.isDark) Color(0xFF0A0A0B).copy(alpha = 0.5f) else Color(0xFFF3F0E9).copy(alpha = 0.58f),
                 border = if (c.isDark) Color.White.copy(alpha = 0.14f) else Color(0xFF221F1A).copy(alpha = 0.18f),
                 tint = c.text,
@@ -113,7 +115,7 @@ private fun AlbumContent(
             // HUD corner-bracket frame over the hero (industrial spec-sheet chrome).
             Box(Modifier.matchParentSize().cornerBrackets(c.hardLine, len = 12.dp))
             Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 16.dp)) {
-                Text("ALBUM", style = mr(11, FontWeight.Bold, 0.2f), color = c.accent)
+                Text(stringResource(R.string.detail_album_eyebrow), style = mr(11, FontWeight.Bold, 0.2f), color = c.accent)
                 Text(album.title, style = sg(30, FontWeight.Bold, -0.02f), color = c.heroText, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
                 Text(subtitle(album), style = mr(13, FontWeight.Medium), color = c.heroSub, modifier = Modifier.padding(top = 6.dp))
             }
@@ -121,7 +123,7 @@ private fun AlbumContent(
 
         album.artists.firstOrNull()?.let { artist ->
             Text(
-                "More by ${artist.name}",
+                stringResource(R.string.detail_more_by, artist.name),
                 style = mr(13, FontWeight.SemiBold), color = c.accent,
                 modifier = Modifier.clickableScale(scale = 0.98f) { onOpenArtist(artist.source) }.padding(horizontal = 22.dp, vertical = 10.dp),
             )
@@ -131,7 +133,7 @@ private fun AlbumContent(
             Modifier.fillMaxWidth().padding(start = 22.dp, end = 18.dp, top = 6.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("TRACKS", style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.detail_tracks_heading), style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.weight(1f))
             DownloadAllButton(album.tracks, downloadStates, onDownloadAll = vm::downloadAll)
         }
         album.tracks.forEachIndexed { index, track ->
@@ -162,20 +164,25 @@ private fun TrackRow(position: Int, track: Track, onPlay: (Int) -> Unit, trailin
         }
         Column(Modifier.weight(1f)) {
             Text(track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(track.artists.joinToString { it.name }.ifEmpty { "Unknown artist" }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            Text(track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.unknown_artist) }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
         Text(formatDuration(track.durationMs), style = mr(12, FontWeight.Medium), color = c.muted)
         trailing()
     }
 }
 
-private fun subtitle(album: Album): String = buildList {
-    album.artists.firstOrNull()?.name?.let { add(it) }
-    album.year?.let { add(it.toString()) }
+@Composable
+private fun subtitle(album: Album): String {
     val count = album.totalTracks ?: album.tracks.size
-    add("$count ${if (count == 1) "track" else "tracks"}")
-    album.durationMs?.let { add("${it / 60000} min") }
-}.joinToString(" · ")
+    val trackWord = if (count == 1) stringResource(R.string.detail_track_word_one) else stringResource(R.string.detail_track_word_other)
+    val minutesUnit = stringResource(R.string.detail_minutes_unit)
+    return buildList {
+        album.artists.firstOrNull()?.name?.let { add(it) }
+        album.year?.let { add(it.toString()) }
+        add("$count $trackWord")
+        album.durationMs?.let { add("${it / 60000} $minutesUnit") }
+    }.joinToString(" · ")
+}
 
 
 
@@ -194,7 +201,7 @@ private fun DetailMessage(text: String, onRetry: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text, style = mr(14, FontWeight.Medium), color = c.muted, textAlign = TextAlign.Center)
             Text(
-                "Retry", style = sg(14, FontWeight.Bold), color = c.onFill,
+                stringResource(R.string.action_retry), style = sg(14, FontWeight.Bold), color = c.onFill,
                 modifier = Modifier.padding(top = 16.dp).background(c.fill).clickableScale(scale = 0.94f, onClick = onRetry).padding(horizontal = 22.dp, vertical = 10.dp),
             )
         }

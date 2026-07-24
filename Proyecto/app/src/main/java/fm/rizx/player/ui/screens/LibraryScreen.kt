@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -51,12 +52,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fm.rizx.player.R
 import fm.rizx.player.data.download.formatBytes
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadedTrack
@@ -87,13 +90,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** The Library's content categories — pick one instead of scrolling past the others. */
-enum class LibraryTab(val label: String) {
-    All("All"),
-    Playlists("Playlists"),
-    Liked("Liked"),
-    Downloads("Downloads"),
-    Recent("Recent"),
-    Local("Local"),
+enum class LibraryTab(@StringRes val labelRes: Int) {
+    All(R.string.library_tab_all),
+    Playlists(R.string.library_tab_playlists),
+    Liked(R.string.library_tab_liked),
+    Downloads(R.string.library_tab_downloads),
+    Recent(R.string.library_tab_recent),
+    Local(R.string.library_tab_local),
 }
 
 /** How many rows a section previews on the [LibraryTab.All] overview before "See all". */
@@ -130,12 +133,23 @@ fun LibraryScreen(
     val scope = rememberCoroutineScope()
     val snackbars = remember { SnackbarHostState() }
 
+    // Toast/snackbar text is shown from callbacks that run after composition (network results, activity
+    // results), where stringResource() can't be called — resolve it here, in composable scope, and capture
+    // the resolved value in the closure below.
+    val playlistImportedMsg = stringResource(R.string.library_playlist_imported)
+    val importFailedMsg = stringResource(R.string.library_import_failed)
+    val fileReadErrorMsg = stringResource(R.string.library_import_file_read_error)
+    val exportSavedTemplate = stringResource(R.string.library_export_saved)
+    val exportFailedMsg = stringResource(R.string.library_export_failed)
+    val removedFromLikedMsg = stringResource(R.string.library_removed_from_liked)
+    val undoLabel = stringResource(R.string.action_undo).uppercase()
+
     // Imports hit the network and can legitimately fail (private list, dead link, changed page) — say so
     // instead of leaving the user staring at an unchanged Library.
     val reportImport: (Result<String>) -> Unit = { result ->
         val message = result.fold(
-            onSuccess = { "Playlist imported" },
-            onFailure = { it.message ?: "Import failed" },
+            onSuccess = { playlistImportedMsg },
+            onFailure = { it.message ?: importFailedMsg },
         )
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
     }
@@ -150,7 +164,7 @@ fun LibraryScreen(
                 }.getOrNull()
             }
             if (file != null) vm.importPlaylistFile(file.first, file.second, reportImport)
-            else Toast.makeText(context, "Couldn't read that file", Toast.LENGTH_LONG).show()
+            else Toast.makeText(context, fileReadErrorMsg, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -158,8 +172,8 @@ fun LibraryScreen(
     val exportDownload: (DownloadedTrack) -> Unit = { entry ->
         vm.exportDownload(entry.key) { result ->
             val message = result.fold(
-                onSuccess = { "Saved to Music/Rizx as $it" },
-                onFailure = { it.message ?: "Export failed" },
+                onSuccess = { String.format(exportSavedTemplate, it) },
+                onFailure = { it.message ?: exportFailedMsg },
             )
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
@@ -170,8 +184,8 @@ fun LibraryScreen(
         vm.unfavoriteTrack(track)
         scope.launch {
             val result = snackbars.showSnackbar(
-                message = "Removed from liked",
-                actionLabel = "UNDO",
+                message = removedFromLikedMsg,
+                actionLabel = undoLabel,
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) vm.favoriteTrack(track)
@@ -190,9 +204,9 @@ fun LibraryScreen(
     }
     if (confirmClear) {
         ConfirmDialog(
-            title = "Clear recently played?",
-            body = "Only the history is cleared — your liked songs and playlists stay.",
-            confirmLabel = "Clear",
+            title = stringResource(R.string.library_clear_recent_title),
+            body = stringResource(R.string.library_clear_recent_body),
+            confirmLabel = stringResource(R.string.action_clear),
             onConfirm = vm::clearRecentlyPlayed,
             onDismiss = { confirmClear = false },
         )
@@ -200,22 +214,27 @@ fun LibraryScreen(
     // Deleting bytes is not undoable, so it asks first rather than offering a snackbar UNDO that would lie.
     confirmDeleteDownload?.let { entry ->
         ConfirmDialog(
-            title = "Delete download?",
-            body = "The file is removed from this device. The song stays in your library and will stream again.",
-            confirmLabel = "Delete",
+            title = stringResource(R.string.library_delete_download_title),
+            body = stringResource(R.string.library_delete_download_body),
+            confirmLabel = stringResource(R.string.action_delete),
             onConfirm = { vm.deleteDownload(entry.key) },
             onDismiss = { confirmDeleteDownload = null },
         )
     }
     if (confirmDeleteAllDownloads) {
         ConfirmDialog(
-            title = "Delete all downloads?",
-            body = "Every downloaded file is removed. Your songs stay in the library and will stream again.",
-            confirmLabel = "Delete all",
+            title = stringResource(R.string.library_delete_all_downloads_title),
+            body = stringResource(R.string.library_delete_all_downloads_body),
+            confirmLabel = stringResource(R.string.library_delete_all_downloads_confirm),
             onConfirm = vm::deleteAllDownloads,
             onDismiss = { confirmDeleteAllDownloads = false },
         )
     }
+
+    val playlistsSectionTitle = stringResource(R.string.library_section_playlists)
+    val likedSectionTitle = stringResource(R.string.library_section_liked)
+    val downloadsSectionTitle = stringResource(R.string.library_section_downloads)
+    val recentSectionTitle = stringResource(R.string.library_section_recent)
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -228,17 +247,17 @@ fun LibraryScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("Your Library", style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.library_title), style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
                     // Labelled, not bare glyphs: "new" and "import" are not guessable from an icon, and the
                     // old import icon was a download arrow — which this screen also uses for its Downloads
                     // tab, so it read as "download" rather than "import".
                     RizxActionButton(
-                        RizxIcons.Add, "New", onClick = { creating = true },
-                        contentDescription = "New playlist", prominent = true,
+                        RizxIcons.Add, stringResource(R.string.library_new_playlist_label), onClick = { creating = true },
+                        contentDescription = stringResource(R.string.library_new_playlist), prominent = true,
                     )
                     RizxActionButton(
-                        Icons.Filled.AddLink, "Import", onClick = { importing = true },
-                        contentDescription = "Import a playlist",
+                        Icons.Filled.AddLink, stringResource(R.string.action_import), onClick = { importing = true },
+                        contentDescription = stringResource(R.string.library_import_playlist_desc),
                     )
                 }
             }
@@ -252,7 +271,7 @@ fun LibraryScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     LibraryTab.entries.forEach { entry ->
-                        RizxChip(entry.label, active = tab == entry, onClick = { tab = entry })
+                        RizxChip(stringResource(entry.labelRes), active = tab == entry, onClick = { tab = entry })
                     }
                 }
             }
@@ -261,7 +280,7 @@ fun LibraryScreen(
                 LibraryTab.All -> {
                     // Playlists first: they're what you open the Library for.
                     section(
-                        title = "Playlists",
+                        title = playlistsSectionTitle,
                         count = playlists.size,
                         onSeeAll = { tab = LibraryTab.Playlists },
                     ) {
@@ -270,7 +289,7 @@ fun LibraryScreen(
                     if (playlists.isEmpty()) item { PlaylistsEmpty { creating = true } }
 
                     section(
-                        title = "Liked songs",
+                        title = likedSectionTitle,
                         count = likedSongs.size,
                         onSeeAll = { tab = LibraryTab.Liked },
                     ) {
@@ -280,7 +299,7 @@ fun LibraryScreen(
 
                     if (downloads.isNotEmpty()) {
                         section(
-                            title = "Downloads",
+                            title = downloadsSectionTitle,
                             count = downloads.size,
                             onSeeAll = { tab = LibraryTab.Downloads },
                         ) {
@@ -289,7 +308,7 @@ fun LibraryScreen(
                     }
 
                     section(
-                        title = "Recently played",
+                        title = recentSectionTitle,
                         count = recents.size,
                         onSeeAll = { tab = LibraryTab.Recent },
                     ) {
@@ -302,7 +321,7 @@ fun LibraryScreen(
                     if (playlists.isEmpty()) {
                         item { PlaylistsEmpty { creating = true } }
                     } else {
-                        item { TabCount("${playlists.size} ${plural(playlists.size, "playlist")}") }
+                        item { TabCount(countLabel(playlists.size, R.string.library_count_playlist_one, R.string.library_count_playlist_other)) }
                         playlistRows(playlists, onOpenPlaylist)
                     }
                 }
@@ -311,7 +330,7 @@ fun LibraryScreen(
                     if (likedSongs.isEmpty()) {
                         item { LikedEmpty() }
                     } else {
-                        item { TabCount("${likedSongs.size} ${plural(likedSongs.size, "song")}") }
+                        item { TabCount(countLabel(likedSongs.size, R.string.library_count_song_one, R.string.library_count_song_other)) }
                         likedRows(likedSongs, downloadStates, vm, onUnfavorite)
                     }
                 }
@@ -331,12 +350,12 @@ fun LibraryScreen(
                             ) {
                                 val bytes = formatBytes(downloads.sumOf { it.sizeBytes })
                                 TabCount(
-                                    "${downloads.size} ${plural(downloads.size, "song")} · $bytes",
+                                    "${countLabel(downloads.size, R.string.library_count_song_one, R.string.library_count_song_other)} · $bytes",
                                     Modifier.weight(1f),
                                 )
                                 RizxIconButton(
                                     Icons.Filled.DeleteOutline,
-                                    "Delete all downloads",
+                                    stringResource(R.string.library_delete_all_downloads_desc),
                                     onClick = { confirmDeleteAllDownloads = true },
                                     iconSize = 20.dp,
                                     tint = c.text2,
@@ -356,10 +375,10 @@ fun LibraryScreen(
                                 Modifier.fillMaxWidth().padding(top = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                TabCount("${recents.size} ${plural(recents.size, "song")}", Modifier.weight(1f))
+                                TabCount(countLabel(recents.size, R.string.library_count_song_one, R.string.library_count_song_other), Modifier.weight(1f))
                                 RizxIconButton(
                                     Icons.Filled.DeleteOutline,
-                                    "Clear recently played",
+                                    stringResource(R.string.library_clear_recent_desc),
                                     onClick = { confirmClear = true },
                                     iconSize = 20.dp,
                                     tint = c.text2,
@@ -376,9 +395,9 @@ fun LibraryScreen(
                     item {
                         LibraryEmpty(
                             icon = Icons.Outlined.LibraryMusic,
-                            title = "Music on this device",
-                            body = "Browse and play the songs, albums and artists stored on your phone.",
-                            actionLabel = "Open local music",
+                            title = stringResource(R.string.library_local_entry_title),
+                            body = stringResource(R.string.library_local_entry_body),
+                            actionLabel = stringResource(R.string.library_open_local_music),
                             onAction = onOpenLocal,
                         )
                     }
@@ -410,12 +429,17 @@ private fun LazyListScope.section(
         SectionHeader(
             title,
             Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 6.dp),
-            action = if (count > PREVIEW_ROWS) "See all" else null,
+            action = if (count > PREVIEW_ROWS) stringResource(R.string.action_see_all) else null,
             onAction = if (count > PREVIEW_ROWS) onSeeAll else null,
         )
     }
     rows()
 }
+
+/** Localized "N noun(s)" — resolves the right plural resource for [count] and formats it in. */
+@Composable
+private fun countLabel(count: Int, @StringRes one: Int, @StringRes other: Int): String =
+    stringResource(if (count == 1) one else other, count)
 
 // Keys are prefixed per section: the same track can sit in both Liked and Recent on the All tab, and a
 // LazyColumn crashes on duplicate keys.
@@ -443,7 +467,7 @@ private fun LazyListScope.likedRows(
                 )
                 RizxIconButton(
                     RizxIcons.Favorite,
-                    "Remove from liked",
+                    stringResource(R.string.library_remove_from_liked_desc),
                     onClick = { onUnfavorite(track) },
                     iconSize = 22.dp,
                     tint = RizxTheme.colors.redAccent,
@@ -469,14 +493,14 @@ private fun LazyListScope.downloadRows(
                 CodeLabel("${entry.container.uppercase()} · ${formatBytes(entry.sizeBytes)}", size = 10)
                 RizxIconButton(
                     Icons.Filled.DriveFileMove,
-                    if (entry.exportedUri != null) "Export again to Music folder" else "Export to Music folder",
+                    if (entry.exportedUri != null) stringResource(R.string.library_export_again_desc) else stringResource(R.string.library_export_desc),
                     onClick = { onExport(entry) },
                     iconSize = 20.dp,
                     tint = if (entry.exportedUri != null) RizxTheme.colors.accent else RizxTheme.colors.text2,
                 )
                 RizxIconButton(
                     Icons.Filled.DeleteOutline,
-                    "Delete download",
+                    stringResource(R.string.library_delete_download_desc),
                     onClick = { onDelete(entry) },
                     iconSize = 20.dp,
                     tint = RizxTheme.colors.text2,
@@ -512,7 +536,7 @@ private fun TrackRow(track: Track, onPlay: () -> Unit, trailing: @Composable (Ro
         Column(Modifier.weight(1f)) {
             Text(track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                track.artists.joinToString { it.name }.ifEmpty { "Unknown artist" },
+                track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.unknown_artist) },
                 style = mr(12, FontWeight.Medium),
                 color = c.muted,
                 maxLines = 1,
@@ -546,7 +570,10 @@ private fun PlaylistRow(playlist: PlaylistSummary, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(playlist.name, style = mr(15, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                playlistSubtitle(playlist),
+                playlistSubtitle(
+                    playlist,
+                    countLabel(playlist.itemCount, R.string.library_count_track_one, R.string.library_count_track_other),
+                ),
                 style = mr(12, FontWeight.Medium),
                 color = c.muted,
                 maxLines = 1,
@@ -558,12 +585,10 @@ private fun PlaylistRow(playlist: PlaylistSummary, onClick: () -> Unit) {
     }
 }
 
-private fun playlistSubtitle(playlist: PlaylistSummary): String = buildList {
-    add("${playlist.itemCount} ${plural(playlist.itemCount, "track")}")
+private fun playlistSubtitle(playlist: PlaylistSummary, trackCountLabel: String): String = buildList {
+    add(trackCountLabel)
     playlist.description?.takeIf { it.isNotBlank() }?.let { add(it) }
 }.joinToString(" · ")
-
-private fun plural(count: Int, noun: String): String = if (count == 1) noun else "${noun}s"
 
 // ---- counts & empty states ----------------------------------------------------------------------
 
@@ -574,33 +599,33 @@ private fun TabCount(text: String, modifier: Modifier = Modifier) =
 @Composable
 private fun PlaylistsEmpty(onCreate: () -> Unit) = LibraryEmpty(
     icon = RizxIcons.QueueMusic,
-    title = "No playlists yet",
-    body = "Create one, or import from Spotify, YouTube Music or a file.",
-    actionLabel = "New playlist",
+    title = stringResource(R.string.library_no_playlists_title),
+    body = stringResource(R.string.library_no_playlists_body),
+    actionLabel = stringResource(R.string.library_new_playlist),
     onAction = onCreate,
 )
 
 @Composable
 private fun LikedEmpty() = LibraryEmpty(
     icon = RizxIcons.FavoriteBorder,
-    title = "No liked songs yet",
-    body = "Tap the heart on any song and it lands here.",
+    title = stringResource(R.string.library_no_liked_title),
+    body = stringResource(R.string.library_no_liked_body),
 )
 
 @Composable
 private fun RecentEmpty() = LibraryEmpty(
     icon = Icons.Filled.History,
-    title = "Nothing played yet",
-    body = "Songs you play show up here.",
+    title = stringResource(R.string.library_no_recent_title),
+    body = stringResource(R.string.library_no_recent_body),
 )
 
 /** The CTA only appears when there's somewhere to send you — an empty Liked tab would be a dead end. */
 @Composable
 private fun DownloadsEmpty(onGoToLiked: (() -> Unit)?) = LibraryEmpty(
     icon = Icons.Filled.DownloadForOffline,
-    title = "No downloads yet",
-    body = "Tap the download icon on any song to save it and play it without a connection.",
-    actionLabel = onGoToLiked?.let { "Go to liked songs" },
+    title = stringResource(R.string.library_no_downloads_title),
+    body = stringResource(R.string.library_no_downloads_body),
+    actionLabel = onGoToLiked?.let { stringResource(R.string.library_go_to_liked) },
     onAction = onGoToLiked,
 )
 

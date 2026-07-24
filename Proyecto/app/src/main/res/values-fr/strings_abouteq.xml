@@ -1,0 +1,32 @@
+<resources>
+    <!-- EqualizerScreen -->
+    <string name="eq_cd_back">Retour</string>
+    <string name="eq_title">Égaliseur</string>
+    <string name="eq_unavailable_message">Lancez un titre pour utiliser l\'égaliseur.</string>
+    <string name="eq_section_presets">PRÉRÉGLAGES</string>
+    <string name="eq_section_bands">BANDES</string>
+
+    <!-- AboutScreen -->
+    <string name="about_cd_back">Retour</string>
+    <string name="about_title">À propos</string>
+    <string name="about_version_label">Version %1$s (%2$s)</string>
+    <string name="about_label_based_on">Basé sur</string>
+    <string name="about_body_based_on">Rizx réimplémente la logique métier de Nuclear, le lecteur de musique de bureau open source créé par nukeop et ses contributeurs. Rizx est un fork indépendant qui n\'est ni affilié à Nuclear ni approuvé par ce projet.</string>
+    <string name="about_label_source">Source (Corresponding Source, AGPL §6)</string>
+    <string name="about_body_source_intro">Le code source complet de cette application — balisé pour correspondre à cette version — et le projet d\'origine sont publics :</string>
+    <string name="about_body_source_nuclear">• Nuclear original : github.com/nukeop/nuclear</string>
+    <string name="about_label_license">Licence</string>
+    <string name="about_body_license">Nuclear is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). As a derived work Rizx is also AGPL-3.0: its source and modifications are made available under the same terms and copyright notices are retained.</string>
+    <string name="about_cd_open_licenses">Ouvrir les licences</string>
+    <string name="about_label_open_source_licenses">Licences open source</string>
+    <string name="about_body_third_party">Dépendances tierces incluses dans cette application</string>
+
+    <!-- LicensesScreen -->
+    <string name="licenses_cd_back">Retour</string>
+    <string name="licenses_title">Licences open source</string>
+    <string name="licenses_intro">Rizx Player est distribué sous licence AGPL-3.0. Il inclut les bibliothèques open source ci-dessous, chacune sous sa propre licence.</string>
+    <string name="licenses_section_bundled">Inclus dans l\'application</string>
+    <string name="licenses_section_test_only">Tests uniquement (non inclus)</string>
+    <string name="licenses_section_license_texts">Textes des licences</string>
+    <string name="licenses_agpl_this_app">AGPL-3.0 (cette application) — gnu.org/licenses/agpl-3.0.html</string>
+</resources>

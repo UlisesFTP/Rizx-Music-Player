@@ -27,8 +27,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import fm.rizx.player.R
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.util.rememberRizxHaptics
@@ -117,7 +119,7 @@ fun PulsingPlayButton(
                 ) { playing ->
                     Icon(
                         if (playing) RizxIcons.Pause else RizxIcons.Play,
-                        contentDescription = if (playing) "Pause" else "Play",
+                        contentDescription = if (playing) stringResource(R.string.action_pause) else stringResource(R.string.action_play),
                         tint = onFillColor,
                         modifier = Modifier.size(iconSize),
                     )

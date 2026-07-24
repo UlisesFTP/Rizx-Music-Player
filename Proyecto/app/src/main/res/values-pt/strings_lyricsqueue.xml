@@ -1,0 +1,40 @@
+<resources>
+    <!-- LyricsScreen -->
+    <string name="lyrics_back_cd">Voltar</string>
+    <string name="lyrics_title_fallback">Letra</string>
+    <string name="lyrics_search_other_cd">Buscar outra letra</string>
+    <string name="lyrics_synced_on_cd">Letra sincronizada ativada — toque para ver texto simples</string>
+    <string name="lyrics_synced_off_cd">Texto simples — toque para sincronizar</string>
+    <string name="lyrics_source_chosen">escolhida</string>
+    <string name="lyrics_source_via">via %1$s</string>
+    <string name="lyrics_source_not_synced">não sincronizada</string>
+    <string name="lyrics_no_track">Nada está tocando.</string>
+    <string name="lyrics_offline">Você está offline. Conecte-se e tente novamente.</string>
+    <string name="lyrics_instrumental">Instrumental — sem letra.</string>
+    <string name="lyrics_no_results_for">Nenhuma letra encontrada para “%1$s”.</string>
+    <string name="lyrics_search_by_hand">Buscar manualmente</string>
+    <string name="lyrics_nudge_earlier_cd">Letra meio segundo antes</string>
+    <string name="lyrics_nudge_later_cd">Letra meio segundo depois</string>
+    <string name="lyrics_in_sync">Sincronizada</string>
+    <string name="lyrics_tap_to_unpin">Toque para desafixar</string>
+    <string name="lyrics_timing_label">Sincronia</string>
+    <string name="lyrics_previous_cd">Anterior</string>
+    <string name="lyrics_next_cd">Próxima</string>
+    <string name="lyrics_find_title">Buscar letra</string>
+    <string name="lyrics_search_placeholder">Artista e título da música</string>
+    <string name="lyrics_search_no_results">Nada encontrado. Tente apenas o título da música.</string>
+    <string name="lyrics_untitled">Sem título</string>
+    <string name="lyrics_synced_badge">Sincronizada</string>
+
+    <!-- QueueScreen -->
+    <string name="queue_back_cd">Voltar</string>
+    <string name="queue_title">Fila</string>
+    <string name="queue_save_as_playlist_cd">Salvar como playlist</string>
+    <string name="queue_nothing_queued">Nada na fila</string>
+    <string name="queue_track_count_one">%1$d música</string>
+    <string name="queue_track_count_other">%1$d músicas</string>
+    <string name="queue_empty_title">Sua fila está vazia</string>
+    <string name="queue_empty_subtitle">Adicione músicas em Pesquisar para colocá-las na fila aqui.</string>
+    <string name="queue_now_current_cd">Tocando agora</string>
+    <string name="queue_remove_cd">Remover da fila</string>
+</resources>

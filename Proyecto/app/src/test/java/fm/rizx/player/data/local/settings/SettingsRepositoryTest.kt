@@ -3,6 +3,7 @@ package fm.rizx.player.data.local.settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import fm.rizx.player.domain.model.ThemeMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -17,12 +18,12 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `dark theme defaults to true then reads back what was written`() = runTest {
+    fun `theme mode defaults to system then reads back what was written`() = runTest {
         val repo = SettingsRepositoryImpl(backgroundScope.newStore())
 
-        assertEquals(true, repo.darkTheme.first())
-        repo.setDarkTheme(false)
-        assertEquals(false, repo.darkTheme.first())
+        assertEquals(ThemeMode.SYSTEM, repo.themeMode.first())
+        repo.setThemeMode(ThemeMode.LIGHT)
+        assertEquals(ThemeMode.LIGHT, repo.themeMode.first())
     }
 
     @Test

@@ -1,0 +1,39 @@
+<resources>
+    <!-- Now Playing screen: hero header actions -->
+    <string name="player_album_artwork">Pochette de l\'album</string>
+    <string name="player_back">Retour</string>
+    <string name="player_lyrics">Paroles</string>
+    <string name="player_more_options">Plus d\'options</string>
+
+    <!-- Now Playing screen: transport + playback modes -->
+    <string name="player_shuffle_on_desc">Lecture aléatoire activée — touchez pour lire dans l\'ordre</string>
+    <string name="player_shuffle_off_desc">Lecture aléatoire désactivée — touchez pour l\'activer</string>
+    <string name="player_previous">Précédent</string>
+    <string name="player_next">Suivant</string>
+    <string name="player_repeat_off_desc">Répétition désactivée — touchez pour répéter la file</string>
+    <string name="player_repeat_all_desc">Répétition de la file — touchez pour répéter ce titre</string>
+    <string name="player_repeat_one_desc">Répétition de ce titre — touchez pour désactiver la répétition</string>
+
+    <!-- Now Playing screen: track actions -->
+    <string name="player_add_to_playlist">Ajouter à la playlist</string>
+    <string name="player_like">Aimer</string>
+    <string name="player_remove_from_liked">Retirer des titres aimés</string>
+
+    <!-- Now Playing screen: bottom bar + up-next drawer -->
+    <string name="player_nearby_devices">Appareils à proximité</string>
+    <string name="player_start_radio">Démarrer la radio</string>
+    <string name="player_up_next_count">À SUIVRE · %1$d</string>
+    <string name="player_up_next">À suivre</string>
+    <string name="player_hide_queue">Masquer la file</string>
+    <string name="player_remove_from_queue">Retirer de la file</string>
+    <string name="player_reorder">Réorganiser</string>
+
+    <!-- Now Playing overflow menu -->
+    <string name="player_queued_for_download">En attente de téléchargement</string>
+    <string name="player_downloading_percent">Téléchargement %1$d %%</string>
+    <string name="player_downloaded_remove">Téléchargé — retirer</string>
+    <string name="player_download_failed_retry">Échec du téléchargement — réessayer</string>
+    <string name="player_video_preview_on_none">Aperçu vidéo activé — indisponible pour ce titre</string>
+    <string name="player_video_preview_turn_off">Désactiver l\'aperçu vidéo</string>
+    <string name="player_video_preview">Aperçu vidéo</string>
+</resources>

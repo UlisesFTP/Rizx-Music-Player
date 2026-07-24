@@ -24,10 +24,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import fm.rizx.player.R
 import fm.rizx.player.core.formatDuration
 import fm.rizx.player.domain.model.PlaybackQueue
 import fm.rizx.player.domain.model.QueueItem
@@ -72,20 +74,20 @@ fun QueueScreen(
         ) {
             Icon(
                 RizxIcons.Back,
-                "Back",
+                stringResource(R.string.queue_back_cd),
                 tint = c.text,
                 modifier = Modifier.size(26.dp).clickableScale(scale = 0.88f, onClick = onBack),
             )
-            Text("Queue", style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.queue_title), style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
             if (queue.items.isNotEmpty()) {
                 Icon(
                     RizxIcons.PlaylistAdd,
-                    "Save as playlist",
+                    stringResource(R.string.queue_save_as_playlist_cd),
                     tint = c.text2,
                     modifier = Modifier.size(24.dp).clickableScale(scale = 0.86f, onClick = { saving = true }),
                 )
                 Text(
-                    "Clear",
+                    stringResource(R.string.action_clear),
                     style = mr(13, FontWeight.SemiBold),
                     color = c.text2,
                     modifier = Modifier.clickableScale(scale = 0.92f, onClick = onClear),
@@ -95,7 +97,14 @@ fun QueueScreen(
 
         val count = queue.items.size
         Text(
-            if (count == 0) "Nothing queued" else "$count ${if (count == 1) "track" else "tracks"}",
+            if (count == 0) {
+                stringResource(R.string.queue_nothing_queued)
+            } else {
+                stringResource(
+                    if (count == 1) R.string.queue_track_count_one else R.string.queue_track_count_other,
+                    count,
+                )
+            },
             style = mr(13, FontWeight.Medium),
             color = c.muted,
             modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
@@ -141,7 +150,7 @@ private fun QueueRow(
     ) {
         Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
             if (isCurrent) {
-                Icon(RizxIcons.Play, "Now current", tint = c.accent, modifier = Modifier.size(20.dp))
+                Icon(RizxIcons.Play, stringResource(R.string.queue_now_current_cd), tint = c.accent, modifier = Modifier.size(20.dp))
             } else {
                 Text("$position", style = mr(13, FontWeight.Medium), color = c.muted)
             }
@@ -156,7 +165,7 @@ private fun QueueRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                item.track.artists.joinToString { it.name }.ifEmpty { "Unknown artist" },
+                item.track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.unknown_artist) },
                 style = mr(12, FontWeight.Medium),
                 color = c.muted,
                 maxLines = 1,
@@ -166,7 +175,7 @@ private fun QueueRow(
         Text(formatDuration(item.track.durationMs), style = mr(12, FontWeight.Medium), color = c.muted)
         Icon(
             RizxIcons.Close,
-            "Remove from queue",
+            stringResource(R.string.queue_remove_cd),
             tint = c.text2,
             modifier = Modifier.size(22.dp).clickableScale(scale = 0.84f, onClick = onRemove),
         )
@@ -178,9 +187,9 @@ private fun EmptyQueue() {
     val c = RizxTheme.colors
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Your queue is empty", style = sg(18, FontWeight.Bold), color = c.text)
+            Text(stringResource(R.string.queue_empty_title), style = sg(18, FontWeight.Bold), color = c.text)
             Text(
-                "Add songs from Search to line them up here.",
+                stringResource(R.string.queue_empty_subtitle),
                 style = mr(13, FontWeight.Medium),
                 color = c.muted,
                 textAlign = TextAlign.Center,

@@ -1,0 +1,103 @@
+<resources>
+    <!-- Library screen: header + tabs -->
+    <string name="library_title">Sua biblioteca</string>
+    <string name="library_tab_all">Tudo</string>
+    <string name="library_tab_playlists">Playlists</string>
+    <string name="library_tab_liked">Curtidas</string>
+    <string name="library_tab_downloads">Downloads</string>
+    <string name="library_tab_recent">Recentes</string>
+    <string name="library_tab_local">Local</string>
+
+    <!-- Library screen: new / import actions + feedback -->
+    <string name="library_new_playlist_label">Nova</string>
+    <string name="library_new_playlist">Nova playlist</string>
+    <string name="library_import_playlist_desc">Importar uma playlist</string>
+    <string name="library_playlist_imported">Playlist importada</string>
+    <string name="library_import_failed">Falha ao importar</string>
+    <string name="library_import_file_read_error">Não foi possível ler esse arquivo</string>
+    <string name="library_export_saved">Salvo em Music/Rizx como %1$s</string>
+    <string name="library_export_failed">Falha ao exportar</string>
+
+    <!-- Library screen: liked actions -->
+    <string name="library_removed_from_liked">Removido das curtidas</string>
+    <string name="library_remove_from_liked_desc">Remover das curtidas</string>
+
+    <!-- Library screen: confirm dialogs -->
+    <string name="library_clear_recent_title">Limpar reproduzidos recentemente?</string>
+    <string name="library_clear_recent_body">Somente o histórico é apagado — suas músicas curtidas e playlists permanecem.</string>
+    <string name="library_delete_download_title">Excluir download?</string>
+    <string name="library_delete_download_body">O arquivo é removido deste dispositivo. A música permanece na sua biblioteca e voltará a tocar via streaming.</string>
+    <string name="library_delete_all_downloads_title">Excluir todos os downloads?</string>
+    <string name="library_delete_all_downloads_body">Todos os arquivos baixados são removidos. Suas músicas permanecem na biblioteca e voltarão a tocar via streaming.</string>
+    <string name="library_delete_all_downloads_confirm">Excluir tudo</string>
+
+    <!-- Library screen: section headers (All tab overview) -->
+    <string name="library_section_playlists">Playlists</string>
+    <string name="library_section_liked">Músicas curtidas</string>
+    <string name="library_section_downloads">Downloads</string>
+    <string name="library_section_recent">Reproduzidas recentemente</string>
+
+    <!-- Library screen: empty states -->
+    <string name="library_no_playlists_title">Ainda não há playlists</string>
+    <string name="library_no_playlists_body">Crie uma ou importe do Spotify, YouTube Music ou de um arquivo.</string>
+    <string name="library_no_liked_title">Ainda não há músicas curtidas</string>
+    <string name="library_no_liked_body">Toque no coração em qualquer música e ela aparecerá aqui.</string>
+    <string name="library_no_recent_title">Nada foi reproduzido ainda</string>
+    <string name="library_no_recent_body">As músicas que você toca aparecem aqui.</string>
+    <string name="library_no_downloads_title">Ainda não há downloads</string>
+    <string name="library_no_downloads_body">Toque no ícone de download em qualquer música para salvá-la e ouvi-la sem conexão.</string>
+    <string name="library_go_to_liked">Ir para músicas curtidas</string>
+    <string name="library_local_entry_title">Música neste dispositivo</string>
+    <string name="library_local_entry_body">Explore e reproduza as músicas, álbuns e artistas armazenados no seu celular.</string>
+    <string name="library_open_local_music">Abrir música local</string>
+
+    <!-- Library screen: row actions -->
+    <string name="library_export_desc">Exportar para a pasta Music</string>
+    <string name="library_export_again_desc">Exportar novamente para a pasta Music</string>
+    <string name="library_delete_download_desc">Excluir download</string>
+    <string name="library_delete_all_downloads_desc">Excluir todos os downloads</string>
+    <string name="library_clear_recent_desc">Limpar reproduzidos recentemente</string>
+
+    <!-- Library screen: counts -->
+    <string name="library_count_playlist_one">%1$d playlist</string>
+    <string name="library_count_playlist_other">%1$d playlists</string>
+    <string name="library_count_song_one">%1$d música</string>
+    <string name="library_count_song_other">%1$d músicas</string>
+    <string name="library_count_track_one">%1$d música</string>
+    <string name="library_count_track_other">%1$d músicas</string>
+
+    <!-- Local music screen: header + tabs -->
+    <string name="local_back">Voltar</string>
+    <string name="local_title">Música local</string>
+    <string name="local_tab_songs">Músicas</string>
+    <string name="local_tab_albums">Álbuns</string>
+    <string name="local_tab_artists">Artistas</string>
+
+    <!-- Local music screen: permission gate -->
+    <string name="local_permission_title">Reproduza sua própria música</string>
+    <string name="local_permission_body_blocked">O acesso ao áudio está desativado para o Rizx. Ative-o em Configurações para explorar e reproduzir suas músicas locais.</string>
+    <string name="local_permission_body_default">Permita o acesso ao áudio deste dispositivo para explorar e reproduzir suas músicas locais.</string>
+    <string name="local_permission_cta_blocked">Abrir configurações</string>
+    <string name="local_permission_cta_default">Permitir acesso</string>
+
+    <!-- Local music screen: empty states -->
+    <string name="local_no_music_title">Nenhuma música encontrada</string>
+    <string name="local_no_music_body">Ainda não há nada neste dispositivo. Copie algumas músicas para o seu celular e arraste para atualizar.</string>
+    <string name="local_no_albums_title">Nenhum álbum</string>
+    <string name="local_no_albums_body">Suas músicas locais ainda não têm informações de álbum.</string>
+    <string name="local_no_artists_title">Nenhum artista</string>
+    <string name="local_no_artists_body">Suas músicas locais ainda não têm informações de artista.</string>
+
+    <!-- Local music screen: counts -->
+    <string name="local_track_count_one">%1$d música</string>
+    <string name="local_track_count_other">%1$d músicas</string>
+    <string name="local_count_song_one">%1$d música</string>
+    <string name="local_count_song_other">%1$d músicas</string>
+
+    <!-- Local album / artist detail -->
+    <string name="local_kind_album">ÁLBUM</string>
+    <string name="local_kind_artist">ARTISTA</string>
+    <string name="local_untitled_album">Álbum</string>
+    <string name="local_untitled_artist">Artista</string>
+    <string name="local_tracks_heading">MÚSICAS</string>
+</resources>

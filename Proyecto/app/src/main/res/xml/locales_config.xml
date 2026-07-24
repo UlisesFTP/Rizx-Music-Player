@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The languages Rizx ships translations for. Referenced by android:localeConfig in the manifest so the
+  system knows the app's supported locales (and shows a per-app Language page in Android Settings).
+  English (values/) is the default and the fallback for any device language not listed here.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="es" />
+    <locale android:name="pt" />
+    <locale android:name="fr" />
+</locale-config>

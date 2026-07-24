@@ -1,0 +1,33 @@
+<resources>
+    <!-- Shared chrome: back button + offline retry (Album/Artist/Editorial playlist detail) -->
+    <string name="detail_back">Atrás</string>
+    <string name="detail_offline_message">Estás sin conexión. Conéctate e inténtalo de nuevo.</string>
+
+    <!-- Hero eyebrow labels -->
+    <string name="detail_album_eyebrow">ÁLBUM</string>
+    <string name="detail_artist_eyebrow">ARTISTA</string>
+    <string name="detail_playlist_eyebrow">PLAYLIST</string>
+
+    <!-- Album detail -->
+    <string name="detail_more_by">Más de %1$s</string>
+    <string name="detail_tracks_heading">CANCIONES</string>
+    <string name="detail_track_word_one">canción</string>
+    <string name="detail_track_word_other">canciones</string>
+    <string name="detail_minutes_unit">min</string>
+
+    <!-- Artist detail -->
+    <string name="detail_followers_count">%1$s seguidores</string>
+    <string name="detail_top_tracks_heading">CANCIONES DESTACADAS</string>
+    <string name="detail_albums_heading">ÁLBUMES</string>
+
+    <!-- Track count, all-caps (editorial + user playlist header row) -->
+    <string name="detail_track_count_caps_one">%1$d CANCIÓN</string>
+    <string name="detail_track_count_caps_other">%1$d CANCIONES</string>
+
+    <!-- User playlist detail -->
+    <string name="detail_playlist_fallback_name">Playlist</string>
+    <string name="detail_export_playlist">Exportar playlist</string>
+    <string name="detail_rename">Renombrar</string>
+    <string name="detail_delete_playlist">Eliminar playlist</string>
+    <string name="detail_playlist_empty">Esta playlist está vacía.</string>
+</resources>

@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fm.rizx.player.R
 import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.PlaylistRef
@@ -104,7 +106,7 @@ fun SearchScreen(
             Modifier.fillMaxWidth().padding(top = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Search", style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.action_search), style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
             if (queueCount > 0) QueueChip(count = queueCount, onClick = onOpenQueue)
         }
 
@@ -116,7 +118,7 @@ fun SearchScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SearchTab.entries.forEach { entry ->
-                RizxChip(entry.label, active = tab == entry, onClick = { vm.selectTab(entry) })
+                RizxChip(entry.displayLabel(), active = tab == entry, onClick = { vm.selectTab(entry) })
             }
         }
 
@@ -128,12 +130,12 @@ fun SearchScreen(
                     SearchUiState.Idle, SearchUiState.Loading -> LoadingState()
                     SearchUiState.Empty -> EmptyState(query)
                     SearchUiState.Offline -> RetryState(
-                        title = "You're offline",
-                        message = "Couldn't reach the source. Check your connection and try again.",
+                        title = stringResource(R.string.search_offline_title),
+                        message = stringResource(R.string.search_offline_message),
                         onRetry = vm::retry,
                     )
                     is SearchUiState.Error -> RetryState(
-                        title = "Couldn't search",
+                        title = stringResource(R.string.search_error_title),
                         message = s.message,
                         onRetry = vm::retry,
                     )
@@ -142,6 +144,16 @@ fun SearchScreen(
             }
         }
     }
+}
+
+/** Localized tab label — [SearchTab] is defined outside Composable scope, so the mapping lives here. */
+@Composable
+private fun SearchTab.displayLabel(): String = when (this) {
+    SearchTab.Songs -> stringResource(R.string.search_tab_songs)
+    SearchTab.Artists -> stringResource(R.string.search_tab_artists)
+    SearchTab.Albums -> stringResource(R.string.search_tab_albums)
+    SearchTab.Playlists -> stringResource(R.string.search_tab_playlists)
+    SearchTab.Underground -> stringResource(R.string.search_tab_underground)
 }
 
 @Composable
@@ -157,7 +169,7 @@ private fun QueueChip(count: Int, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(RizxIcons.QueueMusic, "Open queue", tint = c.onFill, modifier = Modifier.size(17.dp))
+        Icon(RizxIcons.QueueMusic, stringResource(R.string.search_open_queue), tint = c.onFill, modifier = Modifier.size(17.dp))
         Text("$count", style = sg(13, FontWeight.Bold), color = c.onFill)
     }
 }
@@ -192,7 +204,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClear:
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) {
-                        Text("Songs, artists, moods…", style = mr(15, FontWeight.Medium), color = c.muted, maxLines = 1)
+                        Text(stringResource(R.string.search_hint), style = mr(15, FontWeight.Medium), color = c.muted, maxLines = 1)
                     }
                     inner()
                 }
@@ -201,7 +213,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClear:
         if (query.isNotEmpty()) {
             Icon(
                 RizxIcons.Close,
-                "Clear",
+                stringResource(R.string.action_clear),
                 tint = c.text2,
                 modifier = Modifier.size(20.dp).clickableScale(scale = 0.9f, onClick = onClear),
             )
@@ -223,9 +235,9 @@ private fun EmptyState(query: String) {
     val c = RizxTheme.colors
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("No results", style = sg(18, FontWeight.Bold), color = c.text)
+            Text(stringResource(R.string.search_no_results_title), style = sg(18, FontWeight.Bold), color = c.text)
             Text(
-                "Nothing matched “$query”.",
+                stringResource(R.string.search_no_results_message, query),
                 style = mr(13, FontWeight.Medium),
                 color = c.muted,
                 textAlign = TextAlign.Center,
@@ -244,7 +256,7 @@ private fun RetryState(title: String, message: String, onRetry: () -> Unit) {
             Text(title, style = sg(18, FontWeight.Bold), color = c.text)
             Text(message, style = mr(13, FontWeight.Medium), color = c.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
             Text(
-                "Retry",
+                stringResource(R.string.action_retry),
                 style = sg(14, FontWeight.Bold),
                 color = c.onFill,
                 modifier = Modifier
@@ -366,14 +378,14 @@ private fun ResultTrackRow(
         }
         Icon(
             if (liked) RizxIcons.Favorite else RizxIcons.FavoriteBorder,
-            if (liked) "Remove from liked" else "Like",
+            if (liked) stringResource(R.string.search_remove_from_liked) else stringResource(R.string.search_like),
             tint = if (liked) c.redAccent else c.text2,
             modifier = Modifier.size(22.dp).clickableScale(scale = 0.84f, onClick = onToggleFavorite),
         )
         Box {
             Icon(
                 RizxIcons.Add,
-                "Add to queue",
+                stringResource(R.string.search_add_to_queue),
                 tint = c.text2,
                 modifier = Modifier.size(24.dp).clickableScale(scale = 0.86f) { menuOpen = true },
             )
@@ -382,11 +394,11 @@ private fun ResultTrackRow(
                 onDismissRequest = { menuOpen = false },
             ) {
                 DropdownMenuItem(
-                    text = { Text("Add to queue", style = mr(14, FontWeight.Medium), color = c.text) },
+                    text = { Text(stringResource(R.string.search_add_to_queue), style = mr(14, FontWeight.Medium), color = c.text) },
                     onClick = { onAddToQueue(track); menuOpen = false },
                 )
                 DropdownMenuItem(
-                    text = { Text("Play next", style = mr(14, FontWeight.Medium), color = c.text) },
+                    text = { Text(stringResource(R.string.search_play_next), style = mr(14, FontWeight.Medium), color = c.text) },
                     onClick = { onAddNext(track); menuOpen = false },
                 )
             }
@@ -407,7 +419,7 @@ private fun ResultArtistRow(artist: ArtistRef, onClick: () -> Unit) {
     ) {
         CoverArt(tintFor(artist.source.id), initial = artist.name.take(1), Modifier.size(46.dp), initialSize = 18, circle = true, imageUrl = artist.artwork.coverUrl())
         Text(artist.name, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text("Artist", style = mr(11, FontWeight.Medium), color = c.muted)
+        Text(stringResource(R.string.search_result_artist_label), style = mr(11, FontWeight.Medium), color = c.muted)
     }
 }
 
@@ -425,7 +437,7 @@ private fun ResultAlbumRow(album: AlbumRef, onClick: () -> Unit) {
         CoverArt(tintFor(album.source.id), initial = album.title.take(1), Modifier.size(46.dp), initialSize = 18, imageUrl = album.artwork.coverUrl())
         Column(Modifier.weight(1f)) {
             Text(album.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(album.artists.joinToString { it.name }.ifEmpty { "Album" }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(album.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.search_album_fallback) }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -444,8 +456,10 @@ private fun ResultPlaylistRow(playlist: PlaylistRef, onClick: () -> Unit) {
         CoverArt(tintFor(playlist.source.id), initial = playlist.name.take(1), Modifier.size(46.dp), initialSize = 18, imageUrl = playlist.artwork.coverUrl())
         Column(Modifier.weight(1f)) {
             Text(playlist.name, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val trackCountLabel = playlist.trackCount?.let { stringResource(R.string.search_track_count, it) }
+                ?: stringResource(R.string.search_playlist_label)
             Text(
-                playlist.trackCount?.let { "$it tracks" } ?: "Playlist",
+                trackCountLabel,
                 style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -456,36 +470,38 @@ private fun ResultPlaylistRow(playlist: PlaylistRef, onClick: () -> Unit) {
 
 private val SEARCH_SUGGESTIONS = listOf("Daft Punk", "The Weeknd", "Coldplay", "Bad Bunny", "Lo-fi beats", "Tame Impala")
 
-/** A browse-genre tile: display [label], the [query] it searches, a Deezer genre [image], a fallback [tint] and a HUD [code]. */
-private data class Genre(val label: String, val query: String, val image: String, val tint: Int, val code: String)
+/** A browse-genre tile: display [labelRes], the [query] it searches, a Deezer genre [image], a fallback [tint] and a HUD [code]. */
+private data class Genre(val labelRes: Int, val query: String, val image: String, val tint: Int, val code: String)
 
 /** Deezer genre artwork — keyless CDN, the same host Coil already loads album covers from. */
 private fun dzGenre(hash: String) = "https://cdn-images.dzcdn.net/images/misc/$hash/500x500-000000-80-0-0.jpg"
 
+// NB: `query` is the literal string sent to Deezer's genre search — it must stay in English and is
+// intentionally NOT localized, unlike `labelRes` (what's shown on the tile).
 private val BROWSE_GENRES = listOf(
-    Genre("Pop", "Pop", dzGenre("db7a604d9e7634a67d45cfc86b48370a"), 1, "G01"),
-    Genre("Hip-Hop", "Hip Hop", dzGenre("5c27115d3b797954afff59199dad98d1"), 2, "G02"),
-    Genre("Rock", "Rock", dzGenre("b36ca681666d617edd0dcb5ab389a6ac"), 5, "G03"),
-    Genre("Electronic", "Electronic", dzGenre("15df4502c1c58137dae5bdd1cc6f0251"), 3, "G04"),
-    Genre("R&B", "R&B", dzGenre("68a43aec844708e693cb99f47814153b"), 0, "G05"),
-    Genre("Jazz", "Jazz", dzGenre("91468ecc5dfdd19c42a43d2cbdf27059"), 4, "G06"),
-    Genre("Latin", "Latin", dzGenre("069c9888538799748960781f098b5f4b"), 6, "G07"),
-    Genre("Classical", "Classical", dzGenre("609f69b669b242252aa8ee09b5597655"), 7, "G08"),
-    Genre("Metal", "Metal", dzGenre("f14f9fde9feb38ca6d61960f00681860"), 5, "G09"),
-    Genre("Reggaeton", "Reggaeton", dzGenre("44dfebf3cf943dd82759d9bd9063767a"), 6, "G10"),
-    Genre("Reggae", "Reggae", dzGenre("7b901a98628cf879e1465f1dfd697e00"), 4, "G11"),
-    Genre("Soul & Funk", "Funk", dzGenre("3d5e8aab99b95bfa7ac7e9e466e7781e"), 0, "G12"),
-    Genre("Blues", "Blues", dzGenre("1abb6810098d4015bdc860c91bcfd2b6"), 3, "G13"),
-    Genre("Country", "Country", dzGenre("6eca3188f724f04843a15e3e575751a5"), 1, "G14"),
-    Genre("Folk", "Folk", dzGenre("f9e070848998df8870ba65cd0d22b2b3"), 2, "G15"),
-    Genre("Dance", "Dance", dzGenre("bd5fdfa1a23e02e2697818e09e008e69"), 7, "G16"),
+    Genre(R.string.search_genre_pop, "Pop", dzGenre("db7a604d9e7634a67d45cfc86b48370a"), 1, "G01"),
+    Genre(R.string.search_genre_hiphop, "Hip Hop", dzGenre("5c27115d3b797954afff59199dad98d1"), 2, "G02"),
+    Genre(R.string.search_genre_rock, "Rock", dzGenre("b36ca681666d617edd0dcb5ab389a6ac"), 5, "G03"),
+    Genre(R.string.search_genre_electronic, "Electronic", dzGenre("15df4502c1c58137dae5bdd1cc6f0251"), 3, "G04"),
+    Genre(R.string.search_genre_rnb, "R&B", dzGenre("68a43aec844708e693cb99f47814153b"), 0, "G05"),
+    Genre(R.string.search_genre_jazz, "Jazz", dzGenre("91468ecc5dfdd19c42a43d2cbdf27059"), 4, "G06"),
+    Genre(R.string.search_genre_latin, "Latin", dzGenre("069c9888538799748960781f098b5f4b"), 6, "G07"),
+    Genre(R.string.search_genre_classical, "Classical", dzGenre("609f69b669b242252aa8ee09b5597655"), 7, "G08"),
+    Genre(R.string.search_genre_metal, "Metal", dzGenre("f14f9fde9feb38ca6d61960f00681860"), 5, "G09"),
+    Genre(R.string.search_genre_reggaeton, "Reggaeton", dzGenre("44dfebf3cf943dd82759d9bd9063767a"), 6, "G10"),
+    Genre(R.string.search_genre_reggae, "Reggae", dzGenre("7b901a98628cf879e1465f1dfd697e00"), 4, "G11"),
+    Genre(R.string.search_genre_soul_funk, "Funk", dzGenre("3d5e8aab99b95bfa7ac7e9e466e7781e"), 0, "G12"),
+    Genre(R.string.search_genre_blues, "Blues", dzGenre("1abb6810098d4015bdc860c91bcfd2b6"), 3, "G13"),
+    Genre(R.string.search_genre_country, "Country", dzGenre("6eca3188f724f04843a15e3e575751a5"), 1, "G14"),
+    Genre(R.string.search_genre_folk, "Folk", dzGenre("f9e070848998df8870ba65cd0d22b2b3"), 2, "G15"),
+    Genre(R.string.search_genre_dance, "Dance", dzGenre("bd5fdfa1a23e02e2697818e09e008e69"), 7, "G16"),
 )
 
 @Composable
 private fun IdleContent(onSearch: (String) -> Unit) {
     val c = RizxTheme.colors
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Text("Try searching", style = sg(16, FontWeight.Bold), color = c.text, modifier = Modifier.padding(top = 22.dp))
+        Text(stringResource(R.string.search_try_searching), style = sg(16, FontWeight.Bold), color = c.text, modifier = Modifier.padding(top = 22.dp))
         FlowRow(
             Modifier.fillMaxWidth().padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -508,7 +524,7 @@ private fun IdleContent(onSearch: (String) -> Unit) {
             }
         }
 
-        Text("Browse genres", style = sg(19, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.padding(top = 24.dp))
+        Text(stringResource(R.string.search_browse_genres), style = sg(19, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.padding(top = 24.dp))
         Column(Modifier.fillMaxWidth().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             BROWSE_GENRES.chunked(2).forEachIndexed { rowIndex, rowGenres ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -564,7 +580,7 @@ private fun GenreTile(genre: Genre, onSearch: (String) -> Unit, modifier: Modifi
             Text(genre.code, style = code(10, FontWeight.Bold), color = Color.White.copy(alpha = 0.82f))
         }
         Text(
-            genre.label,
+            stringResource(genre.labelRes),
             style = sg(18, FontWeight.Bold, -0.01f),
             color = Color.White,
             maxLines = 1,

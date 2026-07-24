@@ -25,9 +25,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import fm.rizx.player.BuildConfig
+import fm.rizx.player.R
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.RizxTheme
@@ -54,10 +56,10 @@ fun AboutScreen(onBack: () -> Unit, onOpenLicenses: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(
-                RizxIcons.Back, "Back", tint = c.text,
+                RizxIcons.Back, stringResource(R.string.about_cd_back), tint = c.text,
                 modifier = Modifier.size(26.dp).clickableScale(scale = 0.88f, onClick = onBack),
             )
-            Text("About", style = sg(28, FontWeight.Bold, -0.02f), color = c.text)
+            Text(stringResource(R.string.about_title), style = sg(28, FontWeight.Bold, -0.02f), color = c.text)
         }
 
         Box(
@@ -68,36 +70,25 @@ fun AboutScreen(onBack: () -> Unit, onOpenLicenses: () -> Unit) {
         }
         Text("Rizx Player", style = sg(22, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.padding(top = 12.dp))
         Text(
-            "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            stringResource(R.string.about_version_label, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
             style = mr(13, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 2.dp),
         )
 
         Card {
-            Label("Based on")
-            Body(
-                "Rizx re-implements the business logic of Nuclear, the open-source desktop music player " +
-                    "by nukeop and contributors. Rizx is an independent fork and is not affiliated with or " +
-                    "endorsed by the Nuclear project.",
-            )
+            Label(stringResource(R.string.about_label_based_on))
+            Body(stringResource(R.string.about_body_based_on))
         }
 
         Card {
-            Label("Source (Corresponding Source, AGPL §6)")
-            Body(
-                "This app's full source — tagged to match this version — and the upstream project are " +
-                    "public:",
-            )
+            Label(stringResource(R.string.about_label_source))
+            Body(stringResource(R.string.about_body_source_intro))
             Body("• Rizx Player: github.com/rizx-player/rizx-android")
-            Body("• Upstream Nuclear: github.com/nukeop/nuclear")
+            Body(stringResource(R.string.about_body_source_nuclear))
         }
 
         Card {
-            Label("License")
-            Body(
-                "Nuclear is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). As a " +
-                    "derived work Rizx is also AGPL-3.0: its source and modifications are made available " +
-                    "under the same terms and copyright notices are retained.",
-            )
+            Label(stringResource(R.string.about_label_license))
+            Body(stringResource(R.string.about_body_license))
         }
 
         Row(
@@ -112,10 +103,10 @@ fun AboutScreen(onBack: () -> Unit, onOpenLicenses: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Label("Open-source licenses")
-                Body("Third-party dependencies bundled in this app")
+                Label(stringResource(R.string.about_label_open_source_licenses))
+                Body(stringResource(R.string.about_body_third_party))
             }
-            Icon(Icons.AutoMirrored.Filled.OpenInNew, "Open licenses", tint = c.muted, modifier = Modifier.size(20.dp))
+            Icon(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.about_cd_open_licenses), tint = c.muted, modifier = Modifier.size(20.dp))
         }
 
         Spacer(Modifier.height(60.dp))

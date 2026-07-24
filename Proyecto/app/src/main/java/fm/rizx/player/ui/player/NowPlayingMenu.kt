@@ -22,8 +22,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import fm.rizx.player.R
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadStatus
 import fm.rizx.player.ui.theme.RizxTheme
@@ -56,33 +58,33 @@ fun NowPlayingMenu(
         modifier = Modifier.background(c.elev),
     ) {
         when (download?.status) {
-            null -> MenuRow(Icons.Filled.FileDownload, "Download", c.text) { onDismiss(); onDownload() }
+            null -> MenuRow(Icons.Filled.FileDownload, stringResource(R.string.action_download), c.text) { onDismiss(); onDownload() }
 
             DownloadStatus.QUEUED ->
-                MenuRow(Icons.Filled.FileDownload, "Queued for download", c.muted, enabled = false) {}
+                MenuRow(Icons.Filled.FileDownload, stringResource(R.string.player_queued_for_download), c.muted, enabled = false) {}
 
             DownloadStatus.DOWNLOADING ->
-                MenuRow(Icons.Filled.FileDownload, "Downloading ${download.progressPercent}%", c.muted, enabled = false) {}
+                MenuRow(Icons.Filled.FileDownload, stringResource(R.string.player_downloading_percent, download.progressPercent), c.muted, enabled = false) {}
 
             DownloadStatus.COMPLETE ->
-                MenuRow(Icons.Filled.DownloadDone, "Downloaded — remove", c.text) { onDismiss(); onDeleteDownload() }
+                MenuRow(Icons.Filled.DownloadDone, stringResource(R.string.player_downloaded_remove), c.text) { onDismiss(); onDeleteDownload() }
 
             DownloadStatus.FAILED ->
-                MenuRow(Icons.Filled.ErrorOutline, "Download failed — retry", c.redAccent) { onDismiss(); onDownload() }
+                MenuRow(Icons.Filled.ErrorOutline, stringResource(R.string.player_download_failed_retry), c.redAccent) { onDismiss(); onDownload() }
         }
 
         // Named for what it actually is. It is not a Spotify Canvas — it's the song's own video, muted.
         MenuRow(
             icon = if (canvasOn) Icons.Filled.VideocamOff else Icons.Filled.Videocam,
             label = when {
-                canvasOn && !canvasAvailable -> "Video preview on — none for this song"
-                canvasOn -> "Turn off video preview"
-                else -> "Video preview"
+                canvasOn && !canvasAvailable -> stringResource(R.string.player_video_preview_on_none)
+                canvasOn -> stringResource(R.string.player_video_preview_turn_off)
+                else -> stringResource(R.string.player_video_preview)
             },
             tint = if (canvasOn) c.accent else c.text,
         ) { onDismiss(); onToggleCanvas() }
 
-        MenuRow(Icons.Filled.Share, "Share", c.text) { onDismiss(); onShare() }
+        MenuRow(Icons.Filled.Share, stringResource(R.string.action_share), c.text) { onDismiss(); onShare() }
     }
 }
 

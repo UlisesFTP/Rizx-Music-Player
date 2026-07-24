@@ -28,9 +28,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import fm.rizx.player.R
 import fm.rizx.player.core.formatDuration
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.RizxTheme
@@ -117,7 +119,7 @@ fun MiniPlayer(
         }
         RizxIconButton(
             icon = if (liked) RizxIcons.Favorite else RizxIcons.FavoriteBorder,
-            contentDescription = if (liked) "Remove from liked" else "Like",
+            contentDescription = if (liked) stringResource(R.string.player_remove_from_liked) else stringResource(R.string.player_like),
             onClick = onLike,
             size = 44.dp,
             iconSize = 21.dp,
@@ -136,7 +138,7 @@ fun MiniPlayer(
             } else {
                 Icon(
                     if (isPlaying) RizxIcons.Pause else RizxIcons.Play,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    contentDescription = if (isPlaying) stringResource(R.string.action_pause) else stringResource(R.string.action_play),
                     tint = c.onFill,
                     modifier = Modifier.size(23.dp),
                 )

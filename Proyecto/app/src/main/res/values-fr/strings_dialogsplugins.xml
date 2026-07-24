@@ -1,0 +1,28 @@
+<resources>
+    <!-- PlaylistDialogs.kt -->
+    <string name="dialog_new_playlist">Nouvelle playlist</string>
+    <string name="dialog_playlist_name_hint">Nom de la playlist</string>
+    <string name="dialog_import_playlist_title">Importer une playlist</string>
+    <string name="dialog_paste_playlist_link_hint">Collez le lien d\'une playlist…</string>
+    <string name="dialog_import_from_file_title">Importer depuis un fichier à la place</string>
+    <string name="dialog_import_from_file_subtitle">Un export Rizx, Nuclear ou Exportify</string>
+    <string name="dialog_add_to_playlist_title">Ajouter à la playlist</string>
+    <string name="dialog_no_playlists_yet">Aucune playlist pour l\'instant — créez-en une ci-dessous.</string>
+    <string name="dialog_create_and_add">Créer et ajouter</string>
+
+    <!-- PluginsScreen.kt -->
+    <string name="plugins_title">Plugins</string>
+    <string name="plugins_subtitle">Fournisseurs intégrés que Rizx utilise pour rechercher, diffuser en streaming et récupérer les classements.</string>
+    <string name="plugins_tab_installed">Installés</string>
+    <string name="plugins_tab_store">Boutique</string>
+    <string name="plugins_section_nuclear_store">Boutique de plugins Nuclear</string>
+    <string name="plugins_section_installed_plugins">Plugins installés</string>
+    <string name="plugins_active">Actif</string>
+    <string name="plugins_tap_to_use">Appuyez pour utiliser</string>
+    <string name="plugins_install">Installer</string>
+    <string name="plugins_installing">Installation…</string>
+    <string name="plugins_installed">Installé</string>
+    <string name="plugins_uninstall">Désinstaller</string>
+    <string name="plugins_plugin_category">Plugin · %1$s</string>
+    <string name="plugins_health_down">Hors service</string>
+</resources>

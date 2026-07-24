@@ -1,0 +1,11 @@
+<resources>
+    <!-- Download button (components/DownloadButton.kt) -->
+    <string name="ui_download_offline_desc">Baixar para ouvir offline</string>
+    <string name="ui_download_queued">Na fila</string>
+    <string name="ui_download_cancel_desc">Cancelar download</string>
+    <string name="ui_download_complete_desc">Baixado — disponível offline</string>
+    <string name="ui_download_failed_desc">Falha no download — toque para tentar novamente</string>
+    <string name="ui_download_all_done">Baixado</string>
+    <string name="ui_download_all_progress">Baixando %1$d/%2$d</string>
+    <string name="ui_download_all_cta">Baixar tudo</string>
+</resources>

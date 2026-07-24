@@ -22,8 +22,16 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.TeeAudioProcessor
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import android.os.Bundle
+import androidx.media3.datasource.DataSourceBitmapLoader
+import androidx.media3.session.CacheBitmapLoader
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import fm.rizx.player.data.local.store.PlaybackSessionSnapshot
 import fm.rizx.player.data.local.store.PlaybackSessionStore
@@ -33,14 +41,23 @@ import fm.rizx.player.domain.model.QueueSourceKind
 import fm.rizx.player.domain.repository.QueueRepository
 import fm.rizx.player.domain.repository.RecentlyPlayedRepository
 import fm.rizx.player.domain.repository.SettingsRepository
+import fm.rizx.player.R
+import fm.rizx.player.domain.model.RepeatMode
+import fm.rizx.player.domain.repository.FavoritesRepository
+import fm.rizx.player.playback.LogoBitmapLoader
 import fm.rizx.player.playback.toTimelineMediaItem
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
@@ -53,6 +70,7 @@ import javax.inject.Inject
  * `MediaSessionService` provides the foreground notification, media-button, and lock-screen handling.
  */
 @UnstableApi
+@OptIn(ExperimentalCoroutinesApi::class)
 @AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
 
@@ -66,6 +84,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var audioCache: fm.rizx.player.playback.cache.AudioCache
     @Inject lateinit var cacheCompleter: fm.rizx.player.playback.cache.CacheCompleter
+    @Inject lateinit var favorites: FavoritesRepository
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var player: ExoPlayer
@@ -100,6 +119,11 @@ class PlaybackService : MediaSessionService() {
     /** Player buffering state, mirrored for off-main-thread readers (see [startCacheCompletion]). */
     @Volatile
     private var buffering = false
+
+    /** Live favorite/repeat state of the current track, mirrored so the notification's custom buttons
+     *  (heart fill + repeat glyph) can be rebuilt without re-querying on every refresh. */
+    private var currentFavorite = false
+    private var currentRepeat = RepeatMode.OFF
 
     override fun onCreate() {
         super.onCreate()
@@ -164,6 +188,13 @@ class PlaybackService : MediaSessionService() {
             }
 
         session = MediaSession.Builder(this, player)
+            .setCallback(sessionCallback)
+            // Stamp the Rizx logomark onto every cover the session hands the notification / lock screen /
+            // output switcher. The cache wraps the watermarker so each cover is composited only once.
+            .setBitmapLoader(CacheBitmapLoader(LogoBitmapLoader(this, DataSourceBitmapLoader(this))))
+            // Reference layout: a favorite (heart) and a repeat toggle alongside the transport. The seekbar
+            // and prev/play/next are the system's; these two are the extra content we add.
+            .setCustomLayout(buildCustomLayout())
             .apply { sessionActivityIntent()?.let { setSessionActivity(it) } }
             .build()
 
@@ -197,6 +228,23 @@ class PlaybackService : MediaSessionService() {
         // Crossfade / Gapless: recompute the transition fade whenever either setting changes.
         scope.launch { settings.crossfade.collect { crossfadeOn = it; recomputeFade() } }
         scope.launch { settings.gapless.collect { gaplessOn = it; recomputeFade() } }
+
+        // Keep the notification's heart + repeat buttons in sync with the current track's favorite state
+        // and the queue's repeat mode, so the glyphs reflect reality (filled heart, repeat-one).
+        scope.launch {
+            queue.state
+                .flatMapLatest { q ->
+                    val track = q.current?.track
+                    val favFlow = track?.let { favorites.isFavoriteTrack(it.source) } ?: flowOf(false)
+                    favFlow.map { fav -> fav to q.repeatMode }
+                }
+                .distinctUntilChanged()
+                .collect { (fav, repeat) ->
+                    currentFavorite = fav
+                    currentRepeat = repeat
+                    if (::session.isInitialized) session.setCustomLayout(buildCustomLayout())
+                }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession = session
@@ -525,6 +573,67 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE)
         }
 
+    // ---- Notification custom buttons: favorite (heart) + repeat, matching the reference layout ----
+
+    /** Builds the two custom notification buttons from the mirrored [currentFavorite] / [currentRepeat]. */
+    private fun buildCustomLayout(): List<CommandButton> {
+        val favorite = CommandButton.Builder()
+            .setSessionCommand(SessionCommand(ACTION_TOGGLE_FAVORITE, Bundle.EMPTY))
+            .setDisplayName(if (currentFavorite) "Remove from liked" else "Like")
+            .setIconResId(if (currentFavorite) R.drawable.ic_media_favorite_filled else R.drawable.ic_media_favorite)
+            .setEnabled(true)
+            .build()
+        val repeat = CommandButton.Builder()
+            .setSessionCommand(SessionCommand(ACTION_CYCLE_REPEAT, Bundle.EMPTY))
+            .setDisplayName("Repeat")
+            .setIconResId(if (currentRepeat == RepeatMode.ONE) R.drawable.ic_media_repeat_one else R.drawable.ic_media_repeat)
+            .setEnabled(true)
+            .build()
+        return listOf(favorite, repeat)
+    }
+
+    /** Session callback: grants the two custom commands and handles their taps from the notification. */
+    private val sessionCallback = object : MediaSession.Callback {
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): MediaSession.ConnectionResult {
+            val base = super.onConnect(session, controller)
+            // Grant our two custom commands on top of whatever the default connection allows — never narrow
+            // the UI controller's rights, just add heart/repeat so the notification controller can fire them.
+            val sessionCommands = base.availableSessionCommands.buildUpon()
+                .add(SessionCommand(ACTION_TOGGLE_FAVORITE, Bundle.EMPTY))
+                .add(SessionCommand(ACTION_CYCLE_REPEAT, Bundle.EMPTY))
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(sessionCommands)
+                .setAvailablePlayerCommands(base.availablePlayerCommands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            when (customCommand.customAction) {
+                ACTION_TOGGLE_FAVORITE -> queue.state.value.current?.track?.let { track ->
+                    scope.launch { runCatching { favorites.toggleTrack(track) } }
+                }
+                ACTION_CYCLE_REPEAT -> {
+                    val next = when (queue.state.value.repeatMode) {
+                        RepeatMode.OFF -> RepeatMode.ALL
+                        RepeatMode.ALL -> RepeatMode.ONE
+                        RepeatMode.ONE -> RepeatMode.OFF
+                    }
+                    queue.setRepeatMode(next)
+                }
+            }
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+    }
+
     private companion object {
         /** How often to snapshot the position while playing (bounds resume drift after a process kill). */
         const val SAVE_INTERVAL_MS = 5_000L
@@ -546,5 +655,9 @@ class PlaybackService : MediaSessionService() {
 
         /** How often the volume envelope re-evaluates while a fade is active. */
         const val FADE_TICK_MS = 75L
+
+        /** Custom notification-button actions (favorite + repeat) invoked through the session. */
+        const val ACTION_TOGGLE_FAVORITE = "fm.rizx.player.action.TOGGLE_FAVORITE"
+        const val ACTION_CYCLE_REPEAT = "fm.rizx.player.action.CYCLE_REPEAT"
     }
 }

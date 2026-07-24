@@ -24,8 +24,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import fm.rizx.player.R
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.navigation.Routes
 import fm.rizx.player.ui.theme.RizxTheme
@@ -33,13 +35,13 @@ import fm.rizx.player.ui.theme.brutalShadow
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.util.rememberRizxHaptics
 
-private data class NavTab(val route: String, val label: String, val icon: ImageVector)
+private data class NavTab(val route: String, val labelRes: Int, val icon: ImageVector)
 
 private val navTabs = listOf(
-    NavTab(Routes.HOME, "Home", RizxIcons.Home),
-    NavTab(Routes.SEARCH, "Search", RizxIcons.Search),
-    NavTab(Routes.LIBRARY, "Library", RizxIcons.Library),
-    NavTab(Routes.SETTINGS, "Settings", RizxIcons.Settings),
+    NavTab(Routes.HOME, R.string.nav_home, RizxIcons.Home),
+    NavTab(Routes.SEARCH, R.string.nav_search, RizxIcons.Search),
+    NavTab(Routes.LIBRARY, R.string.nav_library, RizxIcons.Library),
+    NavTab(Routes.SETTINGS, R.string.nav_settings, RizxIcons.Settings),
 )
 
 @Composable
@@ -84,13 +86,14 @@ fun RizxBottomNav(
                 ) {
                     repeat(3) { Box(Modifier.size(3.dp).background(c.redAccent)) }
                 }
+                val label = stringResource(tab.labelRes)
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
-                    Icon(tab.icon, tab.label, tint = tint, modifier = Modifier.size(23.dp))
+                    Icon(tab.icon, label, tint = tint, modifier = Modifier.size(23.dp))
                     Text(
-                        tab.label.uppercase(),
+                        label.uppercase(),
                         style = mr(9, if (active) FontWeight.Bold else FontWeight.Medium, 0.1f),
                         color = tint,
                     )

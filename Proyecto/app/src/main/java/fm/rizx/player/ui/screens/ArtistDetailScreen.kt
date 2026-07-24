@@ -25,12 +25,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fm.rizx.player.R
 import fm.rizx.player.core.formatDuration
 import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.Artist
@@ -66,13 +68,13 @@ fun ArtistDetailScreen(
     Box(Modifier.fillMaxSize()) {
         when (val s = state) {
             ArtistUiState.Loading -> ArtistSpinner()
-            ArtistUiState.Offline -> ArtistMessage("You're offline. Connect and try again.", vm::load)
+            ArtistUiState.Offline -> ArtistMessage(stringResource(R.string.detail_offline_message), vm::load)
             is ArtistUiState.Error -> ArtistMessage(s.message, vm::load)
             is ArtistUiState.Content -> ArtistContent(s.artist, onOpenAlbum, vm::play)
         }
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
             RizxIconButton(
-                RizxIcons.Back, "Back", onBack,
+                RizxIcons.Back, stringResource(R.string.detail_back), onBack,
                 background = if (c.isDark) Color(0xFF0A0A0B).copy(alpha = 0.5f) else Color(0xFFF3F0E9).copy(alpha = 0.58f),
                 border = if (c.isDark) Color.White.copy(alpha = 0.14f) else Color(0xFF221F1A).copy(alpha = 0.18f),
                 tint = c.text,
@@ -100,21 +102,21 @@ private fun ArtistContent(artist: Artist, onOpenAlbum: (ProviderRef) -> Unit, on
             // HUD corner-bracket frame over the hero (industrial spec-sheet chrome).
             Box(Modifier.matchParentSize().cornerBrackets(c.hardLine, len = 12.dp))
             Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 16.dp)) {
-                Text("ARTIST", style = mr(11, FontWeight.Bold, 0.2f), color = c.accent)
+                Text(stringResource(R.string.detail_artist_eyebrow), style = mr(11, FontWeight.Bold, 0.2f), color = c.accent)
                 Text(artist.name, style = sg(32, FontWeight.Bold, -0.02f), color = c.heroText, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
                 artist.followers?.let {
-                    Text("${formatFollowers(it)} followers", style = mr(13, FontWeight.Medium), color = c.heroSub, modifier = Modifier.padding(top = 6.dp))
+                    Text(stringResource(R.string.detail_followers_count, formatFollowers(it)), style = mr(13, FontWeight.Medium), color = c.heroSub, modifier = Modifier.padding(top = 6.dp))
                 }
             }
         }
 
         if (artist.topTracks.isNotEmpty()) {
-            Text("TOP TRACKS", style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(start = 22.dp, top = 8.dp, bottom = 2.dp))
+            Text(stringResource(R.string.detail_top_tracks_heading), style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(start = 22.dp, top = 8.dp, bottom = 2.dp))
             artist.topTracks.forEachIndexed { index, track -> Box(Modifier.staggeredReveal(index)) { ArtistTrackRow(index + 1, track, onPlay) } }
         }
 
         if (artist.albums.isNotEmpty()) {
-            Text("ALBUMS", style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(start = 22.dp, top = 20.dp, bottom = 8.dp))
+            Text(stringResource(R.string.detail_albums_heading), style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(start = 22.dp, top = 20.dp, bottom = 8.dp))
             LazyRow(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 22.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -176,7 +178,7 @@ private fun ArtistMessage(text: String, onRetry: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text, style = mr(14, FontWeight.Medium), color = c.muted, textAlign = TextAlign.Center)
             Text(
-                "Retry", style = sg(14, FontWeight.Bold), color = c.onFill,
+                stringResource(R.string.action_retry), style = sg(14, FontWeight.Bold), color = c.onFill,
                 modifier = Modifier.padding(top = 16.dp).background(c.fill).clickableScale(scale = 0.94f, onClick = onRetry).padding(horizontal = 22.dp, vertical = 10.dp),
             )
         }

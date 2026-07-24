@@ -13,7 +13,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import fm.rizx.player.R
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadStatus
 import fm.rizx.player.domain.model.Track
@@ -41,17 +43,17 @@ fun DownloadButton(
         when (state?.status) {
             null -> RizxIconButton(
                 Icons.Filled.FileDownload,
-                "Download for offline",
+                stringResource(R.string.ui_download_offline_desc),
                 onClick = onDownload,
                 iconSize = 20.dp,
                 tint = c.text2,
             )
 
             DownloadStatus.QUEUED -> {
-                CodeLabel("QUEUED", size = 10)
+                CodeLabel(stringResource(R.string.ui_download_queued), size = 10)
                 RizxIconButton(
                     Icons.Filled.Stop,
-                    "Cancel download",
+                    stringResource(R.string.ui_download_cancel_desc),
                     onClick = onCancel,
                     iconSize = 20.dp,
                     tint = c.muted,
@@ -62,7 +64,7 @@ fun DownloadButton(
                 CodeLabel("${state.progressPercent}%", size = 10)
                 RizxIconButton(
                     Icons.Filled.Stop,
-                    "Cancel download",
+                    stringResource(R.string.ui_download_cancel_desc),
                     onClick = onCancel,
                     iconSize = 20.dp,
                     tint = c.accent,
@@ -71,7 +73,7 @@ fun DownloadButton(
 
             DownloadStatus.COMPLETE -> RizxIconButton(
                 Icons.Filled.DownloadDone,
-                "Downloaded — available offline",
+                stringResource(R.string.ui_download_complete_desc),
                 onClick = {},
                 iconSize = 20.dp,
                 tint = c.accent,
@@ -79,7 +81,7 @@ fun DownloadButton(
 
             DownloadStatus.FAILED -> RizxIconButton(
                 Icons.Filled.ErrorOutline,
-                state.error ?: "Download failed — tap to retry",
+                state.error ?: stringResource(R.string.ui_download_failed_desc),
                 onClick = onRetry,
                 iconSize = 20.dp,
                 tint = c.redAccent,
@@ -108,9 +110,9 @@ fun DownloadAllButton(
     val allDone = done == tracks.size
 
     val label = when {
-        allDone -> "DOWNLOADED"
-        inFlight > 0 -> "DOWNLOADING $done/${tracks.size}"
-        else -> "DOWNLOAD ALL"
+        allDone -> stringResource(R.string.ui_download_all_done)
+        inFlight > 0 -> stringResource(R.string.ui_download_all_progress, done, tracks.size)
+        else -> stringResource(R.string.ui_download_all_cta)
     }
     Row(
         modifier

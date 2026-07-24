@@ -1,0 +1,103 @@
+<resources>
+    <!-- Library screen: header + tabs -->
+    <string name="library_title">Your Library</string>
+    <string name="library_tab_all">All</string>
+    <string name="library_tab_playlists">Playlists</string>
+    <string name="library_tab_liked">Liked</string>
+    <string name="library_tab_downloads">Downloads</string>
+    <string name="library_tab_recent">Recent</string>
+    <string name="library_tab_local">Local</string>
+
+    <!-- Library screen: new / import actions + feedback -->
+    <string name="library_new_playlist_label">New</string>
+    <string name="library_new_playlist">New playlist</string>
+    <string name="library_import_playlist_desc">Import a playlist</string>
+    <string name="library_playlist_imported">Playlist imported</string>
+    <string name="library_import_failed">Import failed</string>
+    <string name="library_import_file_read_error">Couldn\'t read that file</string>
+    <string name="library_export_saved">Saved to Music/Rizx as %1$s</string>
+    <string name="library_export_failed">Export failed</string>
+
+    <!-- Library screen: liked actions -->
+    <string name="library_removed_from_liked">Removed from liked</string>
+    <string name="library_remove_from_liked_desc">Remove from liked</string>
+
+    <!-- Library screen: confirm dialogs -->
+    <string name="library_clear_recent_title">Clear recently played?</string>
+    <string name="library_clear_recent_body">Only the history is cleared — your liked songs and playlists stay.</string>
+    <string name="library_delete_download_title">Delete download?</string>
+    <string name="library_delete_download_body">The file is removed from this device. The song stays in your library and will stream again.</string>
+    <string name="library_delete_all_downloads_title">Delete all downloads?</string>
+    <string name="library_delete_all_downloads_body">Every downloaded file is removed. Your songs stay in the library and will stream again.</string>
+    <string name="library_delete_all_downloads_confirm">Delete all</string>
+
+    <!-- Library screen: section headers (All tab overview) -->
+    <string name="library_section_playlists">Playlists</string>
+    <string name="library_section_liked">Liked songs</string>
+    <string name="library_section_downloads">Downloads</string>
+    <string name="library_section_recent">Recently played</string>
+
+    <!-- Library screen: empty states -->
+    <string name="library_no_playlists_title">No playlists yet</string>
+    <string name="library_no_playlists_body">Create one, or import from Spotify, YouTube Music or a file.</string>
+    <string name="library_no_liked_title">No liked songs yet</string>
+    <string name="library_no_liked_body">Tap the heart on any song and it lands here.</string>
+    <string name="library_no_recent_title">Nothing played yet</string>
+    <string name="library_no_recent_body">Songs you play show up here.</string>
+    <string name="library_no_downloads_title">No downloads yet</string>
+    <string name="library_no_downloads_body">Tap the download icon on any song to save it and play it without a connection.</string>
+    <string name="library_go_to_liked">Go to liked songs</string>
+    <string name="library_local_entry_title">Music on this device</string>
+    <string name="library_local_entry_body">Browse and play the songs, albums and artists stored on your phone.</string>
+    <string name="library_open_local_music">Open local music</string>
+
+    <!-- Library screen: row actions -->
+    <string name="library_export_desc">Export to Music folder</string>
+    <string name="library_export_again_desc">Export again to Music folder</string>
+    <string name="library_delete_download_desc">Delete download</string>
+    <string name="library_delete_all_downloads_desc">Delete all downloads</string>
+    <string name="library_clear_recent_desc">Clear recently played</string>
+
+    <!-- Library screen: counts -->
+    <string name="library_count_playlist_one">%1$d playlist</string>
+    <string name="library_count_playlist_other">%1$d playlists</string>
+    <string name="library_count_song_one">%1$d song</string>
+    <string name="library_count_song_other">%1$d songs</string>
+    <string name="library_count_track_one">%1$d track</string>
+    <string name="library_count_track_other">%1$d tracks</string>
+
+    <!-- Local music screen: header + tabs -->
+    <string name="local_back">Back</string>
+    <string name="local_title">Local music</string>
+    <string name="local_tab_songs">Songs</string>
+    <string name="local_tab_albums">Albums</string>
+    <string name="local_tab_artists">Artists</string>
+
+    <!-- Local music screen: permission gate -->
+    <string name="local_permission_title">Play your own music</string>
+    <string name="local_permission_body_blocked">Audio access is turned off for Rizx. Turn it on in Settings to browse and play your local songs.</string>
+    <string name="local_permission_body_default">Allow access to the audio on this device to browse and play your local songs.</string>
+    <string name="local_permission_cta_blocked">Open settings</string>
+    <string name="local_permission_cta_default">Allow access</string>
+
+    <!-- Local music screen: empty states -->
+    <string name="local_no_music_title">No music found</string>
+    <string name="local_no_music_body">Nothing on this device yet. Copy some songs to your phone and pull to refresh.</string>
+    <string name="local_no_albums_title">No albums</string>
+    <string name="local_no_albums_body">Your local songs don\'t carry album info yet.</string>
+    <string name="local_no_artists_title">No artists</string>
+    <string name="local_no_artists_body">Your local songs don\'t carry artist info yet.</string>
+
+    <!-- Local music screen: counts -->
+    <string name="local_track_count_one">%1$d track</string>
+    <string name="local_track_count_other">%1$d tracks</string>
+    <string name="local_count_song_one">%1$d song</string>
+    <string name="local_count_song_other">%1$d songs</string>
+
+    <!-- Local album / artist detail -->
+    <string name="local_kind_album">ALBUM</string>
+    <string name="local_kind_artist">ARTIST</string>
+    <string name="local_untitled_album">Album</string>
+    <string name="local_untitled_artist">Artist</string>
+    <string name="local_tracks_heading">TRACKS</string>
+</resources>
