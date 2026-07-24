@@ -65,6 +65,7 @@ import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.local.LocalAlbum
 import fm.rizx.player.ui.local.LocalArtist
 import fm.rizx.player.ui.local.LocalLibraryViewModel
+import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.sg
@@ -232,7 +233,7 @@ private fun SongsList(songs: List<Track>, onPlay: (Int) -> Unit) {
         EmptyLocal("No music found", "Nothing on this device yet. Copy some songs to your phone and pull to refresh.")
         return
     }
-    LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp)) {
+    LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = LocalBottomInset.current + 16.dp)) {
         items(songs, key = { "loc-${it.source.id}" }) { track ->
             LocalSongRow(track) { onPlay(songs.indexOf(track)) }
         }
@@ -264,7 +265,7 @@ private fun AlbumsGrid(albums: List<LocalAlbum>, onOpen: (String) -> Unit) {
     }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(top = 10.dp, bottom = 120.dp),
+        contentPadding = PaddingValues(top = 10.dp, bottom = LocalBottomInset.current + 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -294,7 +295,7 @@ private fun ArtistsGrid(artists: List<LocalArtist>, onOpen: (String) -> Unit) {
     }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(top = 10.dp, bottom = 120.dp),
+        contentPadding = PaddingValues(top = 10.dp, bottom = LocalBottomInset.current + 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {

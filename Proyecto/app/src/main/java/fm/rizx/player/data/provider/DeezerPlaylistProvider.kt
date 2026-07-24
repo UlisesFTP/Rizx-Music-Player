@@ -3,6 +3,7 @@ package fm.rizx.player.data.provider
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.remote.deezer.DeezerApi
 import fm.rizx.player.data.remote.deezer.DeezerIds
+import fm.rizx.player.data.remote.deezer.allPlaylistTracks
 import fm.rizx.player.data.remote.deezer.toTrackOrNull
 import fm.rizx.player.domain.model.PlaylistPreview
 import fm.rizx.player.domain.provider.PlaylistProvider
@@ -35,10 +36,16 @@ class DeezerPlaylistProvider(
         return try {
             withContext(io) {
                 val dto = api.playlist(playlistId)
+                // Pages past the 400 the playlist endpoint embeds, so a long playlist imports whole.
+                val rows = api.allPlaylistTracks(
+                    playlistId = playlistId,
+                    embedded = dto.tracks?.data.orEmpty(),
+                    declaredTotal = dto.nbTracks,
+                )
                 PlaylistPreview(
                     name = dto.title ?: "Imported playlist",
                     description = dto.description,
-                    tracks = dto.tracks?.data?.mapNotNull { it.toTrackOrNull() }.orEmpty(),
+                    tracks = rows.mapNotNull { it.toTrackOrNull() },
                     origin = dto.id?.let { DeezerIds.playlist(it) },
                 )
             }

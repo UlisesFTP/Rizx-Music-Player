@@ -1,6 +1,7 @@
 package fm.rizx.player.ui
 
 import fm.rizx.player.ui.player.shareTrack
+import fm.rizx.player.ui.player.openAudioOutputSwitcher
 import fm.rizx.player.ui.player.NowPlayingMenu
 import fm.rizx.player.ui.player.CanvasViewModel
 import androidx.compose.ui.platform.LocalContext
@@ -23,10 +24,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -70,6 +74,8 @@ import fm.rizx.player.ui.screens.PreferencesScreen
 import fm.rizx.player.ui.screens.QueueScreen
 import fm.rizx.player.ui.screens.SearchScreen
 import fm.rizx.player.ui.screens.PluginsScreen
+import fm.rizx.player.ui.theme.ClampedFontScale
+import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.blueprintCircles
 import fm.rizx.player.ui.theme.blueprintGrid
@@ -109,6 +115,13 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     // large construction circles/arcs + square markers (refs #2/#4 "spec-sheet" poster).
     val gridColor = if (c.isDark) Color.White.copy(alpha = 0.35f) else Color(0xFF221F1A).copy(alpha = 0.24f)
     val circleColor = if (c.isDark) Color.White.copy(alpha = 0.17f) else Color(0xFF221F1A).copy(alpha = 0.17f)
+    // How tall the floating chrome (mini-player + bottom nav) actually is, measured rather than guessed.
+    // Screens end their scrollable content above this, which is what stops the mini-player covering the
+    // last rows of a list. It changes with the system navigation mode, the font scale, and whether the
+    // mini-player is showing, so no constant could have been right.
+    var chromeHeight by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
+
     Box(
         Modifier
             .fillMaxSize()
@@ -116,6 +129,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
             .blueprintGrid(gridColor, cell = 28.dp)
             .blueprintCircles(circleColor),
     ) {
+      CompositionLocalProvider(LocalBottomInset provides chromeHeight.coerceAtLeast(24.dp)) {
         NavHost(
             navController = nav,
             startDestination = Routes.HOME,
@@ -262,6 +276,10 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     onPrevious = playbackViewModel::previous,
                     onAddToPlaylist = { addToPlaylistTrack = np?.track },
                     onOpenLyrics = { nav.navigate(Routes.LYRICS) },
+                    // Nearby devices: hand off to Android's own output switcher (no cast SDK). Radio:
+                    // reuse the existing artist-radio the controller already knows how to fill.
+                    onOpenDevices = { context.openAudioOutputSwitcher() },
+                    onStartRadio = { np?.track?.let { playbackViewModel.playRadio(it) } },
                     // Only the artists a metadata provider actually identified can be opened — a
                     // YouTube-sourced track credits an uploader name with no ref behind it.
                     onOpenArtist = np?.track?.artists?.firstOrNull()?.source?.let { ref ->
@@ -357,6 +375,8 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
             }
         }
 
+      }
+
         // Floating chrome: mini-player + bottom nav, per-route.
         val showNav = route in Routes.withBottomNav
         // The mini-player follows real playback: it shows wherever something is loaded, except on the
@@ -368,10 +388,14 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
             route != Routes.QUEUE &&
             route != Routes.LYRICS
         if (showNav || showMini) {
+          // The chrome is fixed-height by design; a 1.3x system font would otherwise push its controls
+          // off the edge. Body text everywhere else still scales fully.
+          ClampedFontScale {
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    .onSizeChanged { chromeHeight = with(density) { it.height.toDp() } }
                     .navigationBarsPadding()
                     .padding(horizontal = 14.dp)
                     .padding(bottom = 16.dp),
@@ -409,6 +433,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     RizxBottomNav(currentRoute = route, onSelect = { nav.navigateTab(it) })
                 }
             }
+          }
         }
     }
 }

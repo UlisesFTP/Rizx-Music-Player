@@ -203,6 +203,35 @@ object RizxIcons {
             moveTo(5f, 16f); horizontalLineTo(13f)
         }
     }
+
+    /**
+     * "Cast / nearby devices": a screen outline (top + right + partial bottom) with two broadcast arcs and a
+     * filled node in the bottom-left corner — the universal cast glyph, drawn brutalist. Opens the system
+     * audio-output switcher.
+     */
+    val Devices = icon {
+        stroke(2.2f) {
+            moveTo(4f, 10f); verticalLineTo(6f); horizontalLineTo(20f); verticalLineTo(18f); horizontalLineTo(11f)
+            moveTo(4f, 14f); arcToRelative(4f, 4f, 0f, false, true, 4f, 4f)
+            moveTo(4f, 10.5f); arcToRelative(7.5f, 7.5f, 0f, false, true, 7.5f, 7.5f)
+        }
+        fill { moveTo(3.2f, 16.8f); horizontalLineTo(5.4f); verticalLineTo(19f); horizontalLineTo(3.2f); close() }
+    }
+
+    /**
+     * "Radio / start radio": a filled node with two symmetric wave arcs opening left and right — broadcast
+     * emanating from the current song. Kept symmetric (unlike [Devices], whose arcs sit in one corner) so the
+     * two never read as the same icon side by side.
+     */
+    val Radio = icon {
+        fill { moveTo(10.5f, 10.5f); horizontalLineTo(13.5f); verticalLineTo(13.5f); horizontalLineTo(10.5f); close() }
+        stroke(2.2f) {
+            moveTo(8f, 9f); arcToRelative(4.2f, 4.2f, 0f, false, false, 0f, 6f)
+            moveTo(16f, 9f); arcToRelative(4.2f, 4.2f, 0f, false, true, 0f, 6f)
+            moveTo(5.5f, 6.5f); arcToRelative(7.8f, 7.8f, 0f, false, false, 0f, 11f)
+            moveTo(18.5f, 6.5f); arcToRelative(7.8f, 7.8f, 0f, false, true, 0f, 11f)
+        }
+    }
 }
 
 // ---- builders ----------------------------------------------------------------

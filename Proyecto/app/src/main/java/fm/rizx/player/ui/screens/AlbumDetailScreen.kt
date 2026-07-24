@@ -45,6 +45,7 @@ import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.detail.AlbumDetailViewModel
 import fm.rizx.player.ui.detail.AlbumUiState
 import fm.rizx.player.ui.icons.RizxIcons
+import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.code
 import fm.rizx.player.ui.theme.cornerBrackets
@@ -144,7 +145,7 @@ private fun AlbumContent(
                 }
             }
         }
-        Spacer(Modifier.height(120.dp))
+        Spacer(Modifier.height(LocalBottomInset.current + 16.dp))
     }
 }
 

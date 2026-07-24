@@ -105,4 +105,13 @@ data class DeezerPlaylistFullDto(
     val title: String? = null,
     val description: String? = null,
     val tracks: DeezerTracksWrapper? = null,
+    /** The playlist's real length. `tracks.data` stops at 400, so this is how truncation is detected. */
+    @SerialName("nb_tracks") val nbTracks: Int? = null,
+)
+
+/** `/playlist/{id}/tracks` — a page, with the true total so paging knows when to stop. */
+@Serializable
+data class DeezerPagedTracksDto(
+    val data: List<DeezerTrackDto> = emptyList(),
+    val total: Int? = null,
 )

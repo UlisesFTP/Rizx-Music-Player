@@ -118,11 +118,10 @@ class NewPipeYoutubeExtractorClient(
         // Page through the rest — `relatedItems` is only the first ~100. Bounded so a pathological
         // playlist can't loop or pull forever.
         //
-        // Pagination is wrapped because NewPipe currently NPEs on YouTube continuation pages
-        // (TeamNewPipe/NewPipe#13593: `getPlaylistHeader()` is null past the first page, and
-        // `isCoursePlaylist` dereferences it). There is no fixed release. Rather than throw away the
-        // ~100 tracks the first page already gave us, we stop at the failure and mark the result
-        // truncated — a 40-track playlist imports whole, a 300-track one imports its first 100.
+        // Continuations used to NPE (TeamNewPipe/NewPipe#13593: `getPlaylistHeader()` null past the first
+        // page), which silently capped every long playlist at ~100 tracks; NewPipeExtractor v0.26.4 fixes
+        // it (#1518). The try/catch stays as the safety net it always should have been: a future
+        // extractor regression degrades to a short import marked truncated, never a failed one.
         var page: Page? = info.nextPage
         var pages = 1
         var stoppedEarly = false
@@ -130,7 +129,7 @@ class NewPipeYoutubeExtractorClient(
             val more = try {
                 PlaylistInfo.getMoreItems(service, playlistUrl, page)
             } catch (e: Exception) {
-                stoppedEarly = true // NewPipe's continuation bug — keep the pages we already have
+                stoppedEarly = true // keep the pages we already have rather than losing the import
                 break
             }
             items += more.items

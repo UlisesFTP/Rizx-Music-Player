@@ -136,7 +136,9 @@ dependencies {
 
     // Native full-length YouTube audio (ADR 0014): NewPipeExtractor extracts stream URLs with no API key.
     // GPLv3 — compatible with this app's AGPL-3.0 (§13). Pulls jsoup + Rhino + nanojson transitively.
-    implementation("com.github.teamnewpipe:NewPipeExtractor:v0.26.3")
+    // v0.26.4 fixes "[YouTube] Fix fetching playlists continuations" (#1518) — the bug that made every
+    // YouTube playlist longer than ~100 tracks import as only its first page.
+    implementation("com.github.teamnewpipe:NewPipeExtractor:v0.26.4")
 
     // Embedded JS engine for the sandboxed plugin runtime (ADR 0014): QuickJS via quickjs-kt (Apache-2.0),
     // ~1.2 MiB native lib per ABI. Async binding + fetch bridge; QuickJS has no ambient capabilities.

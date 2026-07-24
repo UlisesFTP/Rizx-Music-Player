@@ -34,6 +34,7 @@ import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.local.LocalLibraryViewModel
+import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.code
 import fm.rizx.player.ui.theme.mr
@@ -122,7 +123,7 @@ private fun LocalDetail(
                     LocalDetailRow(if (numbered) track.trackNumber ?: (index + 1) else index + 1, showNumber = numbered, track = track) { onPlay(index) }
                 }
             }
-            item { Spacer(Modifier.height(120.dp)) }
+            item { Spacer(Modifier.height(LocalBottomInset.current + 16.dp)) }
         }
     }
 }

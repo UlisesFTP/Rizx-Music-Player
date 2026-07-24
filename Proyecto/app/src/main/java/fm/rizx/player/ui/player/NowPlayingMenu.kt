@@ -103,6 +103,27 @@ fun android.content.Context.shareTrack(track: fm.rizx.player.domain.model.Track)
     runCatching { startActivity(android.content.Intent.createChooser(send, null)) }
 }
 
+/**
+ * Opens Android's system audio-output switcher — the "Media output" panel: phone speaker, paired Bluetooth,
+ * and Cast / nearby devices. Uses the public [Settings.Panel][android.provider.Settings.Panel] intent, so
+ * there's no MediaRouter/Cast SDK dependency and nothing to embed. While our session is the one playing, the
+ * panel targets our audio and rerouting there moves our playback. Falls back to Bluetooth settings on the
+ * odd ROM that doesn't ship the panel, so the button never dead-ends; both paths are guarded so a missing
+ * activity can never crash the app.
+ */
+fun android.content.Context.openAudioOutputSwitcher() {
+    // Not a public SDK constant, but the stable action string SystemUI/Settings register for the media
+    // output picker on every modern Android (our minSdk is well past its introduction).
+    val panel = android.content.Intent("android.settings.panel.action.MEDIA_OUTPUT").apply {
+        // Scope the picker to our own session where the platform honours it; a version that doesn't just
+        // ignores the extra and shows the active session, which is ours while we're playing.
+        putExtra("android.provider.extra.MEDIA_OUTPUT_PACKAGE_NAME", packageName)
+    }
+    if (runCatching { startActivity(panel) }.isFailure) {
+        runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)) }
+    }
+}
+
 @Composable
 private fun MenuRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,

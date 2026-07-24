@@ -43,7 +43,21 @@ interface DeezerApi {
     @GET("chart")
     suspend fun chart(): DeezerChartDto
 
-    /** Full playlist with its tracks (URL import, Phase 22). */
+    /** Full playlist with its tracks (URL import, Phase 22). Embeds only the first 400 — see [playlistTracks]. */
     @GET("playlist/{id}")
     suspend fun playlist(@Path("id") id: String): DeezerPlaylistFullDto
+
+    /**
+     * One page of a playlist's tracks.
+     *
+     * Needed because `/playlist/{id}` caps its embedded `tracks.data` at **400** *and returns no `next`
+     * link*, so a longer playlist looks complete when it isn't (verified: a 1640-track playlist reports
+     * `nb_tracks: 1640` and hands back 400). This endpoint reports the true `total` and pages properly.
+     */
+    @GET("playlist/{id}/tracks")
+    suspend fun playlistTracks(
+        @Path("id") id: String,
+        @Query("index") index: Int,
+        @Query("limit") limit: Int,
+    ): DeezerPagedTracksDto
 }

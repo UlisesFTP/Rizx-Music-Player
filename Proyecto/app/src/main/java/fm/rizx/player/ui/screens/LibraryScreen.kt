@@ -77,6 +77,7 @@ import fm.rizx.player.ui.library.ConfirmDialog
 import fm.rizx.player.ui.library.CreatePlaylistDialog
 import fm.rizx.player.ui.library.ImportPlaylistDialog
 import fm.rizx.player.ui.library.LibraryViewModel
+import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.sg
@@ -384,14 +385,14 @@ fun LibraryScreen(
                 }
             }
 
-            item { Spacer(Modifier.height(120.dp)) }
+            item { Spacer(Modifier.height(LocalBottomInset.current + 16.dp)) }
         }
 
         // Clears the floating chrome that RizxApp draws on top of every screen (mini-player + bottom nav,
         // ~175dp together) — otherwise the snackbar, and its UNDO, hide behind them.
         SnackbarHost(
             snackbars,
-            Modifier.align(Alignment.BottomCenter).padding(start = 14.dp, end = 14.dp, bottom = 186.dp),
+            Modifier.align(Alignment.BottomCenter).padding(start = 14.dp, end = 14.dp, bottom = LocalBottomInset.current + 12.dp),
         )
     }
 }

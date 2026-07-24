@@ -34,7 +34,9 @@ import androidx.compose.ui.unit.dp
 import fm.rizx.player.core.formatDuration
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.RizxTheme
+import fm.rizx.player.ui.theme.RizxWidth
 import fm.rizx.player.ui.theme.brutalShadow
+import fm.rizx.player.ui.theme.rizxWidth
 import fm.rizx.player.ui.theme.hatch
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.placeholderBrush
@@ -100,13 +102,18 @@ fun MiniPlayer(
             )
             Text(artist, style = mr(11, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        // Live "elapsed / duration" readout (mono numerals).
-        Column(
-            horizontalAlignment = Alignment.End,
-            modifier = Modifier.padding(start = 8.dp, end = 2.dp),
-        ) {
-            Text(formatDuration(positionMs), style = mr(10, FontWeight.SemiBold), color = c.text2, maxLines = 1)
-            Text(formatDuration(durationMs), style = mr(10, FontWeight.Medium), color = c.muted, maxLines = 1)
+        // Live "elapsed / duration" readout (mono numerals) — **dropped on narrow screens**. The row's
+        // fixed parts (artwork, like, play) already eat ~190dp, so on a compact width this readout left
+        // the title barely 60dp and the marquee just scrolled fragments of a word past. The scrubber
+        // underneath already shows position, so this is the cheapest thing in the row to give up.
+        if (rizxWidth() != RizxWidth.Compact) {
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.padding(start = 8.dp, end = 2.dp),
+            ) {
+                Text(formatDuration(positionMs), style = mr(10, FontWeight.SemiBold), color = c.text2, maxLines = 1)
+                Text(formatDuration(durationMs), style = mr(10, FontWeight.Medium), color = c.muted, maxLines = 1)
+            }
         }
         RizxIconButton(
             icon = if (liked) RizxIcons.Favorite else RizxIcons.FavoriteBorder,

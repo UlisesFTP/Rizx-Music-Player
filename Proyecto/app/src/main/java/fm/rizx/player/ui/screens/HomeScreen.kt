@@ -61,6 +61,7 @@ import fm.rizx.player.ui.components.tintFor
 import fm.rizx.player.ui.home.HomeUiState
 import fm.rizx.player.ui.home.HomeViewModel
 import fm.rizx.player.ui.icons.RizxIcons
+import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.paperElevation
@@ -174,7 +175,7 @@ fun HomeScreen(
                 is HomeUiState.Error -> item { HomeMessage(s.message, vm::load) }
             }
 
-            item { Spacer(Modifier.height(176.dp)) }
+            item { Spacer(Modifier.height(LocalBottomInset.current + 16.dp)) }
         }
     }
 }

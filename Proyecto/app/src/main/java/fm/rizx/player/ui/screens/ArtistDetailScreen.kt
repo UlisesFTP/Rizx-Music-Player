@@ -44,6 +44,7 @@ import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.detail.ArtistDetailViewModel
 import fm.rizx.player.ui.detail.ArtistUiState
 import fm.rizx.player.ui.icons.RizxIcons
+import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.code
 import fm.rizx.player.ui.theme.cornerBrackets
@@ -121,7 +122,7 @@ private fun ArtistContent(artist: Artist, onOpenAlbum: (ProviderRef) -> Unit, on
                 itemsIndexed(artist.albums) { index, album -> Box(Modifier.staggeredReveal(index)) { AlbumCard(album, onOpenAlbum) } }
             }
         }
-        Spacer(Modifier.height(120.dp))
+        Spacer(Modifier.height(LocalBottomInset.current + 16.dp))
     }
 }
 

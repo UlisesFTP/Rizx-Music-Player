@@ -38,6 +38,7 @@ import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.detail.EditorialPlaylistUiState
 import fm.rizx.player.ui.detail.EditorialPlaylistViewModel
 import fm.rizx.player.ui.icons.RizxIcons
+import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.code
 import fm.rizx.player.ui.theme.mr
@@ -84,7 +85,7 @@ fun EditorialPlaylistScreen(
                                 PlaylistTrackRow(index + 1, track) { vm.play(index) }
                             }
                         }
-                        item { Spacer(Modifier.height(120.dp)) }
+                        item { Spacer(Modifier.height(LocalBottomInset.current + 16.dp)) }
                     }
                 }
             }

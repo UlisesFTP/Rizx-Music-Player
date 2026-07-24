@@ -3,6 +3,7 @@ package fm.rizx.player.data.provider
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.remote.deezer.DeezerApi
 import fm.rizx.player.data.remote.deezer.DeezerIds
+import fm.rizx.player.data.remote.deezer.allPlaylistTracks
 import fm.rizx.player.data.remote.deezer.toAlbum
 import fm.rizx.player.data.remote.deezer.toAlbumRef
 import fm.rizx.player.data.remote.deezer.toArtist
@@ -93,7 +94,12 @@ class DeezerMetadataProvider(
     }
 
     override suspend fun playlistTracks(source: ProviderRef): List<Track> = guarded {
-        api.playlist(DeezerIds.rawId(source)).tracks?.data?.mapNotNull { it.toTrackOrNull() }.orEmpty()
+        val id = DeezerIds.rawId(source)
+        val dto = api.playlist(id)
+        // Same 400-track truncation as the URL import: an editorial playlist opened from Home has to
+        // show all of its songs, not the first page.
+        api.allPlaylistTracks(id, dto.tracks?.data.orEmpty(), dto.nbTracks)
+            .mapNotNull { it.toTrackOrNull() }
     }
 
     private suspend fun <T> guarded(block: suspend () -> T): T = try {

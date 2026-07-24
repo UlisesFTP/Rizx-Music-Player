@@ -67,6 +67,7 @@ import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.search.SearchUiState
 import fm.rizx.player.ui.search.SearchViewModel
+import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.catBg
 import fm.rizx.player.ui.theme.code
@@ -329,7 +330,7 @@ private fun ResultsContent(
                 }
             }
         }
-        Spacer(Modifier.height(120.dp))
+        Spacer(Modifier.height(LocalBottomInset.current + 16.dp))
     }
 }
 
@@ -518,7 +519,7 @@ private fun IdleContent(onSearch: (String) -> Unit) {
                 }
             }
         }
-        Spacer(Modifier.height(120.dp))
+        Spacer(Modifier.height(LocalBottomInset.current + 16.dp))
     }
 }
 

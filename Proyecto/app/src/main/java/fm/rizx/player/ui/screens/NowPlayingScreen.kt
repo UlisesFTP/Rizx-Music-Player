@@ -27,6 +27,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -60,6 +61,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -104,6 +106,10 @@ fun NowPlayingScreen(
     onPrevious: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onOpenLyrics: () -> Unit,
+    /** Opens the system audio-output switcher (phone speaker · Bluetooth · Cast/nearby devices). */
+    onOpenDevices: () -> Unit = {},
+    /** Starts an endless radio seeded from the current song (the service auto-fills similar tracks). */
+    onStartRadio: () -> Unit = {},
     /** Opens the artist's page. Null when the track's artist carries no `ProviderRef` to open. */
     onOpenArtist: (() -> Unit)? = null,
     album: String = "",
@@ -169,12 +175,27 @@ fun NowPlayingScreen(
             .fillMaxSize()
             .background(c.bg),
     ) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding()) {
+          // The artwork takes what's left **after** everything below it, not a fixed 420.dp.
+          //
+          // The waveform, times, title, transport, track actions, up-next handle and footer are all
+          // fixed-height; when the artwork claimed 420 and that wasn't enough, the last of them were
+          // clipped to nothing — on a 1220x2712 phone the add-to-playlist and like buttons simply
+          // vanished between the transport row and "UP NEXT".
+          //
+          // [maxHeight] here is the **measured** space left after the status bar, which is the part the
+          // earlier attempt got wrong: it derived the figure from `Configuration.screenHeightDp`, whose
+          // relationship to the system bars varies, and reserved 380dp for a stack that really needs
+          // ~412dp. Measuring removes both guesses. The 420 cap keeps a tall phone's artwork exactly as
+          // designed; the reserve scales with the system font because that is what inflates those rows.
+          val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.5f)
+          val artHeight = (maxHeight - CONTROLS_RESERVE * fontScale).coerceIn(180.dp, 420.dp)
+          Column(Modifier.fillMaxSize()) {
             // ---- Album art ----
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(420.dp)
+                    .height(artHeight)
                     .clipToBounds(),
             ) {
                 // Procedural "cover": an aurora-tinted gradient stands in for album art.
@@ -506,10 +527,16 @@ fun NowPlayingScreen(
                 )
             }
 
-            // ---- Up-next handle: pull up (or tap) to reveal the queue drawer ----
-            if (upcoming.isNotEmpty()) {
-                UpNextHandle(count = upcoming.size, onOpen = { queueOpen = true })
-            }
+            // ---- Bottom action bar: nearby devices · up-next peek · radio ----
+            // The two new actions share the drawer's strip so they read as one bar instead of floating over
+            // the controls. The peek in the middle still pulls up the queue drawer, and only appears when
+            // there's actually something queued.
+            NowPlayingBottomBar(
+                upcomingCount = upcoming.size,
+                onOpenQueue = { queueOpen = true },
+                onOpenDevices = onOpenDevices,
+                onStartRadio = onStartRadio,
+            )
 
             // ---- Footer ----
             // Now purely the "what am I listening to" readout: repeat and shuffle moved up into the
@@ -537,6 +564,7 @@ fun NowPlayingScreen(
                     }
                 }
             }
+          }
         }
 
         // ---- Up-next drawer: slides up over the player, tap a song to jump, tap away to hide ----
@@ -569,19 +597,52 @@ fun NowPlayingScreen(
     }
 }
 
-/** A slim pull-up handle above the footer: the drawer's peek. Tap or swipe up to open. */
+/**
+ * The strip that sits at the drawer's height: nearby-devices on the left, the up-next peek in the middle,
+ * and start-radio on the right. Giving the two new actions their own bar keeps the transport row above
+ * purely about playback while putting cast and radio within easy thumb reach.
+ */
 @Composable
-private fun UpNextHandle(count: Int, onOpen: () -> Unit) {
+private fun NowPlayingBottomBar(
+    upcomingCount: Int,
+    onOpenQueue: () -> Unit,
+    onOpenDevices: () -> Unit,
+    onStartRadio: () -> Unit,
+) {
     val c = RizxTheme.colors
-    Column(
+    Row(
         Modifier
             .fillMaxWidth()
             .background(if (c.isDark) Color(0xFF0C0C10).copy(alpha = 0.6f) else c.elev)
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Left: opens the system audio-output switcher (speaker · Bluetooth · Cast/nearby devices).
+        GlassButton(RizxIcons.Devices, "Nearby devices", onOpenDevices, c.isDark, size = 42.dp, iconSize = 21.dp)
+        // Center: the up-next peek — tap or swipe up to open the queue drawer. Only when something's queued;
+        // otherwise the two buttons just sit at the strip's ends.
+        if (upcomingCount > 0) {
+            UpNextHandle(count = upcomingCount, onOpen = onOpenQueue, modifier = Modifier.weight(1f))
+        } else {
+            Spacer(Modifier.weight(1f))
+        }
+        // Right: start an endless radio seeded from this song.
+        GlassButton(RizxIcons.Radio, "Start radio", onStartRadio, c.isDark, size = 42.dp, iconSize = 21.dp)
+    }
+}
+
+/** A slim pull-up peek: the drawer's handle. Tap or swipe up to open. Sized to sit inside the bottom bar. */
+@Composable
+private fun UpNextHandle(count: Int, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val c = RizxTheme.colors
+    Column(
+        modifier
             // Tap and swipe live in separate pointerInput nodes so they don't fight — a drag detector on
             // the same node as `clickable` swallows the tap.
             .pointerInput(Unit) { detectTapGestures { onOpen() } }
             .pointerInput(Unit) { detectVerticalDragGestures { _, dragAmount -> if (dragAmount < -6f) onOpen() } }
-            .padding(top = 8.dp, bottom = 2.dp),
+            .padding(vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // The grab bar.
@@ -728,3 +789,14 @@ private fun ModeButton(
  * it stays well above the 48.dp touch-target guidance once the 14.dp vertical padding is counted.
  */
 private val WAVEFORM_HEIGHT = 39.dp
+
+/**
+ * Vertical space everything below the artwork needs at a 1.0 font scale, with headroom.
+ *
+ * Measured from the layout rather than estimated: waveform 67 + times 22 + title block 81 + transport 86
+ * + track actions 54 = 310, then the bottom action bar 54 (nearby-devices · up-next peek · radio) and the
+ * footer 69. An earlier reserve counted a bare 33dp up-next handle here; the handle now shares a taller,
+ * always-present bar with the two new buttons, so the reserve grew ~20dp to keep the track-actions row
+ * from being clipped on a short screen (this was already what dropped that row on a 1220x2712 phone).
+ */
+private val CONTROLS_RESERVE = 450.dp
