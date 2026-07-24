@@ -232,6 +232,21 @@ object RizxIcons {
             moveTo(18.5f, 6.5f); arcToRelative(7.8f, 7.8f, 0f, false, true, 0f, 11f)
         }
     }
+
+    /**
+     * Drag handle for reordering — a 6-dot grip (2×3 filled squares). The dot-matrix motif doubles as the
+     * app's own language, so the reorder affordance reads as native rather than a generic hamburger.
+     */
+    val Grip = icon {
+        fill {
+            moveTo(8f, 5f); horizontalLineTo(10.4f); verticalLineTo(7.4f); horizontalLineTo(8f); close()
+            moveTo(13.6f, 5f); horizontalLineTo(16f); verticalLineTo(7.4f); horizontalLineTo(13.6f); close()
+            moveTo(8f, 10.8f); horizontalLineTo(10.4f); verticalLineTo(13.2f); horizontalLineTo(8f); close()
+            moveTo(13.6f, 10.8f); horizontalLineTo(16f); verticalLineTo(13.2f); horizontalLineTo(13.6f); close()
+            moveTo(8f, 16.6f); horizontalLineTo(10.4f); verticalLineTo(19f); horizontalLineTo(8f); close()
+            moveTo(13.6f, 16.6f); horizontalLineTo(16f); verticalLineTo(19f); horizontalLineTo(13.6f); close()
+        }
+    }
 }
 
 // ---- builders ----------------------------------------------------------------

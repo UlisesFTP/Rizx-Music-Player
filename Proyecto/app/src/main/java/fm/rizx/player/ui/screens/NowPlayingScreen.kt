@@ -4,7 +4,6 @@ import fm.rizx.player.ui.components.tintFor
 import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.domain.model.PlaybackQueue
-import fm.rizx.player.core.formatDuration
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.animation.slideOutVertically
@@ -17,6 +16,10 @@ import android.view.TextureView
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,6 +28,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -36,7 +41,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -48,6 +55,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -61,6 +69,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +88,7 @@ import fm.rizx.player.ui.components.VerticalLabel
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.domain.model.RepeatMode
 import fm.rizx.player.ui.icons.RizxIcons
+import fm.rizx.player.ui.theme.brutalShadow
 import fm.rizx.player.ui.theme.cornerBrackets
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.dot
@@ -87,7 +98,9 @@ import fm.rizx.player.ui.theme.sg
 import fm.rizx.player.ui.util.rememberRizxHaptics
 import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlinx.coroutines.launch
 
 @Composable
 fun NowPlayingScreen(
@@ -130,8 +143,12 @@ fun NowPlayingScreen(
     menu: @Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     /** The live queue, for the pull-up "Up next" drawer. */
     queue: PlaybackQueue = PlaybackQueue(),
-    /** Jump to a queue item (by its per-insertion id) — makes it the current song. */
+    /** Jump to a queue item (by its per-insertion id) — makes it the current song and plays it. */
     onPlayQueueItem: (String) -> Unit = {},
+    /** Removes a queue item (by id) from the "Up next" drawer. */
+    onRemoveQueueItem: (String) -> Unit = {},
+    /** Reorders the queue by **absolute** indices — the drawer maps its upcoming rows to these. */
+    onMoveQueueItem: (Int, Int) -> Unit = { _, _ -> },
     // True while the current track is resolving/buffering to play — shows a loader on the play button.
     loading: Boolean = false,
     // Live audio spectrum (0..1 per bar) read lazily inside the waveform's draw so only it invalidates.
@@ -139,8 +156,15 @@ fun NowPlayingScreen(
 ) {
     val c = RizxTheme.colors
     val haptics = rememberRizxHaptics()
+    val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
     var queueOpen by remember { mutableStateOf(false) }
+    // Live offsets for the artwork gestures — the finger drives them directly, then a one-shot `animate`
+    // settles them back (never a continuous driver, so audio stays clean).
+    var artDragX by remember { mutableStateOf(0f) }   // horizontal cover swipe → prev/next
+    var screenDragY by remember { mutableStateOf(0f) } // vertical swipe-down → dismiss
+    // Bumped on a double-tap-to-like so the heart stamp replays; a change trigger, not an animation loop.
+    var likeStamp by remember { mutableStateOf(0) }
     // The songs lined up after the current one — what the drawer lists.
     val upcoming = remember(queue) {
         if (queue.currentIndex < 0) emptyList()
@@ -190,13 +214,49 @@ fun NowPlayingScreen(
           // designed; the reserve scales with the system font because that is what inflates those rows.
           val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.5f)
           val artHeight = (maxHeight - CONTROLS_RESERVE * fontScale).coerceIn(180.dp, 420.dp)
-          Column(Modifier.fillMaxSize()) {
+          Column(Modifier.fillMaxSize().graphicsLayer { translationY = screenDragY }) {
             // ---- Album art ----
             Box(
                 Modifier
                     .fillMaxWidth()
                     .height(artHeight)
-                    .clipToBounds(),
+                    .clipToBounds()
+                    .graphicsLayer { translationX = artDragX }
+                    // Swipe the cover: horizontal = prev/next, a downward drag dismisses the player. One
+                    // axis-locked drag node so the two never fight (and neither fights the waveform's own
+                    // seek-drag, which is a separate region below). Double-tap-to-like is its own tap node.
+                    .pointerInput(Unit) {
+                        var axis = 0 // 0 undecided · 1 horizontal (skip) · 2 vertical (dismiss)
+                        var settle: kotlinx.coroutines.Job? = null
+                        detectDragGestures(
+                            onDragStart = { settle?.cancel(); axis = 0 },
+                            onDragEnd = {
+                                if (axis == 1) {
+                                    val t = size.width * 0.22f
+                                    if (artDragX <= -t) { haptics.confirm(); onNext() }
+                                    else if (artDragX >= t) { haptics.confirm(); onPrevious() }
+                                    settle = scope.launch { animate(artDragX, 0f, animationSpec = tween(210, easing = FastOutSlowInEasing)) { v, _ -> artDragX = v } }
+                                } else if (axis == 2) {
+                                    if (screenDragY >= size.height * 0.30f) onBack()
+                                    else settle = scope.launch { animate(screenDragY, 0f, animationSpec = tween(210, easing = FastOutSlowInEasing)) { v, _ -> screenDragY = v } }
+                                }
+                                axis = 0
+                            },
+                            onDragCancel = { artDragX = 0f; screenDragY = 0f; axis = 0 },
+                        ) { change, delta ->
+                            if (axis == 0) axis = if (abs(delta.x) >= abs(delta.y)) 1 else 2
+                            change.consume()
+                            if (axis == 1) artDragX += delta.x
+                            else screenDragY = (screenDragY + delta.y).coerceAtLeast(0f)
+                        }
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures(onDoubleTap = {
+                            if (!liked) onToggleLike()
+                            likeStamp++
+                            haptics.confirm()
+                        })
+                    },
             ) {
                 // Procedural "cover": an aurora-tinted gradient stands in for album art.
                 Box(
@@ -210,20 +270,24 @@ fun NowPlayingScreen(
                     ),
                 )
                 // Album artwork on top of the gradient base — real cover when available, else the sample.
-                if (artworkUrl != null) {
-                    coil.compose.AsyncImage(
-                        model = artworkUrl,
-                        contentDescription = "Album artwork",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Image(
-                        painter = painterResource(R.drawable.velvet_asphalt),
-                        contentDescription = "Album artwork",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                // Crossfaded on track change so next/prev dissolves instead of hard-cutting. Only the base
+                // image fades; the scrim, canvas video and HUD above stay put (fading them would flicker).
+                Crossfade(targetState = artworkUrl, animationSpec = tween(320), label = "coverArt", modifier = Modifier.fillMaxSize()) { url ->
+                    if (url != null) {
+                        coil.compose.AsyncImage(
+                            model = url,
+                            contentDescription = "Album artwork",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(R.drawable.velvet_asphalt),
+                            contentDescription = "Album artwork",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
                 // The canvas: the song's own video, muted and looping, fading in over the artwork once it
                 // is actually playing — so a track with no video, or a slow extraction, simply never
@@ -280,6 +344,8 @@ fun NowPlayingScreen(
                         }
                     }
                 }
+                // Double-tap-to-like feedback: a red heart stamps over the cover, then fades. One-shot.
+                LikeStamp(trigger = likeStamp)
             }
 
             // ---- Controls zone ----
@@ -321,7 +387,7 @@ fun NowPlayingScreen(
                     // position round-trips back through the player (same trick as the mini-player). Read
                     // only in the draw phase below, so a drag redraws just the waveform, not the screen.
                     var drag by remember { mutableStateOf<Float?>(null) }
-                    Box(
+                    BoxWithConstraints(
                         Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp, vertical = 14.dp)
@@ -387,6 +453,18 @@ fun NowPlayingScreen(
                             drawRect(c.bg, Offset(hx - hs / 2f - edge, 0f), Size(hs + edge * 2f, hs + edge))
                             drawRect(c.redAccent, Offset(hx - hs / 2f, 0f), Size(hs, hs))
                         }
+                        // Floating dot-matrix time chip that tracks the finger while scrubbing — precision
+                        // feedback, gone the instant you lift (bounded by the drag, no continuous driver).
+                        val scrubbing = drag
+                        if (scrubbing != null) {
+                            val chipW = 56.dp
+                            val x = (maxWidth * scrubbing.coerceIn(0f, 1f) - chipW / 2)
+                                .coerceIn(0.dp, (maxWidth - chipW).coerceAtLeast(0.dp))
+                            ScrubBubble(
+                                formatClock(scrubbing * durationSec.toDouble()),
+                                modifier = Modifier.align(Alignment.TopStart).offset(x = x, y = (-30).dp),
+                            )
+                        }
                     }
 
                     // ---- Time row: elapsed · "N OF M" · remaining (dot-matrix numerals) ----
@@ -413,40 +491,52 @@ fun NowPlayingScreen(
                         )
                     }
 
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            title,
-                            style = sg(26, FontWeight.Bold, -0.02f).copy(shadow = npTextShadow),
-                            color = c.text,
-                            maxLines = 1,
-                            textAlign = TextAlign.Center,
-                            // Marquee: a title too long for one line scrolls leftward instead of clipping.
-                            modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE),
-                        )
-                        Text(
-                            artist,
-                            style = mr(14, FontWeight.Medium).copy(shadow = npTextShadow),
-                            color = c.text2,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center,
-                            // Tappable only when we actually know which artist this is: a track's
-                            // ArtistCredit carries no ProviderRef unless its metadata provider gave one
-                            // (Deezer does, YouTube doesn't), and a name alone is not an identity.
-                            modifier = Modifier
-                                .padding(top = 5.dp)
-                                .then(
-                                    if (onOpenArtist != null) {
-                                        Modifier.clickableScale(scale = 0.96f, onClick = onOpenArtist)
-                                    } else {
-                                        Modifier
-                                    },
-                                )
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
-                        )
+                    // Title + artist cross-fade/slide when the track changes, so next/prev feels intentional
+                    // instead of a hard swap. Keyed by the text pair; one-shot, so no continuous driver.
+                    AnimatedContent(
+                        targetState = title to artist,
+                        transitionSpec = {
+                            (fadeIn(tween(280)) + slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it / 3 }) togetherWith
+                                (fadeOut(tween(180)) + slideOutVertically(tween(180)) { -it / 3 })
+                        },
+                        label = "trackText",
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { (animTitle, animArtist) ->
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                animTitle,
+                                style = sg(26, FontWeight.Bold, -0.02f).copy(shadow = npTextShadow),
+                                color = c.text,
+                                maxLines = 1,
+                                textAlign = TextAlign.Center,
+                                // Marquee: a title too long for one line scrolls leftward instead of clipping.
+                                modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE),
+                            )
+                            Text(
+                                animArtist,
+                                style = mr(14, FontWeight.Medium).copy(shadow = npTextShadow),
+                                color = c.text2,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                // Tappable only when we actually know which artist this is: a track's
+                                // ArtistCredit carries no ProviderRef unless its metadata provider gave one
+                                // (Deezer does, YouTube doesn't), and a name alone is not an identity.
+                                modifier = Modifier
+                                    .padding(top = 5.dp)
+                                    .then(
+                                        if (onOpenArtist != null) {
+                                            Modifier.clickableScale(scale = 0.96f, onClick = onOpenArtist)
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                            )
+                        }
                     }
 
                     // ---- Controls ----
@@ -590,7 +680,10 @@ fun NowPlayingScreen(
         ) {
             UpNextPanel(
                 upcoming = upcoming,
+                baseIndex = queue.currentIndex + 1,
                 onPlay = { id -> queueOpen = false; onPlayQueueItem(id) },
+                onRemove = onRemoveQueueItem,
+                onMove = onMoveQueueItem,
                 onCollapse = { queueOpen = false },
             )
         }
@@ -658,14 +751,28 @@ private fun UpNextHandle(count: Int, onOpen: () -> Unit, modifier: Modifier = Mo
     }
 }
 
-/** The drawer body: a drag-down handle, a header, and the upcoming songs — tappable to jump. */
+/**
+ * The drawer body: a drag-down handle, a header, and the upcoming songs — now a real queue manager
+ * (tap to play, X to remove, long-press the grip to reorder).
+ *
+ * Reorder is built from scratch (no library): the lifted row follows the finger, and a **single** move is
+ * committed on drop (`baseIndex + local` maps an upcoming row to its absolute queue index), then
+ * `animateItem` settles the rest. Committing once, on drop, keeps mid-drag churn out of the queue repo.
+ */
 @Composable
 private fun UpNextPanel(
     upcoming: List<fm.rizx.player.domain.model.QueueItem>,
+    baseIndex: Int,
     onPlay: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onMove: (Int, Int) -> Unit,
     onCollapse: () -> Unit,
 ) {
     val c = RizxTheme.colors
+    val haptics = rememberRizxHaptics()
+    var draggingId by remember { mutableStateOf<String?>(null) }
+    var dragDy by remember { mutableStateOf(0f) }
+    var rowHeightPx by remember { mutableStateOf(0f) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -695,36 +802,107 @@ private fun UpNextPanel(
             Modifier.fillMaxWidth().weight(1f),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 22.dp, end = 22.dp, top = 6.dp, bottom = 24.dp),
         ) {
-            itemsIndexed(upcoming, key = { _, item -> item.id }) { _, item ->
-                UpNextRow(item, onPlay = { onPlay(item.id) })
+            itemsIndexed(upcoming, key = { _, item -> item.id }) { index, item ->
+                val isDragging = draggingId == item.id
+                UpNextRow(
+                    item = item,
+                    modifier = if (isDragging) Modifier else Modifier.animateItem(),
+                    isDragging = isDragging,
+                    dragDy = if (isDragging) dragDy else 0f,
+                    onMeasured = { h -> rowHeightPx = h },
+                    onPlay = { onPlay(item.id) },
+                    onRemove = { onRemove(item.id) },
+                    onDragStart = { draggingId = item.id; dragDy = 0f; haptics.heavy() },
+                    onDrag = { dy -> dragDy += dy },
+                    onDragEnd = {
+                        val h = if (rowHeightPx > 0f) rowHeightPx else 1f
+                        val steps = (dragDy / h).roundToInt()
+                        val to = (index + steps).coerceIn(0, upcoming.lastIndex)
+                        if (to != index) { onMove(baseIndex + index, baseIndex + to); haptics.select() }
+                        draggingId = null; dragDy = 0f
+                    },
+                    onDragCancel = { draggingId = null; dragDy = 0f },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun UpNextRow(item: fm.rizx.player.domain.model.QueueItem, onPlay: () -> Unit) {
+private fun UpNextRow(
+    item: fm.rizx.player.domain.model.QueueItem,
+    modifier: Modifier = Modifier,
+    isDragging: Boolean = false,
+    dragDy: Float = 0f,
+    onMeasured: (Float) -> Unit = {},
+    onPlay: () -> Unit = {},
+    onRemove: () -> Unit = {},
+    onDragStart: () -> Unit = {},
+    onDrag: (Float) -> Unit = {},
+    onDragEnd: () -> Unit = {},
+    onDragCancel: () -> Unit = {},
+) {
     val c = RizxTheme.colors
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onPlay)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(13.dp),
-    ) {
-        CoverArt(
-            tintFor(item.track.source.id), initial = null, Modifier.size(46.dp),
-            imageUrl = item.track.artwork.coverUrl(),
-        )
-        Column(Modifier.weight(1f)) {
-            Text(item.track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                item.track.artists.joinToString { it.name }.ifEmpty { "Unknown artist" },
-                style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            .onSizeChanged { onMeasured(it.height.toFloat()) }
+            // While lifted: raise it above its neighbours, follow the finger, and give it a solid card back
+            // with a hard shadow so it reads as picked up.
+            .then(
+                if (isDragging) {
+                    Modifier.zIndex(1f).graphicsLayer { translationY = dragDy }.brutalShadow(c.shadowHard, offset = 4.dp).background(c.elev)
+                } else {
+                    Modifier
+                },
             )
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Tap-to-play region (cover + text), kept separate from the remove/drag controls so the three
+        // touch targets never fight for the same gesture.
+        Row(
+            Modifier.weight(1f).clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onPlay),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
+        ) {
+            CoverArt(
+                tintFor(item.track.source.id), initial = null, Modifier.size(46.dp),
+                imageUrl = item.track.artwork.coverUrl(),
+            )
+            Column(Modifier.weight(1f)) {
+                Text(item.track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    item.track.artists.joinToString { it.name }.ifEmpty { "Unknown artist" },
+                    style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        Text(formatDuration(item.track.durationMs), style = mr(12, FontWeight.Medium), color = c.muted)
+        // Remove from the queue.
+        Box(
+            Modifier.size(34.dp).clickableScale(scale = 0.9f, onClick = onRemove),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(RizxIcons.Close, "Remove from queue", tint = c.muted, modifier = Modifier.size(17.dp))
+        }
+        // Drag handle — long-press, then drag to reorder. Its own pointer node so a normal list scroll and
+        // the tap-to-play above are untouched.
+        Box(
+            Modifier
+                .size(34.dp)
+                .pointerInput(item.id) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { onDragStart() },
+                        onDrag = { change, amount -> change.consume(); onDrag(amount.y) },
+                        onDragEnd = { onDragEnd() },
+                        onDragCancel = { onDragCancel() },
+                    )
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(RizxIcons.Grip, "Reorder", tint = if (isDragging) c.text else c.muted, modifier = Modifier.size(20.dp))
+        }
     }
 }
 
@@ -777,6 +955,52 @@ private fun ModeButton(
         size = 46.dp, iconSize = 22.dp, tint = tint,
         background = bg, border = if (active) Color.Transparent else line,
     )
+}
+
+/**
+ * The double-tap-to-like flourish: a red heart pops over the cover and fades. Driven by a change [trigger]
+ * (incremented on each double-tap) so it replays without ever becoming a continuous animation — the two
+ * `Animatable`s run once per trigger and rest. Renders nothing until the first tap.
+ */
+@Composable
+private fun BoxScope.LikeStamp(trigger: Int) {
+    if (trigger == 0) return
+    val c = RizxTheme.colors
+    val pop = remember { Animatable(0.5f) }
+    val fade = remember { Animatable(0f) }
+    LaunchedEffect(trigger) {
+        pop.snapTo(0.5f); fade.snapTo(0f)
+        launch { pop.animateTo(1.1f, tween(300, easing = FastOutSlowInEasing)) }
+        fade.animateTo(1f, tween(110))
+        kotlinx.coroutines.delay(200)
+        fade.animateTo(0f, tween(240))
+    }
+    Icon(
+        RizxIcons.Favorite,
+        contentDescription = null,
+        tint = c.redAccent,
+        modifier = Modifier
+            .align(Alignment.Center)
+            .size(96.dp)
+            .graphicsLayer { scaleX = pop.value; scaleY = pop.value; alpha = fade.value },
+    )
+}
+
+/** The scrub time chip: a hard-cornered dot-matrix readout with a red tick, floated over the playhead. */
+@Composable
+private fun ScrubBubble(timeText: String, modifier: Modifier = Modifier) {
+    val c = RizxTheme.colors
+    Row(
+        modifier
+            .background(c.elev)
+            .border(1.dp, c.hardLine)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Box(Modifier.size(5.dp).background(c.redAccent))
+        Text(timeText, style = dot(13, FontWeight.Black), color = c.text, maxLines = 1)
+    }
 }
 
 // (The animated "snake-lights" aurora was removed: the dark Now Playing backdrop is now a

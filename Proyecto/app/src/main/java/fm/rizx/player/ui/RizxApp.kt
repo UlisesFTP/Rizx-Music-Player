@@ -295,7 +295,11 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     canvasVideo = canvasViewModel::attach,
                     canvasPlaying = canvasState.playing,
                     queue = queue,
-                    onPlayQueueItem = queueViewModel::playItem,
+                    // Parity with the full Queue screen: tapping a drawer row must actually start that song
+                    // (seek+play), not just move the cursor (goToId). The drawer used the cursor-only path.
+                    onPlayQueueItem = playbackViewModel::playQueueItem,
+                    onRemoveQueueItem = queueViewModel::removeItem,
+                    onMoveQueueItem = queueViewModel::move,
                     menu = { expanded, onDismiss ->
                         val track = np?.track
                         NowPlayingMenu(
