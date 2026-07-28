@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.PlaybackResolverSettings
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
@@ -170,6 +171,17 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.RADIO_ALGORITHM] = mode.name }
     }
 
+    // Same by-name storage as the radio algorithm, for the same reason.
+    override val lyricsVisualQuality: Flow<LyricsVisualQuality> = pref { prefs ->
+        prefs[Keys.LYRICS_QUALITY]
+            ?.let { name -> LyricsVisualQuality.entries.firstOrNull { it.name == name } }
+            ?: LyricsVisualQuality.AUTOMATIC
+    }
+
+    override suspend fun setLyricsVisualQuality(quality: LyricsVisualQuality) {
+        dataStore.edit { it[Keys.LYRICS_QUALITY] = quality.name }
+    }
+
     // `core.*` namespacing leaves room for future `plugin.*` settings (§7.4).
     private object Keys {
         // DARK_THEME is legacy — kept only so an existing install's old choice migrates into THEME_MODE.
@@ -192,6 +204,7 @@ class SettingsRepositoryImpl(
         val AUDIO_CACHE_BYTES = longPreferencesKey("core.cache.audioBytes")
         val RECS_REGIONAL_CONSENT = booleanPreferencesKey("core.recs.regionalConsent")
         val RADIO_ALGORITHM = stringPreferencesKey("core.recs.radioAlgorithm")
+        val LYRICS_QUALITY = stringPreferencesKey("core.ui.lyricsQuality")
     }
 
     companion object {

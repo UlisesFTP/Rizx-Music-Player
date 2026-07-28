@@ -206,6 +206,10 @@ class MediaControllerPlaybackController @Inject constructor(
             isPlaying = c.isPlaying,
             playWhenReady = c.playWhenReady,
             error = error?.errorCodeName,
+            speed = c.playbackParameters.speed,
+            // Stamped at the same instant the position was read, so a consumer can work out how stale
+            // this sample is. `elapsedRealtime` and not wall time: it can't be moved by the clock.
+            sampledAtElapsedMs = android.os.SystemClock.elapsedRealtime(),
         )
     }
 

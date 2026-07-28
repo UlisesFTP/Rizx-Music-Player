@@ -20,6 +20,16 @@ data class PlaybackState(
     val isPlaying: Boolean = false,
     val playWhenReady: Boolean = false,
     val error: String? = null,
+    /** Playback rate, 1.0 at normal speed. Only the smooth lyrics clock cares; nothing sets it yet. */
+    val speed: Float = 1f,
+    /**
+     * When [positionMs] was read, on the device's monotonic uptime clock (`SystemClock.elapsedRealtime`).
+     *
+     * A plain `Long` so this stays a domain type: the playback layer stamps it, and the lyrics clock
+     * extrapolates from it between the 4 Hz samples — without it, a karaoke sweep can only ever move in
+     * 250 ms steps, which is a quarter of a second of a word at a time.
+     */
+    val sampledAtElapsedMs: Long = 0L,
 ) {
     /** Playback position as a 0..1 fraction, or 0 when the duration is unknown. */
     val progress: Float

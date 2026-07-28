@@ -1,5 +1,6 @@
 package fm.rizx.player.data.lyrics
 
+import fm.rizx.player.domain.lyrics.sungWordCountAt
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricLine
 import fm.rizx.player.domain.model.LyricWord

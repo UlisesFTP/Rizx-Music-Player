@@ -7,8 +7,11 @@ import fm.rizx.player.core.error.AppError
 import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
+import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
+import fm.rizx.player.domain.playback.PlaybackController
+import fm.rizx.player.domain.playback.PlaybackState
 import fm.rizx.player.domain.repository.LyricsRepository
 import fm.rizx.player.domain.repository.QueueRepository
 import fm.rizx.player.domain.repository.SettingsRepository
@@ -52,6 +55,8 @@ data class LyricsUiState(
     val content: LyricsContent = LyricsContent.NoTrack,
     /** Karaoke view vs plain prose. Persisted, so it carries across songs. */
     val syncedMode: Boolean = true,
+    /** How much the karaoke renderer is allowed to spend. Persisted; set from Settings. */
+    val visualQuality: LyricsVisualQuality = LyricsVisualQuality.AUTOMATIC,
     val search: LyricsSearchState = LyricsSearchState.Closed,
 ) {
     /** The timed view is only possible when the lyric *has* timings and the user wants it. */
@@ -73,12 +78,22 @@ data class LyricsUiState(
 @HiltViewModel
 class LyricsViewModel @Inject constructor(
     queue: QueueRepository,
+    playback: PlaybackController,
     private val lyrics: LyricsRepository,
     private val settings: SettingsRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LyricsUiState())
     val state: StateFlow<LyricsUiState> = _state.asStateFlow()
+
+    /**
+     * The engine's position, handed to the karaoke view **as a flow**.
+     *
+     * Deliberately not folded into [state]: the position changes four times a second, and a screen that
+     * recomposed at 4 Hz would undo the whole point of the sweep's draw-only update path. The lyrics list
+     * subscribes to this directly and never reads it during composition.
+     */
+    val playbackState: StateFlow<PlaybackState> = playback.state
 
     private var track: Track? = null
     private var searchJob: Job? = null
@@ -87,6 +102,9 @@ class LyricsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             settings.syncedLyricsMode.collect { on -> _state.update { it.copy(syncedMode = on) } }
+        }
+        viewModelScope.launch {
+            settings.lyricsVisualQuality.collect { q -> _state.update { it.copy(visualQuality = q) } }
         }
         viewModelScope.launch {
             queue.state

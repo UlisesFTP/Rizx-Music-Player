@@ -101,29 +101,4 @@ class LrcParserTest {
         assertTrue(LrcParser.parse(null).isEmpty())
         assertTrue(LrcParser.parse("   ").isEmpty())
     }
-
-    @Test
-    fun `active index tracks the line being sung`() {
-        val lines = LrcParser.parse("[00:00.00] one\n[00:10.00] two\n[00:20.00] three")
-
-        assertEquals(-1, lines.activeIndexAt(-1L))
-        assertEquals(0, lines.activeIndexAt(0L))
-        assertEquals(0, lines.activeIndexAt(9_999L))
-        assertEquals(1, lines.activeIndexAt(10_000L))
-        assertEquals(2, lines.activeIndexAt(600_000L))
-    }
-
-    @Test
-    fun `a positive offset delays the lyrics against the audio`() {
-        val lines = LrcParser.parse("[00:00.00] one\n[00:10.00] two")
-
-        // At 10s with the words pushed 2s later, line two has not started yet.
-        assertEquals(0, lines.activeIndexAt(10_000L, offsetMs = 2_000L))
-        assertEquals(1, lines.activeIndexAt(12_000L, offsetMs = 2_000L))
-    }
-
-    @Test
-    fun `an empty lyric has no active line`() {
-        assertEquals(-1, emptyList<fm.rizx.player.domain.model.LyricLine>().activeIndexAt(5_000L))
-    }
 }

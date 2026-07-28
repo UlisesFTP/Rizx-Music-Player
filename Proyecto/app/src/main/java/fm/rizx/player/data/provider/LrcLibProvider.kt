@@ -4,6 +4,8 @@ import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.lyrics.LrcParser
 import fm.rizx.player.data.remote.lrclib.LrcLibApi
 import fm.rizx.player.data.remote.lrclib.LrcLibTrackDto
+import fm.rizx.player.domain.lyrics.LyricsMatchTarget
+import fm.rizx.player.domain.lyrics.LyricsTrackMatcher
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
 import fm.rizx.player.domain.model.Track
@@ -15,7 +17,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.IOException
-import kotlin.math.abs
 
 /**
  * **Timed** lyrics from the keyless LRCLIB API — the source that makes the synced lyrics screen possible.
@@ -54,7 +55,7 @@ class LrcLibProvider(
                 val exact = durationMs?.let { exactGet(artist, title, album, it) }
                 exact
                     ?: looseGet(artist, title, album)
-                    ?: bestFromSearch(artist, title, durationMs)
+                    ?: bestFromSearch(track, artist, title)
             }
         }
     }
@@ -85,21 +86,23 @@ class LrcLibProvider(
         notFoundAsNull { api.get(artist, title, album, null) }?.toLyrics()
 
     /**
-     * Step 3. Scores candidates by how close their duration is to ours, with a bonus for timed lyrics:
-     * given two transcriptions of the same song, the synced one is strictly more useful, and a wrong-length
-     * match is usually a live version, an edit, or a different mix.
+     * Step 3. Free-text search, scored by [LyricsTrackMatcher]: the same recording first (title, artist
+     * and — decisively — version), then whichever is closest in length, with timed lyrics preferred over
+     * prose. A wrong-length match is usually a live version, an edit or a different mix; a *right*-length
+     * one with "(Sped Up)" in its name is the trap the version gate exists for.
      */
-    private suspend fun bestFromSearch(artist: String, title: String, durationMs: Long?): Lyrics? {
+    private suspend fun bestFromSearch(track: Track, artist: String, title: String): Lyrics? {
         val results = notFoundAsNull { api.search("$artist $title") } ?: return null
-        return results
-            .filter { it.syncedLyrics != null || it.plainLyrics != null || it.instrumental }
-            .minByOrNull { row ->
-                val drift = durationMs?.let { ours ->
-                    row.duration?.let { abs((it * 1000).toLong() - ours) } ?: UNKNOWN_DURATION_PENALTY
-                } ?: 0L
-                drift + if (row.syncedLyrics != null) 0L else UNSYNCED_PENALTY
-            }
-            ?.toLyrics()
+        val usable = results.filter { it.syncedLyrics != null || it.plainLyrics != null || it.instrumental }
+        return LyricsTrackMatcher.bestOf(track, usable) { row ->
+            LyricsMatchTarget(
+                title = row.trackName.orEmpty(),
+                artist = row.artistName.orEmpty(),
+                album = row.albumName,
+                durationMs = row.duration?.let { (it * 1000).toLong() },
+                synced = row.syncedLyrics != null,
+            )
+        }?.toLyrics()
     }
 
     // ---- Mapping ----
@@ -153,8 +156,5 @@ class LrcLibProvider(
         /** LRCLIB returns 20 rows; each embeds its full lyrics, so the payload is large. Keep it bounded. */
         private const val MAX_RESULTS = 20
 
-        /** Ranking weights, in the same "milliseconds of drift" unit the score is built from. */
-        private const val UNSYNCED_PENALTY = 30_000L
-        private const val UNKNOWN_DURATION_PENALTY = 60_000L
     }
 }

@@ -26,6 +26,16 @@
     <string name="lyrics_untitled">Untitled</string>
     <string name="lyrics_synced_badge">Synced</string>
     <string name="lyrics_word_badge">Word</string>
+    <string name="lyrics_resume_autoscroll">Resume auto-scroll</string>
+
+    <!-- Settings: how much the karaoke renderer is allowed to spend -->
+    <string name="pref_lyrics_quality">Lyrics visual quality</string>
+    <string name="lyrics_quality_automatic">Automatic</string>
+    <string name="lyrics_quality_automatic_caption">Every effect, easing off on low battery or an older phone</string>
+    <string name="lyrics_quality_high">High</string>
+    <string name="lyrics_quality_high_caption">Everything on, whatever the device says</string>
+    <string name="lyrics_quality_saver">Battery saver</string>
+    <string name="lyrics_quality_saver_caption">No glow, and the highlight steps word by word</string>
 
     <!-- QueueScreen -->
     <string name="queue_back_cd">Back</string>

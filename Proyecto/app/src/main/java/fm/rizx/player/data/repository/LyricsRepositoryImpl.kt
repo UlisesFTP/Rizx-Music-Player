@@ -1,6 +1,7 @@
 package fm.rizx.player.data.repository
 
 import fm.rizx.player.data.local.store.LyricsStore
+import fm.rizx.player.data.lyrics.LyricsNormalizer
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
 import fm.rizx.player.domain.model.Track
@@ -50,7 +51,11 @@ class LyricsRepositoryImpl(
 
     override suspend fun lyricsFor(track: Track): TrackLyrics? {
         val key = track.source.identityKey
-        store?.get(key)?.let { return TrackLyrics(it.lyrics, it.offsetMs, it.pinned) }
+        // Cached entries are normalised too: anything written before lines carried an end still needs
+        // one, and normalisation is idempotent so a fresh entry passes straight through.
+        store?.get(key)?.let {
+            return TrackLyrics(LyricsNormalizer.normalize(it.lyrics), it.offsetMs, it.pinned)
+        }
 
         val result = fetch(track)
         val lyrics = result.lyrics ?: return null
@@ -82,6 +87,9 @@ class LyricsRepositoryImpl(
             .awaitAll()
             .firstOrNull { it.isNotEmpty() }
             .orEmpty()
+            // A hand-picked candidate is rendered and cached without passing through `fetch`, so it has
+            // to be normalised here or the karaoke view would get raw provider timings.
+            .map { it.copy(lyrics = LyricsNormalizer.normalize(it.lyrics)) }
     }
 
     override suspend fun pin(track: Track, candidate: LyricsCandidate) {
@@ -167,7 +175,11 @@ class LyricsRepositoryImpl(
     /** One bounded, isolated provider call. Neither a timeout nor a crash escapes. */
     private suspend fun attempt(provider: LyricsProvider, track: Track): Outcome = try {
         withTimeoutOrNull(providerTimeoutMs) { Boxed(provider.getLyrics(track)) }
-            ?.let { boxed -> Outcome.Ok(boxed.value?.takeUnless { it.isEmpty }) }
+            ?.let { boxed ->
+                // Normalised here, before ranking: `rank()` asks whether the lyric is word-synced, and
+                // that answer is only trustworthy once unusable word timings have been stripped.
+                Outcome.Ok(boxed.value?.let(LyricsNormalizer::normalize)?.takeUnless { it.isEmpty })
+            }
             ?: Outcome.TimedOut
     } catch (e: CancellationException) {
         throw e

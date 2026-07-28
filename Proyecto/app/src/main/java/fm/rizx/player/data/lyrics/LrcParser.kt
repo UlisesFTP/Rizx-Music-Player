@@ -111,38 +111,3 @@ object LrcParser {
         return (m * 60 + s) * 1000 + millis
     }
 }
-
-/**
- * The index of the line being sung at [positionMs], or -1 before the first one.
- *
- * [offsetMs] shifts the *lyrics* relative to the audio: positive means "these words arrive later", which
- * is the correction needed when the played recording has a longer intro than the one the file was timed
- * against — routine here, since the audio usually comes from YouTube rather than the reference master.
- *
- * A plain scan: lyric files are ~60-120 lines and this runs only when the position actually crosses a
- * line boundary, so a binary search would buy nothing but a chance to get the edges wrong.
- */
-fun List<LyricLine>.activeIndexAt(positionMs: Long, offsetMs: Long = 0L): Int {
-    var index = -1
-    for (i in indices) {
-        if (this[i].timeMs + offsetMs <= positionMs) index = i else break
-    }
-    return index
-}
-
-/**
- * How many of this line's words have been sung at [positionMs] — i.e. the length of the highlighted
- * prefix, `0` before the first word and `words.size` once the line is done.
- *
- * A count rather than an index because that is what the UI actually needs: the split point between the
- * sung part of the line and the rest. Lines without word timings always return 0, so the caller falls
- * back to lighting the whole line.
- */
-fun LyricLine.sungWordCountAt(positionMs: Long, offsetMs: Long = 0L): Int {
-    if (words.isEmpty()) return 0
-    var count = 0
-    for (word in words) {
-        if (word.startMs + offsetMs <= positionMs) count++ else break
-    }
-    return count
-}

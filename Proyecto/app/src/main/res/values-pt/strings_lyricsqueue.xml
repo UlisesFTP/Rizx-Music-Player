@@ -26,6 +26,16 @@
     <string name="lyrics_untitled">Sem título</string>
     <string name="lyrics_synced_badge">Sincronizada</string>
     <string name="lyrics_word_badge">Palavra</string>
+    <string name="lyrics_resume_autoscroll">Retomar rolagem automática</string>
+
+    <!-- Configurações: quanto o renderizador de karaokê pode gastar -->
+    <string name="pref_lyrics_quality">Qualidade visual da letra</string>
+    <string name="lyrics_quality_automatic">Automática</string>
+    <string name="lyrics_quality_automatic_caption">Todos os efeitos, reduzindo com pouca bateria ou em aparelhos antigos</string>
+    <string name="lyrics_quality_high">Alta</string>
+    <string name="lyrics_quality_high_caption">Tudo ativado, diga o que disser o aparelho</string>
+    <string name="lyrics_quality_saver">Economia de bateria</string>
+    <string name="lyrics_quality_saver_caption">Sem halo, e o destaque avança palavra por palavra</string>
 
     <!-- QueueScreen -->
     <string name="queue_back_cd">Voltar</string>

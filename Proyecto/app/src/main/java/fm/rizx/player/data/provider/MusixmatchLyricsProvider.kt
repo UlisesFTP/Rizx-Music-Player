@@ -5,6 +5,8 @@ import fm.rizx.player.data.lyrics.LrcParser
 import fm.rizx.player.data.lyrics.RichSyncParser
 import fm.rizx.player.data.remote.musixmatch.MusixmatchClient
 import fm.rizx.player.data.remote.musixmatch.MusixmatchTrack
+import fm.rizx.player.domain.lyrics.LyricsMatchTarget
+import fm.rizx.player.domain.lyrics.LyricsTrackMatcher
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
 import fm.rizx.player.domain.model.Track
@@ -15,7 +17,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
-import kotlin.math.abs
 
 /**
  * **Word-by-word** lyrics from Musixmatch — the largest catalogue of the three karaoke sources.
@@ -44,9 +45,10 @@ class MusixmatchLyricsProvider(
         return guard {
             withContext(io) {
                 val hits = client.search(query, MAX_RESULTS)
-                // Prefer a track that actually has word timings; among those, the closest length to ours.
-                val best = hits.filter { it.hasRichsync }.bestFor(track.durationMs)
-                    ?: hits.bestFor(track.durationMs)
+                // Prefer a track that actually has word timings; among those, the best match for this
+                // recording. Word timings are worth reaching for, but not from a different version.
+                val best = hits.filter { it.hasRichsync }.bestFor(track)
+                    ?: hits.bestFor(track)
                     ?: return@withContext null
                 lyricsFor(best)
             }
@@ -72,11 +74,15 @@ class MusixmatchLyricsProvider(
         }.orEmpty()
     }
 
-    private fun List<MusixmatchTrack>.bestFor(durationMs: Long?): MusixmatchTrack? {
-        if (isEmpty()) return null
-        if (durationMs == null) return first()
-        return minByOrNull { it.durationMs?.let { d -> abs(d - durationMs) } ?: UNKNOWN_DURATION_PENALTY }
-    }
+    private fun List<MusixmatchTrack>.bestFor(track: Track): MusixmatchTrack? =
+        LyricsTrackMatcher.bestOf(track, this) { hit ->
+            LyricsMatchTarget(
+                title = hit.title,
+                artist = hit.artist,
+                album = hit.album,
+                durationMs = hit.durationMs,
+            )
+        }
 
     private fun lyricsFor(hit: MusixmatchTrack): Lyrics? {
         val words = if (hit.hasRichsync) RichSyncParser.parse(client.richSync(hit.trackId)) else emptyList()
@@ -105,6 +111,5 @@ class MusixmatchLyricsProvider(
         /** Each candidate costs a second request for its body, so the manual picker stays short. */
         private const val MAX_CANDIDATES = 4
 
-        private const val UNKNOWN_DURATION_PENALTY = 60_000L
     }
 }

@@ -11,6 +11,7 @@ import fm.rizx.player.domain.plugin.PluginRepository
 import fm.rizx.player.domain.plugin.RegistryPlugin
 import fm.rizx.player.domain.provider.EnabledProviderStore
 import fm.rizx.player.domain.provider.ProviderKind
+import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
@@ -85,6 +86,8 @@ class PluginsViewModelTest {
         override suspend fun setRecsRegionalConsent(consented: Boolean) {}
         override val radioAlgorithm: Flow<RadioMode> = flowOf(RadioMode.YOUTUBE)
         override suspend fun setRadioAlgorithm(mode: RadioMode) {}
+        override val lyricsVisualQuality: Flow<LyricsVisualQuality> = flowOf(LyricsVisualQuality.AUTOMATIC)
+        override suspend fun setLyricsVisualQuality(quality: LyricsVisualQuality) {}
     }
 
     private class NoopPlugins : PluginRepository {

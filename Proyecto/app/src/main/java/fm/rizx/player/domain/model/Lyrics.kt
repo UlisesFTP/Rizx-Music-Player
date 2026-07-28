@@ -21,20 +21,44 @@ data class LyricWord(val startMs: Long, val endMs: Long, val text: String)
  * [words] is the karaoke layer: sources that time each word (NetEase `yrc`, KuGou `krc`, Musixmatch
  * richsync, enhanced LRC) fill it so the active line can light up progressively. It defaults to empty,
  * which keeps line-only providers valid **and** lets lyrics cached before this existed still decode.
+ *
+ * [endMs] is when the line stops being sung. `0` means "not known yet" — three of the four formats carry
+ * it (yrc and krc in the `[start,duration]` header, richsync in `te`) and `LyricsNormalizer` derives it
+ * from the next line for the ones that don't. Without it the last line of a song never ends and a long
+ * instrumental break leaves the previous line lit, and there is nothing to sweep a line-timed lyric
+ * across.
  */
 @Serializable
 data class LyricLine(
     val timeMs: Long,
     val text: String,
     val words: List<LyricWord> = emptyList(),
+    val endMs: Long = 0L,
 )
+
+/** How precisely a lyric is timed. Set by normalisation, never guessed by the UI. */
+enum class LyricsSyncType {
+    /** Prose. No timings at all — the screen shows a scrolling block of text. */
+    PLAIN,
+
+    /** One timestamp per line. Good enough to follow along and to tap-to-seek. */
+    LINE_SYNCED,
+
+    /** Every word carries its own start and end: the karaoke sweep is possible. */
+    WORD_SYNCED,
+}
 
 /**
  * Lyrics for a track: plain text, timed lines, or both.
  *
  * Providers differ in what they can offer — lyrics.ovh has only prose, LRCLIB usually has both — so
- * [lines] being empty is the normal "unsynced" case rather than an error, and [isSynced] is the single
+ * [lines] being empty is the normal "unsynced" case rather than an error, and [syncType] is the single
  * question the UI asks.
+ *
+ * [syncType] is **derived, not stored**, and that is only safe because everything a provider returns goes
+ * through `LyricsNormalizer` first: it deletes word timings that can't actually drive a sweep (all-zero
+ * durations, words that don't reconstruct the line). So by the time these lyrics exist, a non-empty
+ * [LyricLine.words] is a promise, not a hint.
  */
 @Serializable
 data class Lyrics(
@@ -45,10 +69,17 @@ data class Lyrics(
     /** The provider positively declared the track has no words, as opposed to simply not knowing. */
     val instrumental: Boolean = false,
 ) {
-    val isSynced: Boolean get() = lines.isNotEmpty()
+    val syncType: LyricsSyncType
+        get() = when {
+            lines.any { it.words.isNotEmpty() } -> LyricsSyncType.WORD_SYNCED
+            lines.isNotEmpty() -> LyricsSyncType.LINE_SYNCED
+            else -> LyricsSyncType.PLAIN
+        }
+
+    val isSynced: Boolean get() = syncType != LyricsSyncType.PLAIN
 
     /** True when at least one line carries word timings, i.e. the karaoke view is possible. */
-    val isWordSynced: Boolean get() = lines.any { it.words.isNotEmpty() }
+    val isWordSynced: Boolean get() = syncType == LyricsSyncType.WORD_SYNCED
 
     /** True when there is nothing at all to show (and the track isn't a declared instrumental). */
     val isEmpty: Boolean get() = lines.isEmpty() && plain.isNullOrBlank() && !instrumental

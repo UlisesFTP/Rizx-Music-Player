@@ -5,6 +5,7 @@ import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.core.cache.CacheManager
 import fm.rizx.player.core.region.RegionResolver
 import fm.rizx.player.domain.playback.AudioEffectsController
+import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
@@ -100,6 +101,7 @@ class PreferencesViewModelTest {
         val gaplessFlow = MutableStateFlow(true)
         val normalizeFlow = MutableStateFlow(false)
         val radioAlgorithmFlow = MutableStateFlow(RadioMode.YOUTUBE)
+        val lyricsQualityFlow = MutableStateFlow(LyricsVisualQuality.AUTOMATIC)
 
         override val dataSaver = dataSaverFlow
         override suspend fun setDataSaver(enabled: Boolean) { dataSaverFlow.value = enabled }
@@ -142,5 +144,7 @@ class PreferencesViewModelTest {
         override suspend fun setRecsRegionalConsent(consented: Boolean) {}
         override val radioAlgorithm = radioAlgorithmFlow
         override suspend fun setRadioAlgorithm(mode: RadioMode) { radioAlgorithmFlow.value = mode }
+        override val lyricsVisualQuality = lyricsQualityFlow
+        override suspend fun setLyricsVisualQuality(quality: LyricsVisualQuality) { lyricsQualityFlow.value = quality }
     }
 }

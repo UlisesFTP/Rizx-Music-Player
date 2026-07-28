@@ -29,6 +29,9 @@ object YrcParser {
             if (line.isEmpty() || line.startsWith("{")) continue
             val header = LINE_HEADER.find(line) ?: continue
             val lineStart = header.groupValues[1].toLongOrNull() ?: continue
+            // The header's second field is the line's own duration. It used to be matched and thrown
+            // away; it is what tells the sweep when a line is over rather than guessing from the next.
+            val lineDuration = header.groupValues[2].toLongOrNull() ?: 0L
 
             val words = WORD.findAll(line).mapNotNull { it.toWord() }.toList()
             if (words.isEmpty()) continue
@@ -37,6 +40,7 @@ object YrcParser {
                 text = words.joinToString(separator = "") { it.text }.trim(),
                 // A line of pure whitespace carries no words to light up individually.
                 words = words.takeIf { w -> w.any { it.text.isNotBlank() } }.orEmpty(),
+                endMs = if (lineDuration > 0L) lineStart + lineDuration else 0L,
             )
         }
         return lines.sortedBy(LyricLine::timeMs)

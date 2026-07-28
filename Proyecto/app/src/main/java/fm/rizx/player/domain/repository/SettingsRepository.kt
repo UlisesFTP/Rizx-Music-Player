@@ -1,5 +1,6 @@
 package fm.rizx.player.domain.repository
 
+import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
@@ -112,4 +113,13 @@ interface SettingsRepository {
      */
     val radioAlgorithm: Flow<RadioMode>
     suspend fun setRadioAlgorithm(mode: RadioMode)
+
+    /**
+     * How hard the karaoke lyrics view is allowed to work. Defaults to
+     * [LyricsVisualQuality.AUTOMATIC], which turns the halo off and halves the frame rate by itself on a
+     * device in power-save mode or short on RAM. This is the one screen in the app that asks for a frame
+     * every frame, so it gets a switch (`docs/adr/0016-karaoke-frame-loop.md`).
+     */
+    val lyricsVisualQuality: Flow<LyricsVisualQuality>
+    suspend fun setLyricsVisualQuality(quality: LyricsVisualQuality)
 }

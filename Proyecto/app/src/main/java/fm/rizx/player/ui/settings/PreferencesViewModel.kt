@@ -7,6 +7,7 @@ import fm.rizx.player.core.cache.CacheManager
 import fm.rizx.player.core.region.RegionResolver
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl.Companion.DEFAULT_AUDIO_CACHE_BYTES
+import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.playback.AudioEffectsController
 import fm.rizx.player.domain.repository.SettingsRepository
@@ -44,6 +45,14 @@ class PreferencesViewModel @Inject constructor(
         settings.radioAlgorithm.asState(SettingsRepositoryImpl.DEFAULT_RADIO_ALGORITHM)
 
     fun setRadioAlgorithm(mode: RadioMode) { viewModelScope.launch { settings.setRadioAlgorithm(mode) } }
+
+    /** How much the karaoke lyrics renderer is allowed to spend. */
+    val lyricsQuality: StateFlow<LyricsVisualQuality> =
+        settings.lyricsVisualQuality.asState(LyricsVisualQuality.AUTOMATIC)
+
+    fun setLyricsQuality(quality: LyricsVisualQuality) {
+        viewModelScope.launch { settings.setLyricsVisualQuality(quality) }
+    }
 
     /** The detected country's display name (SIM/locale — no permission), for the row caption. */
     val regionCountry: String? get() = runCatching { region.countryDisplayName() }.getOrNull()

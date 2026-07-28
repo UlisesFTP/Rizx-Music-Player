@@ -2,6 +2,7 @@ package fm.rizx.player.ui.player
 
 import app.cash.turbine.test
 import fm.rizx.player.MainDispatcherRule
+import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
@@ -65,6 +66,8 @@ class PlayerViewModelTest {
         override suspend fun setRecsRegionalConsent(consented: Boolean) {}
         override val radioAlgorithm: Flow<RadioMode> = flowOf(RadioMode.YOUTUBE)
         override suspend fun setRadioAlgorithm(mode: RadioMode) {}
+        override val lyricsVisualQuality: Flow<LyricsVisualQuality> = flowOf(LyricsVisualQuality.AUTOMATIC)
+        override suspend fun setLyricsVisualQuality(quality: LyricsVisualQuality) {}
     }
 
     private lateinit var settings: FakeSettings

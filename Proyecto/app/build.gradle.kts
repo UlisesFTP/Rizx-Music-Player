@@ -158,6 +158,14 @@ dependencies {
     // artwork path, neither of which exists on Android. Remove if it doesn't hold up.
     implementation("net.jthink:jaudiotagger:3.0.1")
 
+    // Instrumented UI tests. The karaoke lyrics view is the one screen whose correctness is a *timing*
+    // question — active line, sweep, auto-scroll — and none of that can be asserted on the JVM. These
+    // run only with a device attached (`./gradlew connectedDebugAndroidTest`); the JVM suite is unaffected.
+    // The runner comes transitively from test.ext:junit, and `ui-test-manifest` (already a
+    // debugImplementation, above) is what supplies the empty ComponentActivity they compose into.
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+
     // Unit tests
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.13")

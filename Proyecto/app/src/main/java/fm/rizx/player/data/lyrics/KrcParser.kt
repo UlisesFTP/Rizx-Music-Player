@@ -46,6 +46,8 @@ object KrcParser {
             if (line.isEmpty() || METADATA_TAG.matches(line)) continue
             val header = LINE_HEADER.find(line) ?: continue
             val lineStart = header.groupValues[1].toLongOrNull() ?: continue
+            // Same header shape as yrc: `[start,duration]`. The duration closes the line.
+            val lineDuration = header.groupValues[2].toLongOrNull() ?: 0L
 
             // Offsets are relative to the line — lift them to absolute so every source shares one model.
             val words = WORD.findAll(line).mapNotNull { it.toWord(lineStart) }.toList()
@@ -54,6 +56,7 @@ object KrcParser {
                 timeMs = lineStart,
                 text = words.joinToString(separator = "") { it.text }.trim(),
                 words = words.takeIf { w -> w.any { it.text.isNotBlank() } }.orEmpty(),
+                endMs = if (lineDuration > 0L) lineStart + lineDuration else 0L,
             )
         }
         return lines.sortedBy(LyricLine::timeMs)

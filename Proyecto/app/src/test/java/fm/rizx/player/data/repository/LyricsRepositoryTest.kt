@@ -269,6 +269,26 @@ class LyricsRepositoryTest {
             register(FakeLyrics("other", null, results = listOf(candidate)))
         }
 
-        assertEquals(listOf(candidate), LyricsRepositoryImpl(registry).search("coldplay yellow"))
+        val results = LyricsRepositoryImpl(registry).search("coldplay yellow")
+
+        // Compared field by field rather than whole: search results are normalised on the way out (a
+        // hand-picked candidate is rendered and cached without passing through the fetch path), so the
+        // lyric that comes back has had its line ends filled in.
+        assertEquals(1, results.size)
+        assertEquals(candidate.id, results[0].id)
+        assertEquals(candidate.title, results[0].title)
+        assertEquals("hit", results[0].lyrics.lines.single().text)
+    }
+
+    @Test
+    fun `a searched candidate comes back normalised, ready for the karaoke view`() {
+        val candidate = LyricsCandidate(id = "1", title = "Yellow", artist = "Coldplay", lyrics = synced("hit"))
+        val registry = DefaultProviderRegistry().apply { register(FakeLyrics("lrclib", null, results = listOf(candidate))) }
+
+        val found = runBlocking { LyricsRepositoryImpl(registry).search("coldplay yellow") }.single()
+
+        // The fake's line has no end; without one the sweep would never finish the last line.
+        assertEquals(0L, candidate.lyrics.lines.single().endMs)
+        assertTrue(found.lyrics.lines.single().endMs > 0L)
     }
 }

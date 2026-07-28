@@ -26,6 +26,16 @@
     <string name="lyrics_untitled">Sin título</string>
     <string name="lyrics_synced_badge">Sincronizada</string>
     <string name="lyrics_word_badge">Palabra</string>
+    <string name="lyrics_resume_autoscroll">Reanudar desplazamiento</string>
+
+    <!-- Ajustes: cuánto puede gastar el renderizador de karaoke -->
+    <string name="pref_lyrics_quality">Calidad visual de la letra</string>
+    <string name="lyrics_quality_automatic">Automática</string>
+    <string name="lyrics_quality_automatic_caption">Todos los efectos, reduciéndolos con poca batería o en móviles antiguos</string>
+    <string name="lyrics_quality_high">Alta</string>
+    <string name="lyrics_quality_high_caption">Todos los efectos activos, diga lo que diga el dispositivo</string>
+    <string name="lyrics_quality_saver">Ahorro de batería</string>
+    <string name="lyrics_quality_saver_caption">Sin halo, y el resaltado avanza palabra por palabra</string>
 
     <!-- QueueScreen -->
     <string name="queue_back_cd">Atrás</string>

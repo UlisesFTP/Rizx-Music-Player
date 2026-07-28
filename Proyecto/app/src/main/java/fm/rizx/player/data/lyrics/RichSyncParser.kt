@@ -56,6 +56,9 @@ object RichSyncParser {
                 timeMs = startMs,
                 text = text,
                 words = words.takeIf { w -> w.any { it.text.isNotBlank() } }.orEmpty(),
+                // `te` closed the last word already; keeping it on the line too is what lets the sweep
+                // know when the line is done instead of running until the next one starts.
+                endMs = if (endMs > startMs) endMs else 0L,
             )
         }.sortedBy(LyricLine::timeMs)
     }

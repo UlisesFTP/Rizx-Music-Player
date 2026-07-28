@@ -34,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fm.rizx.player.R
+import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.ui.components.RizxToggle
@@ -75,9 +76,11 @@ fun PreferencesScreen(
     // Read once per composition; selecting a language recreates the activity, so this re-reads fresh.
     val currentLang = currentAppLanguage(context)
     val radioAlgorithm by vm.radioAlgorithm.collectAsStateWithLifecycle()
+    val lyricsQuality by vm.lyricsQuality.collectAsStateWithLifecycle()
     var languageDialogOpen by remember { mutableStateOf(false) }
     var themeDialogOpen by remember { mutableStateOf(false) }
     var radioDialogOpen by remember { mutableStateOf(false) }
+    var lyricsQualityDialogOpen by remember { mutableStateOf(false) }
 
     // stringResource can't be called inside the non-composable buildString lambda, so resolve first.
     val hiresBest = stringResource(R.string.pref_hires_best)
@@ -117,6 +120,14 @@ fun PreferencesScreen(
             title = stringResource(R.string.pref_theme),
             value = stringResource(themeModeLabel(themeMode)),
             onClick = { themeDialogOpen = true },
+        )
+        // The karaoke sweep is the one screen that asks for a frame every frame. Automatic steps itself
+        // down on a phone that can't afford it; this row is the manual override in both directions.
+        SettingRow(
+            title = stringResource(R.string.pref_lyrics_quality),
+            value = stringResource(lyricsQualityLabel(lyricsQuality)),
+            caption = stringResource(lyricsQualityCaption(lyricsQuality)),
+            onClick = { lyricsQualityDialogOpen = true },
         )
 
         SectionLabel(stringResource(R.string.settings_language_section))
@@ -190,6 +201,13 @@ fun PreferencesScreen(
             onDismiss = { radioDialogOpen = false },
         )
     }
+    if (lyricsQualityDialogOpen) {
+        LyricsQualityDialog(
+            current = lyricsQuality,
+            onSelect = { q -> vm.setLyricsQuality(q); lyricsQualityDialogOpen = false },
+            onDismiss = { lyricsQualityDialogOpen = false },
+        )
+    }
 }
 
 /** The @StringRes name of a [RadioMode], as the user thinks of it — by the service, not the mechanism. */
@@ -213,6 +231,58 @@ private fun RadioAlgorithmDialog(
     current: RadioMode,
     onSelect: (RadioMode) -> Unit,
     onDismiss: () -> Unit,
+) = CaptionedOptionDialog(
+    title = stringResource(R.string.pref_radio_algorithm),
+    options = RadioMode.entries,
+    current = current,
+    label = { stringResource(radioAlgorithmLabel(it)) },
+    caption = { stringResource(radioAlgorithmCaption(it)) },
+    onSelect = onSelect,
+    onDismiss = onDismiss,
+)
+
+/** The @StringRes name of a [LyricsVisualQuality]. */
+private fun lyricsQualityLabel(quality: LyricsVisualQuality): Int = when (quality) {
+    LyricsVisualQuality.AUTOMATIC -> R.string.lyrics_quality_automatic
+    LyricsVisualQuality.HIGH -> R.string.lyrics_quality_high
+    LyricsVisualQuality.BATTERY_SAVER -> R.string.lyrics_quality_saver
+}
+
+/** What each level actually costs, since "High" on its own says nothing about the trade. */
+private fun lyricsQualityCaption(quality: LyricsVisualQuality): Int = when (quality) {
+    LyricsVisualQuality.AUTOMATIC -> R.string.lyrics_quality_automatic_caption
+    LyricsVisualQuality.HIGH -> R.string.lyrics_quality_high_caption
+    LyricsVisualQuality.BATTERY_SAVER -> R.string.lyrics_quality_saver_caption
+}
+
+@Composable
+private fun LyricsQualityDialog(
+    current: LyricsVisualQuality,
+    onSelect: (LyricsVisualQuality) -> Unit,
+    onDismiss: () -> Unit,
+) = CaptionedOptionDialog(
+    title = stringResource(R.string.pref_lyrics_quality),
+    options = LyricsVisualQuality.entries,
+    current = current,
+    label = { stringResource(lyricsQualityLabel(it)) },
+    caption = { stringResource(lyricsQualityCaption(it)) },
+    onSelect = onSelect,
+    onDismiss = onDismiss,
+)
+
+/**
+ * The brutalist picker used by settings whose options need explaining — same shell as [ThemeDialog], but
+ * every row carries a caption, because with these choices the difference *is* the point.
+ */
+@Composable
+private fun <T> CaptionedOptionDialog(
+    title: String,
+    options: List<T>,
+    current: T,
+    label: @Composable (T) -> String,
+    caption: @Composable (T) -> String,
+    onSelect: (T) -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val c = RizxTheme.colors
     Dialog(onDismissRequest = onDismiss) {
@@ -224,29 +294,29 @@ private fun RadioAlgorithmDialog(
                 .padding(bottom = 8.dp),
         ) {
             Text(
-                stringResource(R.string.pref_radio_algorithm),
+                title,
                 style = sg(20, FontWeight.Bold, -0.01f),
                 color = c.text,
                 modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp),
             )
-            RadioMode.entries.forEach { mode ->
+            options.forEach { option ->
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = { onSelect(mode) })
+                        .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = { onSelect(option) })
                         .padding(horizontal = 20.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(stringResource(radioAlgorithmLabel(mode)), style = mr(15, FontWeight.SemiBold), color = c.text)
+                        Text(label(option), style = mr(15, FontWeight.SemiBold), color = c.text)
                         Text(
-                            stringResource(radioAlgorithmCaption(mode)),
+                            caption(option),
                             style = mr(12, FontWeight.Normal),
                             color = c.muted,
                             modifier = Modifier.padding(top = 2.dp),
                         )
                     }
-                    if (mode == current) {
+                    if (option == current) {
                         Icon(RizxIcons.Check, "Selected", tint = c.redAccent, modifier = Modifier.padding(start = 12.dp).size(20.dp))
                     }
                 }

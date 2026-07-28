@@ -26,6 +26,16 @@
     <string name="lyrics_untitled">Sans titre</string>
     <string name="lyrics_synced_badge">Synchronisées</string>
     <string name="lyrics_word_badge">Mot</string>
+    <string name="lyrics_resume_autoscroll">Reprendre le défilement auto</string>
+
+    <!-- Réglages : ce que le rendu karaoké a le droit de dépenser -->
+    <string name="pref_lyrics_quality">Qualité visuelle des paroles</string>
+    <string name="lyrics_quality_automatic">Automatique</string>
+    <string name="lyrics_quality_automatic_caption">Tous les effets, réduits si la batterie est faible ou le téléphone ancien</string>
+    <string name="lyrics_quality_high">Élevée</string>
+    <string name="lyrics_quality_high_caption">Tout activé, quoi qu\'en dise l\'appareil</string>
+    <string name="lyrics_quality_saver">Économie de batterie</string>
+    <string name="lyrics_quality_saver_caption">Sans halo, et la surbrillance avance mot à mot</string>
 
     <!-- QueueScreen -->
     <string name="queue_back_cd">Retour</string>

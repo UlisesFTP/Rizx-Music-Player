@@ -5,6 +5,8 @@ import fm.rizx.player.data.lyrics.LrcParser
 import fm.rizx.player.data.lyrics.YrcParser
 import fm.rizx.player.data.remote.netease.NeteaseApi
 import fm.rizx.player.data.remote.netease.NeteaseSongDto
+import fm.rizx.player.domain.lyrics.LyricsMatchTarget
+import fm.rizx.player.domain.lyrics.LyricsTrackMatcher
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
 import fm.rizx.player.domain.model.Track
@@ -16,7 +18,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.IOException
-import kotlin.math.abs
 
 /**
  * **Word-by-word** lyrics from NetEase Cloud Music, keyless.
@@ -45,7 +46,7 @@ class NeteaseLyricsProvider(
 
         return guard {
             withContext(io) {
-                val song = bestMatch(query, track.durationMs) ?: return@withContext null
+                val song = bestMatch(query, track) ?: return@withContext null
                 lyricsFor(song.id ?: return@withContext null)
             }
         }
@@ -73,12 +74,21 @@ class NeteaseLyricsProvider(
         }.orEmpty()
     }
 
-    /** The candidate closest in length to ours; without a duration, simply the top hit. */
-    private suspend fun bestMatch(query: String, durationMs: Long?): NeteaseSongDto? {
+    /**
+     * The candidate that is actually the same recording — title, artist and version, then length.
+     *
+     * Length alone used to decide this, which is how a live take or a sped-up edit of the same song won:
+     * they are the versions whose duration lands closest to the original.
+     */
+    private suspend fun bestMatch(query: String, track: Track): NeteaseSongDto? {
         val songs = api.search(query, limit = MAX_RESULTS).result.songs.ifEmpty { return null }
-        if (durationMs == null) return songs.first()
-        return songs.minByOrNull { song ->
-            song.duration?.let { abs(it - durationMs) } ?: UNKNOWN_DURATION_PENALTY
+        return LyricsTrackMatcher.bestOf(track, songs) { song ->
+            LyricsMatchTarget(
+                title = song.name.orEmpty(),
+                artist = song.artists.joinToString { it.name.orEmpty() },
+                album = song.album?.name,
+                durationMs = song.duration,
+            )
         }
     }
 
@@ -113,7 +123,5 @@ class NeteaseLyricsProvider(
         /** Each candidate costs its own lyric request, so the manual picker stays short. */
         private const val MAX_CANDIDATES = 5
 
-        /** A candidate that won't say how long it is loses to any that will. */
-        private const val UNKNOWN_DURATION_PENALTY = 60_000L
     }
 }

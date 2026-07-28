@@ -6,6 +6,8 @@ import fm.rizx.player.data.remote.kugou.KugouApi
 import fm.rizx.player.data.remote.kugou.KugouCandidateDto
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
+import fm.rizx.player.domain.lyrics.LyricsMatchTarget
+import fm.rizx.player.domain.lyrics.LyricsTrackMatcher
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.LyricsProvider
 import fm.rizx.player.domain.provider.ProviderKind
@@ -15,7 +17,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.IOException
-import kotlin.math.abs
 
 /**
  * **Word-by-word** lyrics from KuGou, keyless — the second karaoke source, in the `krc` format.
@@ -44,7 +45,7 @@ class KugouLyricsProvider(
         return guard {
             withContext(io) {
                 val candidates = api.search(query, track.durationMs).candidates
-                val best = candidates.bestFor(track.durationMs) ?: return@withContext null
+                val best = candidates.bestFor(track) ?: return@withContext null
                 lyricsFor(best)
             }
         }
@@ -70,12 +71,18 @@ class KugouLyricsProvider(
         }.orEmpty()
     }
 
-    /** Closest length to ours; without a duration, KuGou's own ranking (first) is as good as any. */
-    private fun List<KugouCandidateDto>.bestFor(durationMs: Long?): KugouCandidateDto? {
-        if (isEmpty()) return null
-        if (durationMs == null) return first()
-        return minByOrNull { it.duration?.let { d -> abs(d - durationMs) } ?: UNKNOWN_DURATION_PENALTY }
-    }
+    /**
+     * The candidate that is the same recording, not merely the same length — see [LyricsTrackMatcher].
+     * KuGou already filters server-side by duration, so this mostly decides between near-identical hits.
+     */
+    private fun List<KugouCandidateDto>.bestFor(track: Track): KugouCandidateDto? =
+        LyricsTrackMatcher.bestOf(track, this) { candidate ->
+            LyricsMatchTarget(
+                title = candidate.song.orEmpty(),
+                artist = candidate.singer.orEmpty(),
+                durationMs = candidate.duration,
+            )
+        }
 
     private suspend fun lyricsFor(candidate: KugouCandidateDto): Lyrics? {
         val id = candidate.id ?: return null
@@ -105,6 +112,5 @@ class KugouLyricsProvider(
         /** Each candidate costs a download call, so the manual picker stays short. */
         private const val MAX_CANDIDATES = 5
 
-        private const val UNKNOWN_DURATION_PENALTY = 60_000L
     }
 }
