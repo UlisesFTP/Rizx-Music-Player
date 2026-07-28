@@ -23,10 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -36,9 +33,7 @@ import fm.rizx.player.R
 import fm.rizx.player.core.formatDuration
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.RizxTheme
-import fm.rizx.player.ui.theme.RizxWidth
 import fm.rizx.player.ui.theme.brutalShadow
-import fm.rizx.player.ui.theme.rizxWidth
 import fm.rizx.player.ui.theme.hatch
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.placeholderBrush
@@ -104,18 +99,18 @@ fun MiniPlayer(
             )
             Text(artist, style = mr(11, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        // Live "elapsed / duration" readout (mono numerals) — **dropped on narrow screens**. The row's
-        // fixed parts (artwork, like, play) already eat ~190dp, so on a compact width this readout left
-        // the title barely 60dp and the marquee just scrolled fragments of a word past. The scrubber
-        // underneath already shows position, so this is the cheapest thing in the row to give up.
-        if (rizxWidth() != RizxWidth.Compact) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                modifier = Modifier.padding(start = 8.dp, end = 2.dp),
-            ) {
-                Text(formatDuration(positionMs), style = mr(10, FontWeight.SemiBold), color = c.text2, maxLines = 1)
-                Text(formatDuration(durationMs), style = mr(10, FontWeight.Medium), color = c.muted, maxLines = 1)
-            }
+        // Live "elapsed over duration" readout (mono numerals), on every width.
+        //
+        // It used to be dropped below 400dp to give the title more room, but the owner wants the time
+        // back — knowing how far into a song you are is worth more than the extra characters of title,
+        // and the title marquees anyway. Stacked rather than side by side, and tight against the like
+        // button, so it costs ~34dp instead of the ~70dp an inline "0:32 / 2:44" would.
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier.padding(start = 6.dp),
+        ) {
+            Text(formatDuration(positionMs), style = mr(10, FontWeight.SemiBold), color = c.text2, maxLines = 1)
+            Text(formatDuration(durationMs), style = mr(10, FontWeight.Medium), color = c.muted, maxLines = 1)
         }
         RizxIconButton(
             icon = if (liked) RizxIcons.Favorite else RizxIcons.FavoriteBorder,
@@ -185,20 +180,15 @@ private fun MiniSeekBar(progress: Float, onSeek: (Float) -> Unit, modifier: Modi
     ) {
         val shown = (drag ?: progress).coerceIn(0f, 1f)
         Canvas(Modifier.fillMaxWidth().height(13.dp)) {
-            val dot = 9.dp.toPx()
-            val lineH = 3.dp.toPx()
-            // Sit the line a little above the bottom so the marker straddles it (the line runs through
-            // the marker's vertical middle) while the marker's lower half stays fully visible.
-            val lineCenterY = size.height - dot / 2f - 2.dp.toPx()
-            val lineTop = lineCenterY - lineH / 2f
-            drawRect(color = c.hardLine, topLeft = Offset(0f, lineTop), size = Size(size.width, lineH)) // faint track
-            drawRect(color = c.redAccent, topLeft = Offset(0f, lineTop), size = Size(size.width * shown, lineH)) // fill
-
-            // Square position marker centered on the line, clamped so it stays fully visible at either end.
-            val cx = (size.width * shown).coerceIn(dot / 2f, size.width - dot / 2f)
-            val corner = Offset(cx - dot / 2f, lineCenterY - dot / 2f)
-            drawRect(color = c.redAccent, topLeft = corner, size = Size(dot, dot))
-            drawRect(color = c.hardLine, topLeft = corner, size = Size(dot, dot), style = Stroke(width = 1.dp.toPx()))
+            drawSeekLine(
+                progress = shown,
+                trackColor = c.hardLine,
+                fillColor = c.redAccent,
+                markerBorderColor = c.hardLine,
+                // Pushed below centre so the marker straddles the line while its lower half stays
+                // fully visible against the bar's bottom edge.
+                lineCenterY = size.height - SEEK_MARKER.toPx() / 2f - 2.dp.toPx(),
+            )
         }
     }
 }

@@ -589,13 +589,14 @@ fun NowPlayingScreen(
 
                     // Track actions sit in their own row so the transport above stays purely playback. Same
                     // horizontal padding and SpaceBetween as that row, and the same 46.dp button, so these
-                    // land squarely under shuffle (left) and repeat (right) instead of floating loose.
+                    // land squarely under shuffle (left) and repeat (right) instead of floating loose —
+                    // and the bottom bar below repeats the pair, so all four share two vertical axes.
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = ACTION_INSET, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        GlassButton(RizxIcons.PlaylistAdd, stringResource(R.string.player_add_to_playlist), onAddToPlaylist, c.isDark, size = 46.dp, iconSize = 22.dp)
+                        GlassButton(RizxIcons.PlaylistAdd, stringResource(R.string.player_add_to_playlist), onAddToPlaylist, c.isDark, size = ACTION_BUTTON, iconSize = ACTION_ICON)
                         GlassButton(
                             if (liked) RizxIcons.Favorite else RizxIcons.FavoriteBorder,
                             // State-aware: the old constant "Like" told a screen-reader user nothing about
@@ -603,8 +604,8 @@ fun NowPlayingScreen(
                             if (liked) stringResource(R.string.player_remove_from_liked) else stringResource(R.string.player_like),
                             onToggleLike,
                             c.isDark,
-                            size = 46.dp,
-                            iconSize = 22.dp,
+                            size = ACTION_BUTTON,
+                            iconSize = ACTION_ICON,
                             tint = if (liked) c.redAccent else null,
                         )
                     }
@@ -696,6 +697,10 @@ fun NowPlayingScreen(
  * The strip that sits at the drawer's height: nearby-devices on the left, the up-next peek in the middle,
  * and start-radio on the right. Giving the two new actions their own bar keeps the transport row above
  * purely about playback while putting cast and radio within easy thumb reach.
+ *
+ * Its horizontal padding and button size deliberately match the track-actions row above
+ * ([ACTION_INSET] / [ACTION_BUTTON]), so devices sits exactly under add-to-playlist and radio exactly
+ * under like — four buttons on two shared vertical axes rather than two rows that nearly line up.
  */
 @Composable
 private fun NowPlayingBottomBar(
@@ -709,12 +714,12 @@ private fun NowPlayingBottomBar(
         Modifier
             .fillMaxWidth()
             .background(if (c.isDark) Color(0xFF0C0C10).copy(alpha = 0.6f) else c.elev)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
+            .padding(horizontal = ACTION_INSET, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // Left: opens the system audio-output switcher (speaker · Bluetooth · Cast/nearby devices).
-        GlassButton(RizxIcons.Devices, stringResource(R.string.player_nearby_devices), onOpenDevices, c.isDark, size = 42.dp, iconSize = 21.dp)
+        GlassButton(RizxIcons.Devices, stringResource(R.string.player_nearby_devices), onOpenDevices, c.isDark, size = ACTION_BUTTON, iconSize = ACTION_ICON)
         // Center: the up-next peek — tap or swipe up to open the queue drawer. Only when something's queued;
         // otherwise the two buttons just sit at the strip's ends.
         if (upcomingCount > 0) {
@@ -723,7 +728,7 @@ private fun NowPlayingBottomBar(
             Spacer(Modifier.weight(1f))
         }
         // Right: start an endless radio seeded from this song.
-        GlassButton(RizxIcons.Radio, stringResource(R.string.player_start_radio), onStartRadio, c.isDark, size = 42.dp, iconSize = 21.dp)
+        GlassButton(RizxIcons.Radio, stringResource(R.string.player_start_radio), onStartRadio, c.isDark, size = ACTION_BUTTON, iconSize = ACTION_ICON)
     }
 }
 
@@ -778,7 +783,7 @@ private fun UpNextPanel(
     Column(
         Modifier
             .fillMaxWidth()
-            .fillMaxHeight(0.62f)
+            .fillMaxHeight(QUEUE_DRAWER_FRACTION)
             .background(c.elev)
             .border(1.dp, c.hardLine),
     ) {
@@ -1017,12 +1022,32 @@ private fun ScrubBubble(timeText: String, modifier: Modifier = Modifier) {
 private val WAVEFORM_HEIGHT = 39.dp
 
 /**
+ * The geometry the two action rows share — track actions (add-to-playlist · like) and the bottom bar
+ * (nearby devices · up-next peek · radio).
+ *
+ * They are constants rather than repeated literals because their whole job is to be *identical*: same
+ * inset and same button size is what puts the four buttons on two vertical axes. Change one and the
+ * rows drift apart again, which is exactly the misalignment this replaced.
+ */
+private val ACTION_INSET = 24.dp
+private val ACTION_BUTTON = 46.dp
+private val ACTION_ICON = 22.dp
+
+/**
+ * How much of the screen the up-next drawer covers when open. Trimmed a quarter (0.62 → 0.465) at the
+ * owner's request: still five or so upcoming songs, but noticeably more of the player — artwork and
+ * transport — stays visible behind it.
+ */
+private const val QUEUE_DRAWER_FRACTION = 0.465f
+
+/**
  * Vertical space everything below the artwork needs at a 1.0 font scale, with headroom.
  *
  * Measured from the layout rather than estimated: waveform 67 + times 22 + title block 81 + transport 86
- * + track actions 54 = 310, then the bottom action bar 54 (nearby-devices · up-next peek · radio) and the
+ * + track actions 54 = 310, then the bottom action bar 58 (nearby-devices · up-next peek · radio) and the
  * footer 69. An earlier reserve counted a bare 33dp up-next handle here; the handle now shares a taller,
  * always-present bar with the two new buttons, so the reserve grew ~20dp to keep the track-actions row
  * from being clipped on a short screen (this was already what dropped that row on a 1220x2712 phone).
+ * The bar gained a further 4dp when its buttons grew to [ACTION_BUTTON] to line up with the row above.
  */
-private val CONTROLS_RESERVE = 450.dp
+private val CONTROLS_RESERVE = 454.dp

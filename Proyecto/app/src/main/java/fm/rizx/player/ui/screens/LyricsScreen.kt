@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -69,6 +70,7 @@ import fm.rizx.player.ui.components.DotMatrixSpinner
 import fm.rizx.player.ui.components.PulsingPlayButton
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.clickableScale
+import fm.rizx.player.ui.components.drawSeekLine
 import fm.rizx.player.ui.components.tintFor
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.player.LyricsContent
@@ -549,15 +551,18 @@ private fun LyricsTransport(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.fillMaxWidth().height(3.dp).background(c.waveTrack))
                 val fraction = if (durationMs > 0L) (elapsed.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-                Box(
-                    Modifier
-                        .fillMaxWidth(fraction)
-                        .height(3.dp)
-                        .background(c.redAccent)
-                        .align(Alignment.CenterStart),
-                )
+                // The same line the mini-player draws, marker included — this bar used to be two plain
+                // boxes with no position marker, so the one place you watch the words scroll past was
+                // the one place you couldn't see the playhead.
+                Canvas(Modifier.fillMaxSize()) {
+                    drawSeekLine(
+                        progress = fraction,
+                        trackColor = c.waveTrack,
+                        fillColor = c.redAccent,
+                        markerBorderColor = c.hardLine,
+                    )
+                }
             }
             Text(
                 formatClock(((durationMs - elapsed).coerceAtLeast(0L)) / 1000.0),
