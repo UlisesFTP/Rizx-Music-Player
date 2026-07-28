@@ -3,6 +3,9 @@ package fm.rizx.player.data.local.settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -24,6 +27,24 @@ class SettingsRepositoryTest {
         assertEquals(ThemeMode.SYSTEM, repo.themeMode.first())
         repo.setThemeMode(ThemeMode.LIGHT)
         assertEquals(ThemeMode.LIGHT, repo.themeMode.first())
+    }
+
+    @Test
+    fun `the radio algorithm defaults to YouTube Music and persists a change`() = runTest {
+        val repo = SettingsRepositoryImpl(backgroundScope.newStore())
+
+        assertEquals(RadioMode.YOUTUBE, repo.radioAlgorithm.first())
+        repo.setRadioAlgorithm(RadioMode.ARTIST)
+        assertEquals(RadioMode.ARTIST, repo.radioAlgorithm.first())
+    }
+
+    @Test
+    fun `an unrecognised stored algorithm falls back to the default instead of throwing`() = runTest {
+        // It is stored by name, so a renamed/removed enum constant must degrade, not crash the app.
+        val store = backgroundScope.newStore()
+        store.edit { it[stringPreferencesKey("core.recs.radioAlgorithm")] = "SPOTIFY_WRAPPED" }
+
+        assertEquals(RadioMode.YOUTUBE, SettingsRepositoryImpl(store).radioAlgorithm.first())
     }
 
     @Test

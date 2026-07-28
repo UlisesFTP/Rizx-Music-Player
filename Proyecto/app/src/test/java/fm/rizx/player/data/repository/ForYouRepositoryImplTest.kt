@@ -1,0 +1,182 @@
+package fm.rizx.player.data.repository
+
+import fm.rizx.player.core.region.RegionResolver
+import fm.rizx.player.data.remote.deezer.DeezerAlbumShortDto
+import fm.rizx.player.data.remote.deezer.DeezerAlbumsResponse
+import fm.rizx.player.data.remote.deezer.DeezerApi
+import fm.rizx.player.data.remote.deezer.DeezerArtistShortDto
+import fm.rizx.player.data.remote.deezer.DeezerArtistsWrapper
+import fm.rizx.player.data.remote.deezer.DeezerSearchResponse
+import fm.rizx.player.domain.model.ArtistCredit
+import fm.rizx.player.domain.model.ForYouSection
+import fm.rizx.player.domain.model.ProviderRef
+import fm.rizx.player.domain.model.Track
+import fm.rizx.player.domain.provider.RadioMixSource
+import fm.rizx.player.domain.repository.FavoritesRepository
+import fm.rizx.player.domain.repository.RecentlyPlayedRepository
+import fm.rizx.player.domain.repository.SettingsRepository
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class ForYouRepositoryImplTest {
+
+    private fun taste(title: String, artist: String, artistRef: ProviderRef? = null) = Track(
+        title = title,
+        artists = listOf(ArtistCredit(name = artist, source = artistRef)),
+        source = ProviderRef("deezer", title.lowercase()),
+    )
+
+    private fun youtubeTrack(id: String) = Track(title = "yt-$id", source = ProviderRef("youtube", id))
+
+    private fun mixOf(vararg tracks: Track) = object : RadioMixSource {
+        override suspend fun mixTracks(seed: Track) = tracks.toList()
+    }
+
+    private fun repo(
+        liked: List<Track> = emptyList(),
+        recent: List<Track> = emptyList(),
+        mix: RadioMixSource = mixOf(),
+        deezer: DeezerApi = mockk {
+            coEvery { artistRadio(any(), any()) } returns DeezerSearchResponse(emptyList())
+            coEvery { artistRelated(any(), any()) } returns DeezerArtistsWrapper(emptyList())
+            coEvery { searchArtists(any(), any()) } returns DeezerArtistsWrapper(emptyList())
+            coEvery { artistAlbums(any(), any()) } returns DeezerAlbumsResponse(emptyList())
+        },
+    ): ForYouRepositoryImpl {
+        val favorites = mockk<FavoritesRepository> { every { favoriteTracks() } returns flowOf(liked) }
+        val recents = mockk<RecentlyPlayedRepository> { every { recent(any()) } returns flowOf(recent) }
+        val settings = mockk<SettingsRepository> { every { recsRegionalConsent } returns flowOf(null) }
+        return ForYouRepositoryImpl(
+            favorites = favorites,
+            recents = recents,
+            mix = mix,
+            deezer = deezer,
+            settings = settings,
+            region = RegionResolver(listOf { "mx" }),
+            io = Dispatchers.Unconfined,
+            shuffle = { it }, // deterministic seeds
+        )
+    }
+
+    @Test
+    fun `cold start (no likes, no recents) yields no sections`() = runTest {
+        assertTrue(repo().sections().isEmpty())
+    }
+
+    @Test
+    fun `mix seeds are one per artist, so two rows can't be near-copies of each other`() = runTest {
+        val tracks = listOf(
+            taste("Song A", "Artist X"),
+            taste("Song B", "Artist X"), // same artist → its mix would repeat the first row's
+            taste("Song C", "Artist Y"),
+        )
+        val sections = repo(recent = tracks, mix = mixOf(youtubeTrack("a"), youtubeTrack("b"), youtubeTrack("c")))
+            .sections()
+
+        val mixes = sections.filterIsInstance<ForYouSection.Mix>()
+        assertEquals(2, mixes.size)
+        assertEquals(listOf("Song A", "Song C"), mixes.map { it.seedTitle })
+        assertEquals(3, mixes.first().items.size)
+    }
+
+    @Test
+    fun `two artists sharing a song title still yield one row, keeping the list keys unique`() = runTest {
+        val tracks = listOf(taste("Hello", "Artist X"), taste("Hello", "Artist Y"))
+        val sections = repo(recent = tracks, mix = mixOf(youtubeTrack("a"), youtubeTrack("b"), youtubeTrack("c")))
+            .sections()
+
+        assertEquals(1, sections.filterIsInstance<ForYouSection.Mix>().size)
+    }
+
+    @Test
+    fun `because-you-like uses the top artist's Deezer radio via its artist ref`() = runTest {
+        val artistRef = ProviderRef("deezer", "artist:77")
+        val tracks = List(3) { taste("Song $it", "Artist X", artistRef) }
+        val deezer = mockk<DeezerApi> {
+            coEvery { artistRadio("77", any()) } returns DeezerSearchResponse(
+                List(4) { fm.rizx.player.data.remote.deezer.DeezerTrackDto(id = it.toLong() + 1, title = "R$it") },
+            )
+            coEvery { artistRelated(any(), any()) } returns DeezerArtistsWrapper(emptyList())
+            coEvery { searchArtists(any(), any()) } returns DeezerArtistsWrapper(emptyList())
+            coEvery { artistAlbums(any(), any()) } returns DeezerAlbumsResponse(emptyList())
+        }
+
+        val sections = repo(liked = tracks, deezer = deezer).sections()
+
+        val row = sections.filterIsInstance<ForYouSection.BecauseYouLike>().single()
+        assertEquals("Artist X", row.artistName)
+        assertEquals(4, row.items.size)
+    }
+
+    @Test
+    fun `a broken Deezer never sinks the mix rows`() = runTest {
+        val deezer = mockk<DeezerApi> {
+            coEvery { artistRadio(any(), any()) } throws IllegalStateException("down")
+            coEvery { artistRelated(any(), any()) } throws IllegalStateException("down")
+            coEvery { searchArtists(any(), any()) } throws IllegalStateException("down")
+            coEvery { artistAlbums(any(), any()) } throws IllegalStateException("down")
+        }
+        val sections = repo(
+            recent = listOf(taste("Song A", "Artist X")),
+            mix = mixOf(youtubeTrack("a"), youtubeTrack("b"), youtubeTrack("c")),
+            deezer = deezer,
+        ).sections()
+
+        assertEquals(1, sections.filterIsInstance<ForYouSection.Mix>().size)
+        assertTrue(sections.filterIsInstance<ForYouSection.BecauseYouLike>().isEmpty())
+        assertTrue(sections.filterIsInstance<ForYouSection.ArtistsForYou>().isEmpty())
+        assertTrue(sections.filterIsInstance<ForYouSection.AlbumsForYou>().isEmpty())
+    }
+
+    @Test
+    fun `artists-for-you merges related artists across top seeds`() = runTest {
+        val sections = repo(liked = relatedTaste(), deezer = relatedDeezer()).sections()
+
+        val row = sections.filterIsInstance<ForYouSection.ArtistsForYou>().single()
+        assertEquals(3, row.items.size)
+    }
+
+    @Test
+    fun `albums-for-you takes the related artists' records and carries their artist over`() = runTest {
+        val sections = repo(liked = relatedTaste(), deezer = relatedDeezer()).sections()
+
+        val row = sections.filterIsInstance<ForYouSection.AlbumsForYou>().single()
+        // Two related artists are seeded, three albums each, deduped by identity.
+        assertEquals(6, row.items.size)
+        // Deezer's /artist/{id}/albums omits the artist per row — it must be filled in from the seed.
+        assertTrue(row.items.all { it.artists.singleOrNull()?.name?.startsWith("Related") == true })
+        // Round-robin, so the row alternates artists instead of listing one discography first.
+        assertEquals(
+            listOf("Related 0", "Related 1", "Related 0", "Related 1", "Related 0", "Related 1"),
+            row.items.map { it.artists.single().name },
+        )
+    }
+
+    /** Taste that resolves to one Deezer artist id, so `artistRelated("1")` is the only seed call. */
+    private fun relatedTaste(): List<Track> {
+        val refX = ProviderRef("deezer", "artist:1")
+        return listOf(taste("S1", "Artist X", refX), taste("S2", "Artist X", refX))
+    }
+
+    private fun relatedDeezer(): DeezerApi = mockk {
+        coEvery { artistRadio(any(), any()) } returns DeezerSearchResponse(emptyList())
+        coEvery { artistRelated("1", any()) } returns DeezerArtistsWrapper(
+            List(3) { DeezerArtistShortDto(id = it.toLong() + 10, name = "Related $it") },
+        )
+        coEvery { searchArtists(any(), any()) } returns DeezerArtistsWrapper(emptyList())
+        // Distinct ids per artist so the dedup doesn't collapse the two seeds into one row of three.
+        coEvery { artistAlbums(any(), any()) } answers {
+            val artistId = firstArg<String>().toLong()
+            DeezerAlbumsResponse(
+                List(3) { DeezerAlbumShortDto(id = artistId * 100 + it, title = "Album $artistId-$it") },
+            )
+        }
+    }
+}

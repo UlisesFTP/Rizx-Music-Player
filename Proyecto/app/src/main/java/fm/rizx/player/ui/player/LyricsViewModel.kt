@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.error.AppError
+import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
 import fm.rizx.player.domain.model.Track
@@ -159,7 +160,7 @@ class LyricsViewModel @Inject constructor(
             } catch (e: AppError.Network) {
                 LyricsSearchState.Error("You're offline. Connect and try again.")
             } catch (e: Exception) {
-                LyricsSearchState.Error(e.message ?: "Search failed")
+                LyricsSearchState.Error(e.toSafeMessage("Search failed"))
             }
             _state.update { it.copy(search = next) }
         }
@@ -221,7 +222,7 @@ class LyricsViewModel @Inject constructor(
         } catch (e: AppError.Network) {
             LyricsContent.Offline
         } catch (e: Exception) {
-            LyricsContent.Error(e.message ?: "Couldn't load lyrics")
+            LyricsContent.Error(e.toSafeMessage("Couldn't load lyrics"))
         }
         _state.update { it.copy(content = content) }
     }

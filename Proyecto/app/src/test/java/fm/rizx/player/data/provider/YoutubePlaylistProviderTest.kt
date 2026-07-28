@@ -26,6 +26,7 @@ class YoutubePlaylistProviderTest {
         override fun searchPlaylists(query: String, limit: Int): List<org.schabi.newpipe.extractor.playlist.PlaylistInfoItem> = emptyList()
         override fun streamInfo(videoUrl: String): StreamInfo = error("not used")
         override fun playlist(playlistUrl: String): YoutubePlaylistData = data
+        override fun mix(videoId: String, limit: Int): List<StreamInfoItem> = emptyList()
     }
 
     private fun item(videoId: String, title: String, uploader: String, durationSec: Long): StreamInfoItem =

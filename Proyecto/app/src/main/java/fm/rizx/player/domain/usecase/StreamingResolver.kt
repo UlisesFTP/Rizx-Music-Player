@@ -56,11 +56,16 @@ class StreamingResolver @Inject constructor(
      * already carries a non-expired [stream]; otherwise resolves a fresh URL with retry/backoff,
      * stamping [lastResolvedAtIso] on success or flagging [failed] once attempts are exhausted.
      */
-    suspend fun resolveStreamForCandidate(candidate: StreamCandidate): StreamCandidate {
+    suspend fun resolveStreamForCandidate(
+        candidate: StreamCandidate,
+        forDownload: Boolean = false,
+    ): StreamCandidate {
         if (candidate.failed) return candidate
         if (candidate.stream != null && !candidate.isStreamExpired(nowEpochMs())) return candidate
         return try {
-            val stream = withRetry { streaming.getStreamUrl(candidate) }
+            val stream = withRetry {
+                if (forDownload) streaming.getDownloadStreamUrl(candidate) else streaming.getStreamUrl(candidate)
+            }
             candidate.copy(
                 stream = stream,
                 lastResolvedAtIso = Instant.ofEpochMilli(nowEpochMs()).toString(),

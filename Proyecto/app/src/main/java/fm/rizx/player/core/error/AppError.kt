@@ -21,3 +21,18 @@ sealed class AppError(message: String, cause: Throwable? = null) : Exception(mes
     /** Transport-level failure (no connectivity, timeout, DNS, …). */
     class Network(detail: String, cause: Throwable? = null) : AppError("Network error: $detail", cause)
 }
+
+/**
+ * The single point of translation from "whatever an exception says" to "what a user is safe to read".
+ * [AppError]'s own [Exception.message] embeds the raw provider/network detail (HTTP codes, hostnames,
+ * zip-entry paths, transpiler output, …) — useful for logs, never for the UI. This never reads that
+ * detail: known [AppError] kinds map to a fixed, generic sentence built only from already-safe fields
+ * (a provider's display name); anything else — including a bare [AppError] subtype added later, or a
+ * raw platform exception that slipped past a provider's normalization — falls through to [fallback].
+ */
+fun Throwable.toSafeMessage(fallback: String): String = when (this) {
+    is AppError.Network -> "You're offline. Connect and try again."
+    is AppError.ProviderUnavailable -> "No source is available for this right now."
+    is AppError.ProviderFailure -> "Couldn't reach $providerName. Try again in a moment."
+    else -> fallback
+}

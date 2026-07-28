@@ -114,14 +114,31 @@ class DeezerMetadataProviderTest {
     }
 
     @Test
-    fun `radioTracks falls back to a deezer search when the seed has no deezer artist`() = runBlocking {
+    fun `radioTracks looks the artist up so a foreign seed still gets the real radio`() = runBlocking {
+        // A seed from another provider (or a YouTube Mix) has no Deezer artist id, and the artist radio
+        // is keyed by id. Rather than degrade to a text search, the id is resolved first.
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"data":[{"id":4050205,"name":"The Weeknd"}]}"""))
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"data":[{"id":60,"title":"Blinding Lights","duration":200,"artist":{"id":4050205,"name":"The Weeknd"}}]}"""))
         val seed = Track(title = "Save Your Tears", artists = listOf(ArtistCredit(name = "The Weeknd", source = ProviderRef("itunes", "artist:1"))), source = ProviderRef("itunes", "99"))
 
         val radio = provider().radioTracks(seed)
 
         assertEquals(listOf("Blinding Lights"), radio.map { it.title })
-        assertTrue(server.takeRequest().path!!.contains("/search"))
+        assertTrue(server.takeRequest().path!!.contains("/search/artist"))
+        assertTrue(server.takeRequest().path!!.contains("/artist/4050205/radio"))
+    }
+
+    @Test
+    fun `radioTracks still falls back to a track search for an artist Deezer doesn't have`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"data":[]}"""))
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"data":[{"id":60,"title":"Bedroom Demo","duration":200,"artist":{"id":7,"name":"Some Producer"}}]}"""))
+        val seed = Track(title = "Demo", artists = listOf(ArtistCredit(name = "Some Producer")), source = ProviderRef("youtube", "abcdefghijk"))
+
+        val radio = provider().radioTracks(seed)
+
+        assertEquals(listOf("Bedroom Demo"), radio.map { it.title })
+        server.takeRequest() // the artist lookup that found nothing
+        assertTrue(server.takeRequest().path!!.contains("/search?"))
     }
 
     @Test

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.error.AppError
+import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.domain.model.Artist
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.QueueContext
@@ -57,7 +58,7 @@ class ArtistDetailViewModel @Inject constructor(
             } catch (e: AppError.Network) {
                 ArtistUiState.Offline
             } catch (e: Exception) {
-                ArtistUiState.Error(e.message ?: "Couldn't load artist")
+                ArtistUiState.Error(e.toSafeMessage("Couldn't load artist"))
             }
         }
     }

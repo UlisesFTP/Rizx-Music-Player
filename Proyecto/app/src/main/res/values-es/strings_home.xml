@@ -27,7 +27,6 @@
     <string name="home_popular_artists">Artistas populares</string>
     <string name="home_editorial">Editorial</string>
     <string name="home_generic_album">Álbum</string>
-    <string name="home_for_you_notice">Selecciones editoriales por ahora — las recomendaciones personalizadas llegarán pronto.</string>
 
     <!-- Search screen: header + field -->
     <string name="search_open_queue">Abrir cola</string>

@@ -2,6 +2,7 @@ package fm.rizx.player.data.provider
 
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.core.network.NetworkMonitor
+import org.schabi.newpipe.extractor.stream.AudioTrackType
 import fm.rizx.player.data.remote.youtube.YoutubeExtractorClient
 import fm.rizx.player.data.remote.youtube.toBestAudioStreamOrNull
 import fm.rizx.player.data.remote.youtube.youtubeVideoId
@@ -49,6 +50,7 @@ class YoutubeStreamingProviderTest {
         override fun searchPlaylists(query: String, limit: Int): List<org.schabi.newpipe.extractor.playlist.PlaylistInfoItem> = error("playlist search not used by the streaming provider")
         override fun streamInfo(videoUrl: String): StreamInfo = info(videoUrl)
         override fun playlist(playlistUrl: String) = error("playlist not used by the streaming provider")
+        override fun mix(videoId: String, limit: Int): List<StreamInfoItem> = error("mix not used by the streaming provider")
     }
 
     private fun item(url: String, name: String, durationSec: Long): StreamInfoItem =
@@ -63,6 +65,16 @@ class YoutubeStreamingProviderTest {
             .setDeliveryMethod(DeliveryMethod.PROGRESSIVE_HTTP)
             .build()
 
+    private fun audioTrack(url: String, format: MediaFormat, bitrate: Int, type: AudioTrackType): AudioStream =
+        AudioStream.Builder()
+            .setId("itag-$bitrate-$type")
+            .setContent(url, true)
+            .setMediaFormat(format)
+            .setAverageBitrate(bitrate)
+            .setDeliveryMethod(DeliveryMethod.PROGRESSIVE_HTTP)
+            .setAudioTrackType(type)
+            .build()
+
     private fun streamInfoWith(streams: List<AudioStream>): StreamInfo =
         StreamInfo(ytServiceId, "https://youtu.be/vid", "https://youtu.be/vid", StreamType.VIDEO_STREAM, "vid", "GIRLS", 0)
             .apply { audioStreams = streams }
@@ -73,12 +85,29 @@ class YoutubeStreamingProviderTest {
     private fun provider(
         client: YoutubeExtractorClient,
         dataSaverOn: Boolean = false,
+        hiResOn: Boolean = false,
         net: NetworkMonitor.Snapshot = NetworkMonitor.Snapshot(isCellular = false, downstreamKbps = 0),
     ): YoutubeStreamingProvider {
         val monitor = mockk<NetworkMonitor> { every { snapshot() } returns net }
-        val settings = mockk<SettingsRepository> { every { dataSaver } returns flowOf(dataSaverOn) }
+        val settings = mockk<SettingsRepository> {
+            every { dataSaver } returns flowOf(dataSaverOn)
+            every { hiResOutput } returns flowOf(hiResOn)
+        }
         return YoutubeStreamingProvider(client, monitor, settings, io = Dispatchers.Unconfined)
     }
+
+    /** The two streams YouTube really offers for a song: AAC 128 and the better Opus 160. */
+    private fun aacAndOpus(): StreamInfo = streamInfoWith(
+        listOf(
+            audio("https://cdn/opus", MediaFormat.WEBMA_OPUS, 160),
+            audio("https://cdn/m4a", MediaFormat.M4A, 128),
+        ),
+    )
+
+    private fun ytCandidate() = StreamCandidate(
+        id = "abcdefghij0", title = "GIRLS",
+        source = ProviderRef("youtube", "abcdefghij0", "https://youtu.be/abcdefghij0"),
+    )
 
     @Test
     fun `youtubeVideoId parses watch, short and embed urls`() {
@@ -109,19 +138,49 @@ class YoutubeStreamingProviderTest {
     }
 
     @Test
-    fun `getStreamUrl prefers M4A over a higher-bitrate opus`() = runBlocking {
+    fun `getStreamUrl prefers M4A over a higher-bitrate opus by default`() = runBlocking {
+        val stream = provider(FakeClient(info = { aacAndOpus() })).getStreamUrl(ytCandidate())
+        assertEquals("https://cdn/m4a", stream.url)
+    }
+
+    @Test
+    fun `getStreamUrl with Hi-Res on takes the opus stream — better codec, and 48 kHz so nothing resamples`() =
+        runBlocking {
+            val stream = provider(FakeClient(info = { aacAndOpus() }), hiResOn = true).getStreamUrl(ytCandidate())
+            assertEquals("https://cdn/opus", stream.url)
+        }
+
+    @Test
+    fun `downloads stay on M4A even with Hi-Res on, because only that container can be tagged`() =
+        runBlocking {
+            val provider = provider(FakeClient(info = { aacAndOpus() }), hiResOn = true)
+            assertEquals("https://cdn/opus", provider.getStreamUrl(ytCandidate()).url)
+            assertEquals("https://cdn/m4a", provider.getDownloadStreamUrl(ytCandidate()).url)
+        }
+
+    @Test
+    fun `a weak signal alone no longer downgrades — only the user's data saver does`() = runBlocking {
+        val weak = NetworkMonitor.Snapshot(isCellular = false, downstreamKbps = 900)
         val info = streamInfoWith(
             listOf(
-                audio("https://cdn/opus", MediaFormat.WEBMA_OPUS, 160),
-                audio("https://cdn/m4a", MediaFormat.M4A, 128),
+                audio("https://cdn/m4a128", MediaFormat.M4A, 128),
+                audio("https://cdn/m4a48", MediaFormat.M4A, 48),
             ),
         )
-        val candidate = StreamCandidate(
-            id = "abcdefghij0", title = "GIRLS",
-            source = ProviderRef("youtube", "abcdefghij0", "https://youtu.be/abcdefghij0"),
+        val stream = provider(FakeClient(info = { info }), dataSaverOn = false, net = weak)
+            .getStreamUrl(ytCandidate())
+        assertEquals("https://cdn/m4a128", stream.url)
+    }
+
+    @Test
+    fun `the original audio track wins over a dubbed one`() {
+        val info = streamInfoWith(
+            listOf(
+                audioTrack("https://cdn/dubbed", MediaFormat.M4A, 160, AudioTrackType.DUBBED),
+                audioTrack("https://cdn/original", MediaFormat.M4A, 128, AudioTrackType.ORIGINAL),
+            ),
         )
-        val stream = provider(FakeClient(info = { info })).getStreamUrl(candidate)
-        assertEquals("https://cdn/m4a", stream.url)
+        assertEquals("https://cdn/original", info.toBestAudioStreamOrNull(ytCandidate())!!.url)
     }
 
     @Test
@@ -135,8 +194,14 @@ class YoutubeStreamingProviderTest {
         )
         val candidate = StreamCandidate(id = "abcdefghij0", title = "GIRLS", source = ProviderRef("youtube", "abcdefghij0"))
 
-        assertEquals("https://cdn/m4a48", info.toBestAudioStreamOrNull(candidate, preferLow = true)!!.url)
+        // Not the 48 kbps floor: data saver picks the lowest stream still worth listening to (≥35% of the
+        // best on offer), so saving data doesn't mean a stream that sounds broken.
+        assertEquals("https://cdn/m4a128", info.toBestAudioStreamOrNull(candidate, preferLow = true)!!.url)
         assertEquals("https://cdn/m4a128", info.toBestAudioStreamOrNull(candidate, preferLow = false)!!.url)
+        assertEquals(
+            "https://cdn/opus160",
+            info.toBestAudioStreamOrNull(candidate, preferLow = false, maxQuality = true)!!.url,
+        )
     }
 
     @Test

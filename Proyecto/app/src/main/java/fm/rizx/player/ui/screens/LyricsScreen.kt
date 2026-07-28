@@ -48,7 +48,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fm.rizx.player.R
 import fm.rizx.player.core.formatClock
 import fm.rizx.player.data.lyrics.activeIndexAt
+import fm.rizx.player.data.lyrics.sungWordCountAt
 import fm.rizx.player.domain.model.LyricLine
 import fm.rizx.player.ui.components.CodeLabel
 import fm.rizx.player.ui.components.CoverArt
@@ -278,6 +282,22 @@ private fun SyncedLyrics(
         derivedStateOf { lines.activeIndexAt(positionMs(), offsetMs) }
     }
 
+    // Karaoke needs a finer clock than the 4 Hz transport ticker — at 250 ms the highlight visibly jumps
+    // whole words. This one runs only while a word-timed lyric is on screen, and only for the active
+    // line, so it is a cheap text re-measure rather than a continuous animation.
+    val wordTimed = remember(lines) { lines.any { it.words.isNotEmpty() } }
+    var wordClockMs by remember { mutableStateOf(0L) }
+    LaunchedEffect(wordTimed, activeIndex) {
+        if (!wordTimed || activeIndex < 0) return@LaunchedEffect
+        while (true) {
+            wordClockMs = positionMs()
+            delay(WORD_TICK_MS)
+        }
+    }
+    val sungWords = remember(lines, offsetMs, activeIndex, wordClockMs) {
+        lines.getOrNull(activeIndex)?.sungWordCountAt(wordClockMs, offsetMs) ?: 0
+    }
+
     // Auto-scroll pauses while a finger is on the list, and resumes a few seconds after it lifts —
     // otherwise reading ahead turns into a tug of war with the animation.
     var dragging by remember { mutableStateOf(false) }
@@ -312,6 +332,7 @@ private fun SyncedLyrics(
             LyricRow(
                 line = line,
                 active = index == activeIndex,
+                sungWords = if (index == activeIndex) sungWords else 0,
                 onClick = {
                     haptics.select()
                     onSeekMs((line.timeMs + offsetMs).coerceAtLeast(0L))
@@ -321,8 +342,13 @@ private fun SyncedLyrics(
     }
 }
 
+/**
+ * One line. When the line is the active one **and** carries word timings, [sungWords] says how many of
+ * its words have already been sung, and the row is drawn in two pieces: what's been sung in full
+ * strength, the rest dimmed — the line fills in as it is performed.
+ */
 @Composable
-private fun LyricRow(line: LyricLine, active: Boolean, onClick: () -> Unit) {
+private fun LyricRow(line: LyricLine, active: Boolean, sungWords: Int, onClick: () -> Unit) {
     val c = RizxTheme.colors
     val spec = tween<Float>(300, easing = FastOutSlowInEasing)
     val alpha by animateFloatAsState(if (active) 1f else 0.38f, spec, label = "lyricAlpha")
@@ -350,12 +376,22 @@ private fun LyricRow(line: LyricLine, active: Boolean, onClick: () -> Unit) {
             CodeLabel("· · ·", color = color, size = 13)
         }
     } else {
-        Text(
-            line.text,
-            style = sg(22, if (active) FontWeight.Bold else FontWeight.Medium, -0.01f, lineHeight = 30),
-            color = color,
-            modifier = content,
-        )
+        val style = sg(22, if (active) FontWeight.Bold else FontWeight.Medium, -0.01f, lineHeight = 30)
+        if (active && line.words.isNotEmpty()) {
+            Text(
+                buildAnnotatedString {
+                    val sung = line.words.take(sungWords).joinToString(separator = "") { it.text }
+                    val rest = line.words.drop(sungWords).joinToString(separator = "") { it.text }
+                    withStyle(SpanStyle(color = c.text)) { append(sung) }
+                    // Not yet sung: the same words, held back — the split is what reads as karaoke.
+                    withStyle(SpanStyle(color = c.text2)) { append(rest) }
+                },
+                style = style,
+                modifier = content,
+            )
+        } else {
+            Text(line.text, style = style, color = color, modifier = content)
+        }
     }
 }
 
@@ -671,10 +707,13 @@ private fun CandidateRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        // The badge is the deciding factor between two otherwise identical rows.
+        // The badge is the deciding factor between two otherwise identical rows — and a word-timed
+        // transcription beats a line-timed one, so it says so.
         if (candidate.lyrics.isSynced) {
+            val badge =
+                if (candidate.lyrics.isWordSynced) R.string.lyrics_word_badge else R.string.lyrics_synced_badge
             Box(Modifier.background(c.redAccent).padding(horizontal = 7.dp, vertical = 3.dp)) {
-                CodeLabel(stringResource(R.string.lyrics_synced_badge), color = c.onRed, size = 9)
+                CodeLabel(stringResource(badge), color = c.onRed, size = 9)
             }
         }
     }
@@ -685,3 +724,10 @@ private const val OFFSET_STEP_MS = 500L
 
 /** Grace period before auto-scroll takes the list back from the reader. */
 private const val RESUME_AFTER_SCROLL_MS = 3_000L
+
+/**
+ * How often the karaoke highlight re-reads the playback position (~12 Hz). Fine enough that words light
+ * up on the beat, coarse enough that it stays a periodic text re-measure — deliberately nothing like a
+ * per-frame animation, which this app keeps away from the playing screen.
+ */
+private const val WORD_TICK_MS = 80L

@@ -3,6 +3,7 @@ package fm.rizx.player.data.provider
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.remote.deezer.DeezerApi
 import fm.rizx.player.data.remote.deezer.DeezerIds
+import fm.rizx.player.data.remote.deezer.DeezerArtistSearch
 import fm.rizx.player.data.remote.deezer.allPlaylistTracks
 import fm.rizx.player.data.remote.deezer.toAlbum
 import fm.rizx.player.data.remote.deezer.toAlbumRef
@@ -36,6 +37,8 @@ import java.io.IOException
 class DeezerMetadataProvider(
     private val api: DeezerApi,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    /** Shared so this provider's artist search and its radio's id lookup don't ask Deezer twice. */
+    private val artists: DeezerArtistSearch = DeezerArtistSearch(api),
 ) : MetadataProvider {
 
     override val id: String = DeezerIds.PROVIDER
@@ -59,7 +62,7 @@ class DeezerMetadataProvider(
         return guarded {
             when (params.types) {
                 listOf(SearchCategory.ARTISTS) ->
-                    SearchResults(artists = api.searchArtists(query, limit).data.mapNotNull { it.toArtistRef() })
+                    SearchResults(artists = artists.byName(query, limit).mapNotNull { it.toArtistRef() })
                 listOf(SearchCategory.ALBUMS) ->
                     SearchResults(albums = api.searchAlbums(query, limit).data.mapNotNull { it.toAlbumRef() })
                 else ->
@@ -80,14 +83,24 @@ class DeezerMetadataProvider(
         header.toArtist(topTracks = top, albums = albums)
     }
 
+    /**
+     * Deezer's artist radio — ~25 tracks "in the style of" the artist, mixing in related acts, which is
+     * a real recommendation flow rather than a discography listing.
+     *
+     * It is keyed by **artist id**, so a seed from another provider used to skip it entirely and fall
+     * back to a plain track search by name, shuffled — text matching dressed up as a radio, and for a
+     * YouTube seed ("ModjoOfficial") a search that returns nothing, leaving "next" with no tracks at
+     * all. Now the id is looked up first ([findArtistId], which reads a channel name as the artist
+     * behind it), so the real radio is used whatever the seed came from. The old search stays as the
+     * last resort for an artist Deezer genuinely doesn't have.
+     */
     override suspend fun radioTracks(seed: Track): List<Track> = guarded {
-        val artistSource = seed.artists.firstOrNull()?.source
-        if (artistSource != null && artistSource.provider == DeezerIds.PROVIDER) {
-            // The seed is a Deezer track — Deezer's artist "radio" is a real similar-tracks flow.
-            api.artistRadio(DeezerIds.rawId(artistSource), RADIO_LIMIT).data.mapNotNull { it.toTrackOrNull() }
+        val credit = seed.artists.firstOrNull()
+        val artistId = artists.idFor(credit)
+        if (artistId != null) {
+            api.artistRadio(artistId, RADIO_LIMIT).data.mapNotNull { it.toTrackOrNull() }
         } else {
-            // Seed from another provider (e.g. iTunes) — approximate by searching Deezer for the artist.
-            val artistName = seed.artists.firstOrNull()?.name?.trim().orEmpty()
+            val artistName = credit?.name?.trim().orEmpty()
             if (artistName.isEmpty()) emptyList()
             else api.searchTracks(artistName, RADIO_LIMIT).data.mapNotNull { it.toTrackOrNull() }.shuffled()
         }

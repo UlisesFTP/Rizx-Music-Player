@@ -1,5 +1,7 @@
 package fm.rizx.player.domain.model
 
+import kotlinx.serialization.Serializable
+
 /** Which dashboard sections a provider can supply (Phase 19). */
 enum class DashboardCapability { TOP_TRACKS, TOP_ARTISTS, TOP_ALBUMS, EDITORIAL_PLAYLISTS, NEW_RELEASES }
 
@@ -7,7 +9,11 @@ enum class DashboardCapability { TOP_TRACKS, TOP_ARTISTS, TOP_ALBUMS, EDITORIAL_
  * A section's items **attributed** to the dashboard provider that produced them. Dashboard is a
  * multi-provider **fan-out** kind (NUCLEAR_UPSTREAM_STUDY.md §4/§5): each active provider contributes an
  * [AttributedResult] per section, so the UI can group/label by source.
+ *
+ * Serializable so the whole feed can be cached to disk — the items it carries ([Track], [ArtistRef],
+ * [AlbumRef], [PlaylistRef]) already are, and none of them holds an ephemeral stream URL.
  */
+@Serializable
 data class AttributedResult<T>(
     val providerId: String,
     val providerName: String,
@@ -18,6 +24,7 @@ data class AttributedResult<T>(
  * The Home feed: sections aggregated by fan-out over all active dashboard providers. Each section is a
  * list of [AttributedResult]s (one per contributing provider). Empty sections are simply absent.
  */
+@Serializable
 data class HomeFeed(
     val topTracks: List<AttributedResult<Track>> = emptyList(),
     val topArtists: List<AttributedResult<ArtistRef>> = emptyList(),

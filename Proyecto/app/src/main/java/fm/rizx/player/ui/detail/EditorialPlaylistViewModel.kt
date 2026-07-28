@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.error.AppError
+import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.QueueContext
 import fm.rizx.player.domain.model.QueueSourceKind
@@ -65,7 +66,7 @@ class EditorialPlaylistViewModel @Inject constructor(
             } catch (e: AppError.Network) {
                 EditorialPlaylistUiState.Offline
             } catch (e: Exception) {
-                EditorialPlaylistUiState.Error(e.message ?: "Couldn't load playlist")
+                EditorialPlaylistUiState.Error(e.toSafeMessage("Couldn't load playlist"))
             }
         }
     }

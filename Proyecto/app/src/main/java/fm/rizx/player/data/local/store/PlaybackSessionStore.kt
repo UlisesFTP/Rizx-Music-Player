@@ -7,6 +7,7 @@ import fm.rizx.player.domain.model.QueueContext
 import fm.rizx.player.domain.model.QueueItem
 import fm.rizx.player.domain.model.QueueItemStatus
 import fm.rizx.player.domain.model.QueueSourceKind
+import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.RepeatMode
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.stripResolutionState
@@ -131,15 +132,23 @@ private data class PersistedContext(
     val kind: String = QueueSourceKind.MANUAL.name,
     val label: String = "",
     val radioSeed: ProviderRef? = null,
+    // Nullable with default so sessions persisted before radio modes existed restore as ARTIST.
+    val radioMode: String? = null,
 ) {
     fun toContext() = QueueContext(
         kind = runCatching { QueueSourceKind.valueOf(kind) }.getOrDefault(QueueSourceKind.MANUAL),
         label = label,
         radioSeed = radioSeed,
+        radioMode = radioMode?.let { m -> runCatching { RadioMode.valueOf(m) }.getOrNull() } ?: RadioMode.ARTIST,
     )
 
     companion object {
-        fun from(c: QueueContext) = PersistedContext(kind = c.kind.name, label = c.label, radioSeed = c.radioSeed)
+        fun from(c: QueueContext) = PersistedContext(
+            kind = c.kind.name,
+            label = c.label,
+            radioSeed = c.radioSeed,
+            radioMode = c.radioMode.name,
+        )
     }
 }
 

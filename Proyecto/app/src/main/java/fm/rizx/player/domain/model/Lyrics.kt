@@ -3,14 +3,31 @@ package fm.rizx.player.domain.model
 import kotlinx.serialization.Serializable
 
 /**
+ * One word (or syllable) of a karaoke-timed line, with times **absolute** to the track.
+ *
+ * [text] keeps its own trailing space, so concatenating a line's words reproduces [LyricLine.text]
+ * exactly — the UI splits the line at a word boundary rather than re-joining it.
+ */
+@Serializable
+data class LyricWord(val startMs: Long, val endMs: Long, val text: String)
+
+/**
  * One timed line of a synced lyric.
  *
  * An **empty [text] is meaningful, not junk**: LRC files mark instrumental gaps with a timestamp and no
  * words (8 of the 65 lines in a typical file), which is what lets the UI stop highlighting a stale line
  * during a solo instead of leaving the last sung line lit for a minute.
+ *
+ * [words] is the karaoke layer: sources that time each word (NetEase `yrc`, KuGou `krc`, Musixmatch
+ * richsync, enhanced LRC) fill it so the active line can light up progressively. It defaults to empty,
+ * which keeps line-only providers valid **and** lets lyrics cached before this existed still decode.
  */
 @Serializable
-data class LyricLine(val timeMs: Long, val text: String)
+data class LyricLine(
+    val timeMs: Long,
+    val text: String,
+    val words: List<LyricWord> = emptyList(),
+)
 
 /**
  * Lyrics for a track: plain text, timed lines, or both.
@@ -29,6 +46,9 @@ data class Lyrics(
     val instrumental: Boolean = false,
 ) {
     val isSynced: Boolean get() = lines.isNotEmpty()
+
+    /** True when at least one line carries word timings, i.e. the karaoke view is possible. */
+    val isWordSynced: Boolean get() = lines.any { it.words.isNotEmpty() }
 
     /** True when there is nothing at all to show (and the track isn't a declared instrumental). */
     val isEmpty: Boolean get() = lines.isEmpty() && plain.isNullOrBlank() && !instrumental

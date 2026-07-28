@@ -1,0 +1,29 @@
+<resources>
+    <!-- Home: linhas personalizadas de "Para você" -->
+    <string name="home_mix_of">Mix · %1$s</string>
+    <string name="home_because_you_like">Porque você gosta de %1$s</string>
+    <string name="home_artists_for_you">Artistas para você</string>
+    <string name="home_albums_for_you">Álbuns para você</string>
+    <string name="home_playlists_for_you">Playlists para você</string>
+
+    <!-- Home: cartão de consentimento regional (somente no app — sem permissão do sistema, sem localização) -->
+    <string name="home_region_consent_title">Recomendações da sua região?</string>
+    <string name="home_region_consent_body">Detectamos %1$s (pelo seu SIM ou idioma do dispositivo). Usado apenas para escolher paradas regionais — nunca localização, nunca rastreamento.</string>
+    <string name="home_region_consent_body_unknown">Usar seu país (pelo SIM ou idioma do dispositivo) para escolher paradas regionais — nunca localização, nunca rastreamento.</string>
+    <string name="home_region_consent_accept">Usar região</string>
+    <string name="home_region_consent_decline">Agora não</string>
+
+    <!-- Configurações: seção de recomendações -->
+    <string name="settings_recs_section">Recomendações</string>
+    <string name="settings_regional_recs">Recomendações regionais</string>
+    <string name="settings_regional_recs_on">País: %1$s</string>
+    <string name="settings_regional_recs_off">Desativadas — apenas paradas globais</string>
+    <string name="settings_regional_recs_unset">Ainda sem decisão</string>
+
+    <!-- Configurações: qual motor preenche "a seguir" depois de tocar uma única música -->
+    <string name="pref_radio_algorithm">Algoritmo de A seguir</string>
+    <string name="radio_algorithm_youtube">YouTube Music</string>
+    <string name="radio_algorithm_youtube_caption">Segue a própria música, como a reprodução automática do YT Music</string>
+    <string name="radio_algorithm_deezer">Deezer</string>
+    <string name="radio_algorithm_deezer_caption">Segue o artista, com as faixas parecidas dele</string>
+</resources>

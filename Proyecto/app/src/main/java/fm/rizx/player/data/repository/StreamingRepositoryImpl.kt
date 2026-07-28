@@ -62,12 +62,17 @@ class StreamingRepositoryImpl(
         return emptyList()
     }
 
-    override suspend fun getStreamUrl(candidate: StreamCandidate): Stream {
-        val provider = (registry.get(candidate.source.provider, ProviderKind.STREAMING) as? StreamingProvider)
+    override suspend fun getStreamUrl(candidate: StreamCandidate): Stream =
+        providerFor(candidate).getStreamUrl(candidate)
+
+    override suspend fun getDownloadStreamUrl(candidate: StreamCandidate): Stream =
+        providerFor(candidate).getDownloadStreamUrl(candidate)
+
+    /** The provider that produced [candidate], else the active one. */
+    private fun providerFor(candidate: StreamCandidate): StreamingProvider =
+        (registry.get(candidate.source.provider, ProviderKind.STREAMING) as? StreamingProvider)
             ?: (registry.activeDescriptor(ProviderKind.STREAMING) as? StreamingProvider)
             ?: throw NoStreamingProviderException()
-        return provider.getStreamUrl(candidate)
-    }
 
     /**
      * The ordered fallback chain: the active provider first, then the other **real** enabled providers.

@@ -149,7 +149,7 @@ fun LibraryScreen(
     val reportImport: (Result<String>) -> Unit = { result ->
         val message = result.fold(
             onSuccess = { playlistImportedMsg },
-            onFailure = { it.message ?: importFailedMsg },
+            onFailure = { importFailedMsg },
         )
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
     }
@@ -173,7 +173,7 @@ fun LibraryScreen(
         vm.exportDownload(entry.key) { result ->
             val message = result.fold(
                 onSuccess = { String.format(exportSavedTemplate, it) },
-                onFailure = { it.message ?: exportFailedMsg },
+                onFailure = { exportFailedMsg },
             )
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }

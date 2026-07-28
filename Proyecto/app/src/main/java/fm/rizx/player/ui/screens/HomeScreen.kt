@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fm.rizx.player.R
 import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.ArtistRef
+import fm.rizx.player.domain.model.ForYouSection
 import fm.rizx.player.domain.model.HomeFeed
 import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.model.ProviderRef
@@ -55,6 +56,7 @@ import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.DotMatrixSpinner
+import fm.rizx.player.ui.components.Eyebrow
 import fm.rizx.player.ui.components.RizxChip
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.clickableScale
@@ -69,11 +71,13 @@ import fm.rizx.player.ui.theme.paperElevation
 import fm.rizx.player.ui.theme.sg
 import fm.rizx.player.ui.theme.staggeredReveal
 
-/** What the Home feed is showing: [All] is the overview, the rest are one full category each. */
+/**
+ * What the Home feed is showing: [All] is the overview — charts *and* the "For you" recommendations,
+ * which used to be a tab of their own — and the rest are one full category each.
+ */
 enum class HomeTab(val labelRes: Int) {
     All(R.string.home_tab_all),
     Songs(R.string.home_tab_songs),
-    ForYou(R.string.home_tab_for_you),
     Albums(R.string.home_tab_albums),
     Artists(R.string.home_tab_artists),
 }
@@ -101,13 +105,26 @@ fun HomeScreen(
 ) {
     val c = RizxTheme.colors
     val state by vm.state.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableStateOf(HomeTab.All) }
+    // Saved by name, not as the enum itself: restoring a constant that a later version removed (as
+    // "For you" was) would throw on the way back from process death.
+    var tabName by rememberSaveable { mutableStateOf(HomeTab.All.name) }
+    val tab = HomeTab.entries.firstOrNull { it.name == tabName } ?: HomeTab.All
     // Hoisted here because `tabContent`/`carousel` below are plain LazyListScope builders, not
     // @Composable functions — stringResource() can only be called from this composable scope.
     val topSongsTitle = stringResource(R.string.home_top_songs)
-    val madeForYouTitle = stringResource(R.string.home_made_for_you)
     val topAlbumsTitle = stringResource(R.string.home_top_albums)
     val popularArtistsTitle = stringResource(R.string.home_popular_artists)
+    val playlistsForYouTitle = stringResource(R.string.home_playlists_for_you)
+    val forYouLabel = stringResource(R.string.home_tab_for_you)
+    // Localized titles for the personalized rows, resolved here for the same reason as above.
+    val forYouRows = ((state as? HomeUiState.Content)?.forYouSections.orEmpty()).map { section ->
+        when (section) {
+            is ForYouSection.Mix -> stringResource(R.string.home_mix_of, section.seedTitle)
+            is ForYouSection.BecauseYouLike -> stringResource(R.string.home_because_you_like, section.artistName)
+            is ForYouSection.ArtistsForYou -> stringResource(R.string.home_artists_for_you)
+            is ForYouSection.AlbumsForYou -> stringResource(R.string.home_albums_for_you)
+        } to section
+    }
 
     Box(Modifier.fillMaxSize()) {
         Text(
@@ -163,17 +180,23 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             HomeTab.entries.forEach { entry ->
-                                RizxChip(stringResource(entry.labelRes), active = tab == entry, onClick = { tab = entry })
+                                RizxChip(stringResource(entry.labelRes), active = tab == entry, onClick = { tabName = entry.name })
                             }
                         }
                     }
                     tabContent(
                         s.feed, tab, onOpenAlbum, onOpenArtist, onOpenEditorialPlaylist, vm::playTrack,
-                        onSeeAll = { tab = it },
+                        onSeeAll = { tabName = it.name },
                         topSongsTitle = topSongsTitle,
-                        madeForYouTitle = madeForYouTitle,
                         topAlbumsTitle = topAlbumsTitle,
                         popularArtistsTitle = popularArtistsTitle,
+                        forYouRows = forYouRows,
+                        forYouLoading = s.forYouLoading,
+                        playlistsForYouTitle = playlistsForYouTitle,
+                        forYouLabel = forYouLabel,
+                        regionalConsent = s.regionalConsent,
+                        countryName = s.countryName,
+                        onSetRegionalConsent = vm::setRegionalConsent,
                     )
                 }
 
@@ -182,8 +205,9 @@ fun HomeScreen(
                         DotMatrixSpinner(color = c.accent, diameter = 34.dp)
                     }
                 }
-                HomeUiState.Offline -> item { HomeMessage(stringResource(R.string.home_offline_message), vm::load) }
-                is HomeUiState.Error -> item { HomeMessage(s.message, vm::load) }
+                // Retry means "go to the network", not "re-read the cache we just failed to fill".
+                HomeUiState.Offline -> item { HomeMessage(stringResource(R.string.home_offline_message), vm::refresh) }
+                is HomeUiState.Error -> item { HomeMessage(s.message, vm::refresh) }
             }
 
             item { Spacer(Modifier.height(LocalBottomInset.current + 16.dp)) }
@@ -200,9 +224,15 @@ private fun LazyListScope.tabContent(
     onPlay: (Track) -> Unit,
     onSeeAll: (HomeTab) -> Unit,
     topSongsTitle: String,
-    madeForYouTitle: String,
     topAlbumsTitle: String,
     popularArtistsTitle: String,
+    forYouRows: List<Pair<String, ForYouSection>>,
+    forYouLoading: Boolean,
+    playlistsForYouTitle: String,
+    forYouLabel: String,
+    regionalConsent: Boolean?,
+    countryName: String?,
+    onSetRegionalConsent: (Boolean) -> Unit,
 ) {
     when (tab) {
         HomeTab.All -> {
@@ -210,23 +240,77 @@ private fun LazyListScope.tabContent(
             val albums = feed.topAlbums.flatMap { it.items }
             val artists = feed.topArtists.flatMap { it.items }
             val playlists = feed.editorialPlaylists.flatMap { it.items }
-            if (tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() && playlists.isEmpty()) {
+            if (tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() &&
+                playlists.isEmpty() && forYouRows.isEmpty()
+            ) {
                 item { HomeEmpty(stringResource(R.string.home_empty_charts)) }
             }
 
-            carousel(topSongsTitle, tracks, HomeTab.Songs, onSeeAll) { track ->
-                CarouselCell(onClick = { onPlay(track) }) {
-                    CoverArt(
-                        tintFor(track.source.id), initial = null,
-                        Modifier.size(CAROUSEL_ART).paperElevation(),
-                        imageUrl = track.artwork.coverUrl(),
+            // ---- "For you": everything picked for this listener, under one label. Its own tab was
+            // folded in here — the songs, artists, albums and playlists chosen for you read better as
+            // the top of the overview than as a place you had to go looking for. ----
+            if (regionalConsent == null) {
+                item(key = "region-consent") {
+                    RegionConsentCard(
+                        countryName = countryName,
+                        onAccept = { onSetRegionalConsent(true) },
+                        onDecline = { onSetRegionalConsent(false) },
                     )
-                    CellTitle(track.title)
-                    CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })
                 }
             }
-
-            carousel(madeForYouTitle, playlists, HomeTab.ForYou, onSeeAll) { playlist ->
+            if (forYouRows.isNotEmpty() || playlists.isNotEmpty() || forYouLoading) {
+                item(key = "for-you-label") {
+                    Eyebrow(
+                        forYouLabel,
+                        Modifier.padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 2.dp),
+                    )
+                }
+            }
+            // The personalized rows are the slow half (YouTube-backed mixes). They no longer hold the
+            // charts hostage — this small strip marks where they will land while everything below is
+            // already usable.
+            if (forYouLoading && forYouRows.isEmpty()) {
+                item(key = "for-you-loading") {
+                    Box(
+                        Modifier.fillMaxWidth().height(72.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        DotMatrixSpinner(
+                            color = RizxTheme.colors.accent,
+                            diameter = 20.dp,
+                            modifier = Modifier.padding(start = 22.dp),
+                        )
+                    }
+                }
+            }
+            forYouRows.forEach { (title, section) ->
+                when (section) {
+                    is ForYouSection.Mix -> trackCarousel(title, section.items, onPlay)
+                    is ForYouSection.BecauseYouLike -> trackCarousel(title, section.items, onPlay)
+                    is ForYouSection.ArtistsForYou -> carousel(title, section.items, key = { it.source.identityKey }) { artist ->
+                        CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
+                            CoverArt(
+                                tintFor(artist.source.id), initial = artist.name.take(1),
+                                Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
+                                initialSize = 38, circle = true, imageUrl = artist.artwork.coverUrl(),
+                            )
+                            CellTitle(artist.name, centered = true)
+                        }
+                    }
+                    is ForYouSection.AlbumsForYou -> carousel(title, section.items, key = { it.source.identityKey }) { album ->
+                        CarouselCell(onClick = { onOpenAlbum(album.source) }) {
+                            CoverArt(
+                                tintFor(album.source.id), initial = album.title.take(1),
+                                Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
+                                imageUrl = album.artwork.coverUrl(),
+                            )
+                            CellTitle(album.title)
+                            CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+                        }
+                    }
+                }
+            }
+            carousel(playlistsForYouTitle, playlists, key = { it.source.identityKey }) { playlist ->
                 CarouselCell(onClick = { onOpenEditorialPlaylist(playlist) }) {
                     CoverArt(
                         tintFor(playlist.source.id), initial = playlist.name.take(1),
@@ -238,7 +322,20 @@ private fun LazyListScope.tabContent(
                 }
             }
 
-            carousel(topAlbumsTitle, albums, HomeTab.Albums, onSeeAll) { album ->
+            // ---- The charts, each with "See all" into its own tab ----
+            carousel(topSongsTitle, tracks, HomeTab.Songs, onSeeAll, key = { it.source.identityKey }) { track ->
+                CarouselCell(onClick = { onPlay(track) }) {
+                    CoverArt(
+                        tintFor(track.source.id), initial = null,
+                        Modifier.size(CAROUSEL_ART).paperElevation(),
+                        imageUrl = track.artwork.coverUrl(),
+                    )
+                    CellTitle(track.title)
+                    CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })
+                }
+            }
+
+            carousel(topAlbumsTitle, albums, HomeTab.Albums, onSeeAll, key = { it.source.identityKey }) { album ->
                 CarouselCell(onClick = { onOpenAlbum(album.source) }) {
                     CoverArt(
                         tintFor(album.source.id), initial = album.title.take(1),
@@ -250,7 +347,7 @@ private fun LazyListScope.tabContent(
                 }
             }
 
-            carousel(popularArtistsTitle, artists, HomeTab.Artists, onSeeAll) { artist ->
+            carousel(popularArtistsTitle, artists, HomeTab.Artists, onSeeAll, key = { it.source.identityKey }) { artist ->
                 CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
                     CoverArt(
                         tintFor(artist.source.id), initial = artist.name.take(1),
@@ -274,31 +371,6 @@ private fun LazyListScope.tabContent(
                     )
                     CellTitle(track.title)
                     CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })
-                }
-            }
-        }
-
-        HomeTab.ForYou -> {
-            val playlists = feed.editorialPlaylists.flatMap { it.items }
-            // Editorial picks stand in until real, personalized recommendations exist — say so rather than
-            // implying these were chosen for you.
-            item {
-                Text(
-                    stringResource(R.string.home_for_you_notice),
-                    style = mr(12, FontWeight.Medium),
-                    color = RizxTheme.colors.muted,
-                    modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 12.dp),
-                )
-            }
-            if (playlists.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_picks)) }
-            browseGrid(playlists, key = { "pl-${it.source.identityKey}" }) { playlist, index ->
-                GridCell(index, onClick = { onOpenEditorialPlaylist(playlist) }) {
-                    CoverArt(
-                        tintFor(playlist.source.id), initial = playlist.name.take(1),
-                        Modifier.fillMaxWidth().aspectRatio(1f).paperElevation(), initialSize = 46,
-                        imageUrl = playlist.artwork.coverUrl(),
-                    )
-                    CellTitle(playlist.name)
                 }
             }
         }
@@ -351,6 +423,7 @@ private fun <T> LazyListScope.carousel(
     items: List<T>,
     tab: HomeTab,
     onSeeAll: (HomeTab) -> Unit,
+    key: (T) -> Any,
     cell: @Composable (T) -> Unit,
 ) {
     if (items.isEmpty()) return
@@ -368,8 +441,96 @@ private fun <T> LazyListScope.carousel(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             // Capped: the strip is a taste of the category — "See all" is right there for the rest.
-            items(items.take(PREVIEW_ITEMS)) { item -> cell(item) }
+            // Keyed by provider identity so a refresh that reorders a strip moves the cells that exist
+            // instead of rebuilding (and re-fetching the artwork of) every one of them.
+            items(items.take(PREVIEW_ITEMS), key = key) { item -> cell(item) }
         }
+    }
+}
+
+/** [carousel] without a "See all" action — the personalized For-you rows have no backing tab. */
+private fun <T> LazyListScope.carousel(
+    title: String,
+    items: List<T>,
+    key: (T) -> Any,
+    cell: @Composable (T) -> Unit,
+) {
+    if (items.isEmpty()) return
+    item(key = "hdr-$title") {
+        SectionHeader(
+            title,
+            Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 8.dp),
+        )
+    }
+    item(key = "car-$title") {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 22.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            items(items.take(PREVIEW_ITEMS), key = key) { item -> cell(item) }
+        }
+    }
+}
+
+/** A For-you row of playable tracks (Mix / Because-you-like), in the standard carousel cell. */
+private fun LazyListScope.trackCarousel(title: String, tracks: List<Track>, onPlay: (Track) -> Unit) =
+    carousel(title, tracks, key = { it.source.identityKey }) { track ->
+        CarouselCell(onClick = { onPlay(track) }) {
+            CoverArt(
+                tintFor(track.source.id), initial = null,
+                Modifier.size(CAROUSEL_ART).paperElevation(),
+                imageUrl = track.artwork.coverUrl(),
+            )
+            CellTitle(track.title)
+            CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })
+        }
+    }
+
+/**
+ * The discreet regional-recommendations ask (owner decision: an in-app card, never an OS dialog —
+ * the country comes from the SIM / device language, no location involved). Shown only while the
+ * choice is undecided; accepting or declining persists it, and Settings can change it later.
+ */
+@Composable
+private fun RegionConsentCard(countryName: String?, onAccept: () -> Unit, onDecline: () -> Unit) {
+    val c = RizxTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 22.dp, end = 22.dp, top = 16.dp)
+            .border(1.5.dp, c.hardLine, RectangleShape)
+            .background(c.elev)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(stringResource(R.string.home_region_consent_title), style = sg(16, FontWeight.Bold), color = c.text)
+        Text(
+            if (countryName != null) {
+                stringResource(R.string.home_region_consent_body, countryName)
+            } else {
+                stringResource(R.string.home_region_consent_body_unknown)
+            },
+            style = mr(12, FontWeight.Medium),
+            color = c.muted,
+        )
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ConsentButton(stringResource(R.string.home_region_consent_accept), filled = true, onClick = onAccept)
+            ConsentButton(stringResource(R.string.home_region_consent_decline), filled = false, onClick = onDecline)
+        }
+    }
+}
+
+@Composable
+private fun ConsentButton(label: String, filled: Boolean, onClick: () -> Unit) {
+    val c = RizxTheme.colors
+    Box(
+        Modifier
+            .clickableScale(scale = 0.97f, onClick = onClick)
+            .border(1.5.dp, c.hardLine, RectangleShape)
+            .background(if (filled) c.text else c.elev)
+            .padding(horizontal = 16.dp, vertical = 11.dp),
+    ) {
+        Text(label, style = mr(12, FontWeight.Bold), color = if (filled) c.elev else c.text)
     }
 }
 

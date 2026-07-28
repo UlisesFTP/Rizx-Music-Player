@@ -14,6 +14,7 @@ import fm.rizx.player.domain.repository.QueueRepository
 import fm.rizx.player.domain.usecase.CandidateResult
 import fm.rizx.player.domain.usecase.StreamingResolver
 import fm.rizx.player.playback.cache.AudioCache
+import fm.rizx.player.playback.cache.audioCacheKey
 import fm.rizx.player.playback.queueItemIdFromPlaceholder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -90,9 +91,10 @@ class QueueStreamResolver @Inject constructor(
         // Every byte already on disk? Then don't resolve at all. Skipping that round trip is what makes a
         // cached song play offline — resolving first would fail with no network and the cache would only
         // ever have saved bandwidth, not enabled playback.
-        if (key !in cacheBypassed && audioCache?.isFullyCached(key) == true) {
+        val cachedKey = if (key in cacheBypassed) null else audioCache?.fullyCachedKeyFor(key)
+        if (cachedKey != null) {
             queue.updateItemState(id, QueueItemStatus.SUCCESS)
-            return dataSpec.buildUpon().setUri(cachedUri(key)).setKey(key).build()
+            return dataSpec.buildUpon().setUri(cachedUri(cachedKey)).setKey(cachedKey).build()
         }
 
         // Show LOADING only for a genuine cold miss — a cache hit (prior resolve or prefetch) is instant,
@@ -109,8 +111,12 @@ class QueueStreamResolver @Inject constructor(
         queue.updateItemState(id, QueueItemStatus.SUCCESS)
         // The key is what makes the byte cache work at all. Media3 keys on the URI by default, and ours
         // are ephemeral — the same song resolves to a different URL tomorrow, so a URI-keyed cache would
-        // miss every time and fill the disk with bytes it could never reuse.
-        return dataSpec.buildUpon().setUri(Uri.parse(stream.url)).setKey(key).build()
+        // miss every time and fill the disk with bytes it could never reuse. The format goes in the key
+        // too, so AAC and Opus copies of one song never share a resource (see [audioCacheKey]).
+        return dataSpec.buildUpon()
+            .setUri(Uri.parse(stream.url))
+            .setKey(audioCacheKey(key, stream.codec))
+            .build()
     }
 
     /**
@@ -180,6 +186,14 @@ class QueueStreamResolver @Inject constructor(
     fun invalidate(key: String) {
         streamCache.remove(key)
         cacheBypassed.add(key)
+    }
+
+    /**
+     * Drops every reused stream URL so the next play resolves fresh. Used when a setting that changes
+     * *which* stream gets picked (Hi-Res) flips: the cached URLs point at the old codec's file.
+     */
+    fun clearUrlCache() {
+        streamCache.clear()
     }
 
     /** Cancels the background prefetch scope. Call from the service's `onDestroy`. */

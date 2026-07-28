@@ -9,10 +9,12 @@ import androidx.media3.session.SessionToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import fm.rizx.player.domain.model.QueueContext
 import fm.rizx.player.domain.model.QueueSourceKind
+import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.playback.PlaybackState
 import fm.rizx.player.domain.repository.QueueRepository
+import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.playback.service.PlaybackService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +39,7 @@ import javax.inject.Singleton
 class MediaControllerPlaybackController @Inject constructor(
     @ApplicationContext context: Context,
     private val queue: QueueRepository,
+    settings: SettingsRepository,
 ) : PlaybackController {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -46,7 +49,14 @@ class MediaControllerPlaybackController @Inject constructor(
     private var controller: MediaController? = null
     private var ticker: Job? = null
 
+    /**
+     * The user's chosen radio engine, mirrored so [playAutoRadio] can read it synchronously — the
+     * transport commands are fire-and-forget by design and must not suspend on a DataStore read.
+     */
+    private var radioAlgorithm: RadioMode = RadioMode.YOUTUBE
+
     init {
+        scope.launch { settings.radioAlgorithm.collect { radioAlgorithm = it } }
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener(
@@ -91,6 +101,25 @@ class MediaControllerPlaybackController @Inject constructor(
         val seed = artist?.source ?: track.source
         val label = artist?.name?.takeIf { it.isNotBlank() }?.let { "Radio · $it" } ?: "Radio"
         playContext(listOf(track), 0, QueueContext(kind = QueueSourceKind.RADIO, label = label, radioSeed = seed))
+    }
+
+    override fun playYoutubeRadio(track: Track) {
+        val label = track.title.takeIf { it.isNotBlank() }?.let { "Mix · $it" } ?: "Mix"
+        playContext(
+            listOf(track),
+            0,
+            QueueContext(
+                kind = QueueSourceKind.RADIO,
+                label = label,
+                radioSeed = track.source,
+                radioMode = RadioMode.YOUTUBE,
+            ),
+        )
+    }
+
+    override fun playAutoRadio(track: Track) = when (radioAlgorithm) {
+        RadioMode.YOUTUBE -> playYoutubeRadio(track)
+        RadioMode.ARTIST -> playRadio(track)
     }
 
     override fun play() {

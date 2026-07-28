@@ -9,10 +9,12 @@ import fm.rizx.player.domain.model.Stream
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.StreamProtocol
 import fm.rizx.player.domain.model.Track
+import org.schabi.newpipe.extractor.Image
 import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubePlaylistLinkHandlerFactory
 import org.schabi.newpipe.extractor.stream.AudioStream
+import org.schabi.newpipe.extractor.stream.AudioTrackType
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
@@ -53,6 +55,14 @@ fun isImportableYoutubePlaylistId(id: String): Boolean =
 private val VIDEO_ID = Regex("""(?:v=|vi=|youtu\.be/|/embed/|/shorts/)([A-Za-z0-9_-]{11})""")
 private val VIDEO_ID_ONLY = Regex("""^[A-Za-z0-9_-]{11}$""")
 
+/**
+ * The biggest thumbnail the extractor reported. NewPipe doesn't guarantee the list's order, so taking
+ * the last one could hand back a 68px placeholder; prefer the tallest with a known height and only fall
+ * back to positional order when none report one.
+ */
+internal fun List<Image>.bestThumbnailUrl(): String? =
+    filter { it.height > 0 }.maxByOrNull { it.height }?.url ?: lastOrNull()?.url
+
 /** Extracts the 11-char YouTube video id from a watch/short/embed URL, or null. */
 fun youtubeVideoId(url: String): String? = VIDEO_ID.find(url)?.groupValues?.get(1)
 
@@ -89,7 +99,7 @@ fun StreamInfoItem.toStreamCandidateOrNull(): StreamCandidate? {
         id = videoId,
         title = name,
         durationMs = durationSec * 1000L,
-        thumbnail = thumbnails.lastOrNull()?.url,
+        thumbnail = thumbnails.bestThumbnailUrl(),
         source = ProviderRef(YoutubeIds.STREAMING, videoId, itemUrl),
     )
 }
@@ -109,7 +119,9 @@ fun StreamInfoItem.toTrackOrNull(): Track? {
         title = title,
         artists = listOfNotNull(uploaderName?.takeIf { it.isNotBlank() }?.let { ArtistCredit(name = it) }),
         durationMs = durationSec * 1000L,
-        artwork = thumbnails.lastOrNull()?.url?.let { ArtworkSet(listOf(Artwork(url = it))) },
+        // A video still, not cover art — callers that can reach a metadata provider should upgrade it
+        // (see TrackArtworkEnricher's `upgradeFrom`); this is the offline-safe fallback.
+        artwork = thumbnails.bestThumbnailUrl()?.let { ArtworkSet(listOf(Artwork(url = it))) },
         source = ProviderRef(YoutubeIds.STREAMING, videoId, itemUrl),
     )
 }
@@ -126,7 +138,7 @@ fun PlaylistInfoItem.toPlaylistRefOrNull(): PlaylistRef? {
     return PlaylistRef(
         id = listId,
         name = n,
-        artwork = thumbnails.lastOrNull()?.url?.let { ArtworkSet(listOf(Artwork(url = it))) },
+        artwork = thumbnails.bestThumbnailUrl()?.let { ArtworkSet(listOf(Artwork(url = it))) },
         source = YoutubeIds.playlist(listId),
         trackCount = streamCount.takeIf { it >= 0 }?.toInt(),
     )
@@ -134,17 +146,28 @@ fun PlaylistInfoItem.toPlaylistRefOrNull(): PlaylistRef? {
 
 /**
  * Phase-2: pick an **audio-only** stream and wrap it as an ephemeral [Stream]. Prefers progressive HTTP
- * (ExoPlayer plays it directly). By default picks the **highest** quality (M4A/AAC first, then bitrate);
- * when [preferLow] is set (data saver on cellular, or a weak signal) it picks the **lowest** bitrate
- * instead — a real reduction that's independent of NewPipe's bitrate unit. Returns null when the video
- * exposes no audio stream.
+ * (ExoPlayer plays it directly) and the **original** audio track over dubbed/auto-translated ones.
+ *
+ * [maxQuality] (the Hi-Res setting) switches the pick from "M4A first" to *actual* perceptual quality —
+ * see [effectiveBitrate]. That is what finally lets YouTube's Opus track win over its AAC one, and it
+ * comes with a second, free win: Opus is always 48 kHz, the rate Android's mixer runs at, so the
+ * platform never has to resample it (Google's own NDK guidance: resamplers add passband ripple and
+ * aliasing, "avoid using them unnecessarily").
+ *
+ * When [preferLow] is set (the user's data saver) it drops to the lowest *adequate* stream instead.
+ * Returns null when the video exposes no audio stream.
  */
-fun StreamInfo.toBestAudioStreamOrNull(candidate: StreamCandidate, preferLow: Boolean = false): Stream? {
+fun StreamInfo.toBestAudioStreamOrNull(
+    candidate: StreamCandidate,
+    preferLow: Boolean = false,
+    maxQuality: Boolean = false,
+): Stream? {
     val all = audioStreams.orEmpty()
     if (all.isEmpty()) return null
     val progressive = all.filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }.ifEmpty { all }
-    val best = (if (preferLow) progressive.lowestAudioOrNull() else null)
-        ?: progressive.maxByOrNull { it.audioRank() }
+    val usable = progressive.originalTrackOrAll()
+    val best = (if (preferLow) usable.lowestAdequateOrNull() else null)
+        ?: usable.maxWithOrNull(qualityOrder(maxQuality))
         ?: return null
     val url = best.content ?: return null
     return Stream(
@@ -188,17 +211,61 @@ fun StreamInfo.toCanvasVideoUrlOrNull(): String? =
 private fun VideoStream.resolutionHeight(): Int =
     resolution?.takeWhile { it.isDigit() }?.toIntOrNull() ?: Int.MAX_VALUE
 
-/** M4A/AAC first (best ExoPlayer support), then higher average bitrate. */
-private fun AudioStream.audioRank(): Int {
-    val formatBonus = if (format == MediaFormat.M4A) 1_000_000 else 0
-    return formatBonus + averageBitrate.coerceAtLeast(0)
+/**
+ * How the "best" stream is chosen.
+ *
+ * [maxQuality] off keeps the historical rule — **M4A/AAC first**, then bitrate — because the M4A path is
+ * the one downloads can tag and the one this app has always streamed.
+ *
+ * [maxQuality] on ranks by [effectiveBitrate] instead, so a 160 kbps Opus track beats a 128 kbps AAC one
+ * the way it actually sounds. Ties break toward M4A so the choice stays deterministic.
+ */
+private fun qualityOrder(maxQuality: Boolean): Comparator<AudioStream> =
+    if (maxQuality) {
+        compareBy({ it.effectiveBitrate() }, { if (it.format == MediaFormat.M4A) 1 else 0 })
+    } else {
+        compareBy({ if (it.format == MediaFormat.M4A) 1 else 0 }, { it.averageBitrate.coerceAtLeast(0) })
+    }
+
+/**
+ * Bitrate weighted by how efficient the codec is, so streams of different codecs are comparable at all.
+ * Opus is worth roughly 1.6× AAC at these rates (it also carries a higher sample rate); MP3 needs far
+ * more bits for the same result. Read from [MediaFormat.suffix] — **never** from `getItagItem()`, which
+ * is YouTube-only and null for SoundCloud, which shares this picker.
+ */
+private fun AudioStream.effectiveBitrate(): Double =
+    averageBitrate.coerceAtLeast(0) * when (format?.suffix?.lowercase()) {
+        "opus" -> 1.6
+        "m4a", "aac", "mp4" -> 1.0
+        "webm", "ogg" -> 0.9 // Vorbis
+        "mp3" -> 0.7
+        else -> 1.0 // unknown codec: judge it on raw bitrate alone
+    }
+
+/**
+ * The original audio only, when any candidate says which it is — otherwise YouTube's auto-dubbed track
+ * can outrank the real one and the song plays in the wrong voice. Sources that don't report a track type
+ * at all (SoundCloud, older extractions) fall through unfiltered.
+ */
+private fun List<AudioStream>.originalTrackOrAll(): List<AudioStream> {
+    if (none { it.audioTrackType != null }) return this
+    return filter { it.audioTrackType == null || it.audioTrackType == AudioTrackType.ORIGINAL }.ifEmpty { this }
 }
 
 /**
- * Data-saver pick: the lowest **known** average bitrate (tie-broken toward M4A for ExoPlayer support),
- * or null if no stream reports a bitrate (caller falls back to the max pick). Comparing raw bitrates is
- * unit-agnostic — "lowest is lowest" whether NewPipe reports kbps or bps.
+ * Data-saver pick: the lowest stream that is still *worth playing* — at least [DATA_SAVER_MIN_FRACTION]
+ * of the best one on offer — rather than the absolute floor, which on YouTube is a ~50 kbps stream that
+ * sounds broken. Expressed as a fraction of the best because NewPipe's bitrate unit varies by source, so
+ * any absolute threshold would be meaningless for one of them. Null when nothing reports a bitrate.
  */
-private fun List<AudioStream>.lowestAudioOrNull(): AudioStream? =
-    filter { it.averageBitrate > 0 }
+private fun List<AudioStream>.lowestAdequateOrNull(): AudioStream? {
+    val known = filter { it.averageBitrate > 0 }
+    if (known.isEmpty()) return null
+    val ceiling = known.maxOf { it.effectiveBitrate() }
+    val adequate = known.filter { it.effectiveBitrate() >= ceiling * DATA_SAVER_MIN_FRACTION }
+    return adequate.ifEmpty { known }
         .minWithOrNull(compareBy({ it.averageBitrate }, { if (it.format == MediaFormat.M4A) 0 else 1 }))
+}
+
+/** Data saver won't go below this share of the best available quality. */
+private const val DATA_SAVER_MIN_FRACTION = 0.35

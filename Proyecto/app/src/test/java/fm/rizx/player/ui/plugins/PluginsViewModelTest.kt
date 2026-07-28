@@ -11,6 +11,7 @@ import fm.rizx.player.domain.plugin.PluginRepository
 import fm.rizx.player.domain.plugin.RegistryPlugin
 import fm.rizx.player.domain.provider.EnabledProviderStore
 import fm.rizx.player.domain.provider.ProviderKind
+import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.domain.usecase.ProviderHealthProbe
@@ -54,6 +55,8 @@ class PluginsViewModelTest {
         override suspend fun setActiveMetadataProviderId(id: String?) {}
         override val activeStreamingProviderId: Flow<String?> = flowOf(null)
         override suspend fun setActiveStreamingProviderId(id: String?) {}
+        override val activeLyricsProviderId: Flow<String?> = flowOf(null)
+        override suspend fun setActiveLyricsProviderId(id: String?) {}
         override val streamExpiryMs: Flow<Long> = flowOf(0L)
         override suspend fun setStreamExpiryMs(ms: Long) {}
         override val streamResolutionRetries: Flow<Int> = flowOf(0)
@@ -78,6 +81,10 @@ class PluginsViewModelTest {
         override suspend fun setSyncedLyricsMode(enabled: Boolean) {}
         override val audioCacheBytes: Flow<Long> = flowOf(0L)
         override suspend fun setAudioCacheBytes(bytes: Long) {}
+        override val recsRegionalConsent: Flow<Boolean?> = flowOf(null)
+        override suspend fun setRecsRegionalConsent(consented: Boolean) {}
+        override val radioAlgorithm: Flow<RadioMode> = flowOf(RadioMode.YOUTUBE)
+        override suspend fun setRadioAlgorithm(mode: RadioMode) {}
     }
 
     private class NoopPlugins : PluginRepository {

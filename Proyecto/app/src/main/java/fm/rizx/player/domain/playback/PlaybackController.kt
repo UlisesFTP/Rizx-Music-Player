@@ -33,9 +33,26 @@ interface PlaybackController {
 
     /**
      * Start a **radio** seeded from [track]: play it now as a 1-item `RADIO` queue; the playback service
-     * then auto-fills similar tracks so next keeps going (Spotify-style). Used for feed/search plays.
+     * then auto-fills similar tracks so next keeps going (Spotify-style). Used for feed plays.
      */
     fun playRadio(track: Track)
+
+    /**
+     * [playRadio], but refilled from the **YouTube Mix** — YT Music's own autoplay recommendations —
+     * instead of the metadata provider's artist radio. Used for search-originated plays. Defaults to
+     * [playRadio] so test fakes and simple implementations keep compiling unchanged.
+     */
+    fun playYoutubeRadio(track: Track) = playRadio(track)
+
+    /**
+     * Start a radio seeded from [track] using **whichever algorithm the user chose**
+     * (`SettingsRepository.radioAlgorithm`). This is what every "play one song" entry point should
+     * call — the Home feed, Search, the player's radio button — so the choice is honoured everywhere
+     * from one place instead of each caller hard-coding an engine.
+     *
+     * Defaults to [playRadio] so test fakes keep compiling unchanged.
+     */
+    fun playAutoRadio(track: Track) = playRadio(track)
 
     /** Resume playback (also restarts from 0 if the queue had ended). */
     fun play()

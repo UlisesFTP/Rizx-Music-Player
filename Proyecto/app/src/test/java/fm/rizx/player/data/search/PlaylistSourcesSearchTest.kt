@@ -60,6 +60,7 @@ class PlaylistSourcesSearchTest {
         }
         override fun streamInfo(videoUrl: String): StreamInfo = error("not used")
         override fun playlist(playlistUrl: String): YoutubePlaylistData = error("not used")
+        override fun mix(videoId: String, limit: Int): List<StreamInfoItem> = error("not used")
     }
 
     private fun search(yt: FakeYoutube) = DefaultPlaylistSourcesSearch(deezer, yt, io = Dispatchers.Unconfined)

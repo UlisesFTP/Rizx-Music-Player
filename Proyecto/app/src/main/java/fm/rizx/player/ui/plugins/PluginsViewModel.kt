@@ -3,6 +3,7 @@ package fm.rizx.player.ui.plugins
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.domain.plugin.PluginRepository
 import fm.rizx.player.domain.plugin.RegistryPlugin
 import fm.rizx.player.domain.provider.EnabledProviderStore
@@ -108,7 +109,7 @@ class PluginsViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { plugins.registry() }
                 .onSuccess { registryCache = it; _state.update { s -> s.copy(storeError = null) }; rebuildStore() }
-                .onFailure { e -> _state.update { s -> s.copy(storeError = e.message ?: "Couldn't load the plugin store") } }
+                .onFailure { e -> _state.update { s -> s.copy(storeError = e.toSafeMessage("Couldn't load the plugin store")) } }
         }
     }
 
@@ -119,7 +120,7 @@ class PluginsViewModel @Inject constructor(
         rebuildStore()
         viewModelScope.launch {
             runCatching { plugins.install(entry) }
-                .onFailure { e -> _state.update { it.copy(storeError = "Install failed: ${e.message}") } }
+                .onFailure { e -> _state.update { it.copy(storeError = e.toSafeMessage("Install failed. Please try again.")) } }
             installing.remove(id)
             snapshot()
             rebuildStore()
@@ -127,11 +128,20 @@ class PluginsViewModel @Inject constructor(
     }
 
     fun setPluginEnabled(id: String, enabled: Boolean) {
-        viewModelScope.launch { plugins.setEnabled(id, enabled); snapshot() }
+        viewModelScope.launch {
+            runCatching { plugins.setEnabled(id, enabled) }
+                .onFailure { e -> _state.update { it.copy(storeError = e.toSafeMessage("Couldn't update the plugin")) } }
+            snapshot()
+        }
     }
 
     fun uninstall(id: String) {
-        viewModelScope.launch { plugins.uninstall(id); snapshot(); rebuildStore() }
+        viewModelScope.launch {
+            runCatching { plugins.uninstall(id) }
+                .onFailure { e -> _state.update { it.copy(storeError = e.toSafeMessage("Couldn't remove the plugin")) } }
+            snapshot()
+            rebuildStore()
+        }
     }
 
     fun setActive(kind: ProviderKind, id: String) {
@@ -140,6 +150,9 @@ class PluginsViewModel @Inject constructor(
             when (kind) {
                 ProviderKind.METADATA -> settings.setActiveMetadataProviderId(id)
                 ProviderKind.STREAMING -> settings.setActiveStreamingProviderId(id)
+                // Lyrics is single-active too, and with several sources to choose between the pick has
+                // to survive a restart — otherwise it silently reverts to whichever registered first.
+                ProviderKind.LYRICS -> settings.setActiveLyricsProviderId(id)
                 else -> Unit
             }
             snapshot()

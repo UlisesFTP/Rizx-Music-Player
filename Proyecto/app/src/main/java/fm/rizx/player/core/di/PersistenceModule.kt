@@ -19,6 +19,8 @@ import fm.rizx.player.data.local.db.RecentlyPlayedDao
 import fm.rizx.player.data.local.db.RizxDatabase
 import fm.rizx.player.data.local.settings.EnabledProviderStoreImpl
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
+import fm.rizx.player.data.artwork.ArtworkCache
+import fm.rizx.player.data.local.store.HomeFeedStore
 import fm.rizx.player.data.local.store.LyricsStore
 import fm.rizx.player.data.repository.FavoritesRepositoryImpl
 import fm.rizx.player.data.repository.PlaylistRepositoryImpl
@@ -64,8 +66,13 @@ object PersistenceModule {
     /** Fills in covers an import didn't supply (notably Spotify, whose tracklist carries no images). */
     @Provides
     @Singleton
-    fun provideTrackArtworkEnricher(registry: ProviderRegistry): TrackArtworkEnricher =
-        TrackArtworkEnricher(registry)
+    fun provideTrackArtworkEnricher(
+        registry: ProviderRegistry,
+        @ApplicationContext context: Context,
+    ): TrackArtworkEnricher = TrackArtworkEnricher(
+        registry = registry,
+        cache = ArtworkCache(File(context.filesDir, "artwork_cache.json")),
+    )
 
     @Provides
     @Singleton
@@ -89,6 +96,15 @@ object PersistenceModule {
     @Singleton
     fun provideLyricsStore(@ApplicationContext context: Context): LyricsStore =
         LyricsStore(File(context.filesDir, "lyrics.json"))
+
+    /**
+     * The last Home the user saw, so the next launch renders instantly and refreshes behind the content
+     * instead of showing a spinner through ~70 network round-trips.
+     */
+    @Provides
+    @Singleton
+    fun provideHomeFeedStore(@ApplicationContext context: Context): HomeFeedStore =
+        HomeFeedStore(File(context.filesDir, "home_feed.json"))
 
     @Provides
     @Singleton

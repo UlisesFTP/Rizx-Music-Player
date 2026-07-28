@@ -33,6 +33,7 @@ import fm.rizx.player.R
 import fm.rizx.player.core.formatDuration
 import fm.rizx.player.domain.model.PlaybackQueue
 import fm.rizx.player.domain.model.QueueItem
+import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
@@ -155,7 +156,10 @@ private fun QueueRow(
                 Text("$position", style = mr(13, FontWeight.Medium), color = c.muted)
             }
         }
-        CoverArt(tintFor(item.track.source.id), initial = null, Modifier.size(44.dp))
+        CoverArt(
+            tintFor(item.track.source.id), initial = null, Modifier.size(44.dp),
+            imageUrl = item.track.artwork.coverUrl(),
+        )
         Column(Modifier.weight(1f)) {
             Text(
                 item.track.title,

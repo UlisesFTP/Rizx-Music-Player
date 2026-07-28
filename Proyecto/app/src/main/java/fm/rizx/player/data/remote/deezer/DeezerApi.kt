@@ -39,6 +39,10 @@ interface DeezerApi {
     @GET("artist/{id}/albums")
     suspend fun artistAlbums(@Path("id") id: String, @Query("limit") limit: Int): DeezerAlbumsResponse
 
+    /** Artists similar to {id} — feeds the personalized "Artists for you" Home row. */
+    @GET("artist/{id}/related")
+    suspend fun artistRelated(@Path("id") id: String, @Query("limit") limit: Int): DeezerArtistsWrapper
+
     /** Top tracks/albums/artists/playlists in one call (dashboard, Phase 19). */
     @GET("chart")
     suspend fun chart(): DeezerChartDto

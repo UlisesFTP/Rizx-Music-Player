@@ -34,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fm.rizx.player.R
+import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.ui.components.RizxToggle
 import fm.rizx.player.ui.components.clickableScale
@@ -67,13 +68,16 @@ fun PreferencesScreen(
     val hiRes by vm.hiRes.collectAsStateWithLifecycle()
     val audioOutputLabel by vm.audioOutputLabel.collectAsStateWithLifecycle()
     val dataSaver by vm.dataSaver.collectAsStateWithLifecycle()
+    val regionalRecs by vm.regionalRecs.collectAsStateWithLifecycle()
     val cacheSize by vm.cacheSize.collectAsStateWithLifecycle()
     val cacheLimit by vm.audioCacheLimitLabel.collectAsStateWithLifecycle()
 
     // Read once per composition; selecting a language recreates the activity, so this re-reads fresh.
     val currentLang = currentAppLanguage(context)
+    val radioAlgorithm by vm.radioAlgorithm.collectAsStateWithLifecycle()
     var languageDialogOpen by remember { mutableStateOf(false) }
     var themeDialogOpen by remember { mutableStateOf(false) }
+    var radioDialogOpen by remember { mutableStateOf(false) }
 
     // stringResource can't be called inside the non-composable buildString lambda, so resolve first.
     val hiresBest = stringResource(R.string.pref_hires_best)
@@ -124,6 +128,27 @@ fun PreferencesScreen(
             onClick = { languageDialogOpen = true },
         )
 
+        SectionLabel(stringResource(R.string.settings_recs_section))
+        // Which engine fills "next" after playing one song from the feed or from search. Both are real
+        // recommendation systems, they just read different things — YT Music reads the *song*, Deezer
+        // reads its *artist* — so it's a taste choice, not a quality one.
+        SettingRow(
+            title = stringResource(R.string.pref_radio_algorithm),
+            value = stringResource(radioAlgorithmLabel(radioAlgorithm)),
+            caption = stringResource(radioAlgorithmCaption(radioAlgorithm)),
+            onClick = { radioDialogOpen = true },
+        )
+        ToggleRowDetail(
+            title = stringResource(R.string.settings_regional_recs),
+            caption = when (regionalRecs) {
+                true -> vm.regionCountry?.let { stringResource(R.string.settings_regional_recs_on, it) }
+                    ?: stringResource(R.string.settings_regional_recs_off)
+                false -> stringResource(R.string.settings_regional_recs_off)
+                null -> stringResource(R.string.settings_regional_recs_unset)
+            },
+            checked = regionalRecs == true,
+        ) { vm.setRegionalRecs(regionalRecs != true) }
+
         SectionLabel(stringResource(R.string.settings_data_storage))
         ToggleRow(stringResource(R.string.pref_data_saver), dataSaver) { vm.setDataSaver(!dataSaver) }
         // Tapping cycles the limit rather than opening a dialog: four values, and this row already sits
@@ -157,6 +182,76 @@ fun PreferencesScreen(
             onSelect = { mode -> onSetThemeMode(mode); themeDialogOpen = false },
             onDismiss = { themeDialogOpen = false },
         )
+    }
+    if (radioDialogOpen) {
+        RadioAlgorithmDialog(
+            current = radioAlgorithm,
+            onSelect = { mode -> vm.setRadioAlgorithm(mode); radioDialogOpen = false },
+            onDismiss = { radioDialogOpen = false },
+        )
+    }
+}
+
+/** The @StringRes name of a [RadioMode], as the user thinks of it — by the service, not the mechanism. */
+private fun radioAlgorithmLabel(mode: RadioMode): Int = when (mode) {
+    RadioMode.YOUTUBE -> R.string.radio_algorithm_youtube
+    RadioMode.ARTIST -> R.string.radio_algorithm_deezer
+}
+
+/** One line on what each engine actually does, so the choice isn't two opaque brand names. */
+private fun radioAlgorithmCaption(mode: RadioMode): Int = when (mode) {
+    RadioMode.YOUTUBE -> R.string.radio_algorithm_youtube_caption
+    RadioMode.ARTIST -> R.string.radio_algorithm_deezer_caption
+}
+
+/**
+ * Picks what plays next after one song. Same brutalist picker as [ThemeDialog], but each option
+ * carries its caption — the difference between the two engines is the whole point of the choice.
+ */
+@Composable
+private fun RadioAlgorithmDialog(
+    current: RadioMode,
+    onSelect: (RadioMode) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = RizxTheme.colors
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(c.elev)
+                .border(1.5.dp, c.hardLine)
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                stringResource(R.string.pref_radio_algorithm),
+                style = sg(20, FontWeight.Bold, -0.01f),
+                color = c.text,
+                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp),
+            )
+            RadioMode.entries.forEach { mode ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = { onSelect(mode) })
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(radioAlgorithmLabel(mode)), style = mr(15, FontWeight.SemiBold), color = c.text)
+                        Text(
+                            stringResource(radioAlgorithmCaption(mode)),
+                            style = mr(12, FontWeight.Normal),
+                            color = c.muted,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                    if (mode == current) {
+                        Icon(RizxIcons.Check, "Selected", tint = c.redAccent, modifier = Modifier.padding(start = 12.dp).size(20.dp))
+                    }
+                }
+            }
+        }
     }
 }
 

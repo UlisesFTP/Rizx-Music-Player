@@ -21,4 +21,13 @@ interface StreamingProvider : ProviderDescriptor {
 
     /** Phase 2 — resolve [candidate] to a concrete, ephemeral [Stream] URL. */
     suspend fun getStreamUrl(candidate: StreamCandidate): Stream
+
+    /**
+     * [getStreamUrl] for a stream that will be **written to a file** rather than played once.
+     *
+     * A provider may legitimately want a different pick here: the best-sounding codec isn't always the
+     * one a download can carry tags in. Defaults to [getStreamUrl], so providers with nothing to choose
+     * between are unaffected.
+     */
+    suspend fun getDownloadStreamUrl(candidate: StreamCandidate): Stream = getStreamUrl(candidate)
 }

@@ -94,6 +94,10 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     val playbackState by playbackViewModel.state.collectAsStateWithLifecycle()
     val currentItem by playbackViewModel.currentItem.collectAsStateWithLifecycle()
     val isFavorite by playbackViewModel.currentIsFavorite.collectAsStateWithLifecycle()
+    // The player's cover and its artist link both need a resolution step for tracks that came from
+    // YouTube, so they're state rather than a straight read off the current track.
+    val npArtworkUrl by playbackViewModel.currentArtworkUrl.collectAsStateWithLifecycle()
+    val npArtistRef by playbackViewModel.currentArtistRef.collectAsStateWithLifecycle()
     // Held as a State (not read here) so the ~25fps spectrum only invalidates the waveform's draw.
     val levelsState = playbackViewModel.levels.collectAsStateWithLifecycle()
     // Library (favorites + playlists) shared for the app-wide "add to playlist" picker.
@@ -154,7 +158,9 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
             composable(Routes.SEARCH) {
                 SearchScreen(
                     onOpenQueue = { nav.navigate(Routes.QUEUE) },
-                    onPlay = { playbackViewModel.playRadio(it) },
+                    // Which engine keeps "next" going is the user's choice (Settings → Recommendations);
+                    // the controller reads it, so search and the feed always agree.
+                    onPlay = { playbackViewModel.playAutoRadio(it) },
                     onAddToQueue = queueViewModel::addToQueue,
                     onAddNext = queueViewModel::addNext,
                     onOpenAlbum = { nav.navigate(Routes.albumDetail(it)) },
@@ -264,7 +270,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                 NowPlayingScreen(
                     title = np?.track?.title ?: stringResource(fm.rizx.player.R.string.now_playing_empty),
                     artist = np?.track?.artists?.joinToString { it.name }?.ifEmpty { "—" } ?: "—",
-                    artworkUrl = np?.track?.artwork?.coverUrl(),
+                    artworkUrl = npArtworkUrl,
                     isPlaying = playbackState.isPlaying,
                     progress = npProgress,
                     durationSec = (npDurationMs / 1000L).toInt(),
@@ -280,10 +286,11 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     // Nearby devices: hand off to Android's own output switcher (no cast SDK). Radio:
                     // reuse the existing artist-radio the controller already knows how to fill.
                     onOpenDevices = { context.openAudioOutputSwitcher() },
-                    onStartRadio = { np?.track?.let { playbackViewModel.playRadio(it) } },
-                    // Only the artists a metadata provider actually identified can be opened — a
-                    // YouTube-sourced track credits an uploader name with no ref behind it.
-                    onOpenArtist = np?.track?.artists?.firstOrNull()?.source?.let { ref ->
+                    onStartRadio = { np?.track?.let { playbackViewModel.playAutoRadio(it) } },
+                    // Resolved ahead of the tap: a Deezer song knows its own artist, a YouTube-Mix song
+                    // credits only an uploader name and gets looked up on Deezer by that name. No
+                    // equivalent found → null → the name simply isn't tappable.
+                    onOpenArtist = npArtistRef?.let { ref ->
                         { nav.navigate(Routes.artistDetail(ref)) }
                     },
                     album = np?.track?.album?.title ?: "",
@@ -425,7 +432,8 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                         onClick = { nav.navigate(Routes.NOW_PLAYING) },
                         onPlayPause = playbackViewModel::toggle,
                         onLike = playbackViewModel::toggleCurrentFavorite,
-                        artworkUrl = mini?.track?.artwork?.coverUrl(),
+                        // Same resolved cover as the full player, so opening it doesn't swap the image.
+                        artworkUrl = npArtworkUrl ?: mini?.track?.artwork?.coverUrl(),
                         progress = miniProgress,
                         loading = playbackState.isLoading,
                         liked = isFavorite,

@@ -1,5 +1,6 @@
 package fm.rizx.player.domain.repository
 
+import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 
@@ -20,6 +21,10 @@ interface SettingsRepository {
 
     val activeStreamingProviderId: Flow<String?>
     suspend fun setActiveStreamingProviderId(id: String?)
+
+    /** Which lyrics source leads the chain. Persisted like the others so a pick survives a restart. */
+    val activeLyricsProviderId: Flow<String?>
+    suspend fun setActiveLyricsProviderId(id: String?)
 
     val streamExpiryMs: Flow<Long>
     suspend fun setStreamExpiryMs(ms: Long)
@@ -90,4 +95,21 @@ interface SettingsRepository {
      */
     val audioCacheBytes: Flow<Long>
     suspend fun setAudioCacheBytes(bytes: Long)
+
+    /**
+     * Regional-recommendations consent: `null` = never asked (the For-you consent card shows),
+     * `true` = use the device country (SIM/locale — no location) for regional charts, `false` =
+     * declined, global variants only. The country itself is resolved on demand and never stored.
+     */
+    val recsRegionalConsent: Flow<Boolean?>
+    suspend fun setRecsRegionalConsent(consented: Boolean)
+
+    /**
+     * Which engine keeps a single-track play going when you hit next: [RadioMode.YOUTUBE] follows YT
+     * Music's own autoplay for that song, [RadioMode.ARTIST] follows the metadata provider's artist
+     * radio (Deezer). Applies to anything started from one song — the Home feed, Search, and the
+     * player's own radio button.
+     */
+    val radioAlgorithm: Flow<RadioMode>
+    suspend fun setRadioAlgorithm(mode: RadioMode)
 }

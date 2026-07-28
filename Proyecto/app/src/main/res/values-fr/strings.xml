@@ -20,8 +20,8 @@
     <string name="pref_gapless">Lecture sans interruption</string>
     <string name="pref_normalize">Normaliser le volume</string>
     <string name="pref_hires">Sortie Hi-Res</string>
-    <string name="pref_hires_best">Idéal avec des fichiers locaux sans perte</string>
-    <string name="pref_hires_applies">s\'applique à la prochaine lecture</string>
+    <string name="pref_hires_best">Diffuse le meilleur codec disponible et garde le sans perte local en pleine résolution</string>
+    <string name="pref_hires_applies">l\'égaliseur et la normalisation s\'appliquent après le lecteur et réduisent la dynamique</string>
     <string name="pref_theme">Thème</string>
     <string name="theme_system">Système</string>
     <string name="theme_dark">Sombre</string>

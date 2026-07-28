@@ -1,6 +1,7 @@
 package fm.rizx.player.data.lyrics
 
 import fm.rizx.player.domain.model.LyricLine
+import fm.rizx.player.domain.model.LyricWord
 
 /**
  * Parses the LRC format — `[mm:ss.xx] text` — into timed [LyricLine]s.
@@ -26,6 +27,12 @@ object LrcParser {
     private val OFFSET_TAG = Regex("""\[offset:\s*([+-]?\d+)\s*]""", RegexOption.IGNORE_CASE)
     private val METADATA_TAG = Regex("""^\[[a-zA-Z#]+:[^]]*]$""")
 
+    /** The enhanced-LRC (A2) per-word stamp: `<mm:ss.xx>` sitting inline among the words. */
+    private val WORD_STAMP = Regex("""<(\d{1,3}):([0-5]?\d)(?:[.:](\d{1,3}))?>""")
+
+    /** Gives the last word of a line an end when the format doesn't say where it stops. */
+    private const val TRAILING_WORD_MS = 500L
+
     /**
      * Parses [raw] into lines sorted by time. Returns empty when [raw] carries no timestamps at all —
      * that is the caller's signal that the text is prose, not a synced lyric.
@@ -44,16 +51,51 @@ object LrcParser {
 
             // The text is whatever follows the last leading timestamp — so a bracketed aside inside the
             // words (e.g. "[laughs]") can't be mistaken for a stamp and truncate the line.
-            val text = line.substring(stamps.last().range.last + 1).trim()
+            val body = line.substring(stamps.last().range.last + 1).trim()
+            // Enhanced LRC (A2) hides a stamp before every word. Read them as karaoke timings; either
+            // way they must leave the visible text, or "<00:12.34>" would be drawn as if it were lyrics.
+            val words = wordsOf(body, offsetMs)
+            val text = if (words.isEmpty()) WORD_STAMP.replace(body, "").trim() else body.wordsText()
             for (stamp in stamps) {
                 val at = timeOf(stamp) ?: continue
                 // A negative offset can push the first lines before zero; clamp so seeking stays valid.
-                lines += LyricLine(timeMs = (at + offsetMs).coerceAtLeast(0L), text = text)
+                lines += LyricLine(
+                    timeMs = (at + offsetMs).coerceAtLeast(0L),
+                    text = text,
+                    // Word stamps are absolute, so they only belong to the stamp they were written under
+                    // — a repeated chorus line reuses the text but not the timings.
+                    words = if (stamps.size == 1) words else emptyList(),
+                )
             }
         }
         // Multi-timestamp choruses arrive out of order by construction.
         return lines.sortedBy(LyricLine::timeMs)
     }
+
+    /** The words of an enhanced-LRC body, or empty when it carries no inline stamps. */
+    private fun wordsOf(body: String, offsetMs: Long): List<LyricWord> {
+        val stamps = WORD_STAMP.findAll(body).toList()
+        if (stamps.isEmpty()) return emptyList()
+        val words = mutableListOf<LyricWord>()
+        for ((i, stamp) in stamps.withIndex()) {
+            val start = (timeOf(stamp) ?: continue) + offsetMs
+            val chunk = body.substring(
+                stamp.range.last + 1,
+                stamps.getOrNull(i + 1)?.range?.first ?: body.length,
+            )
+            if (chunk.isBlank()) continue
+            val next = stamps.getOrNull(i + 1)?.let { timeOf(it)?.plus(offsetMs) }
+            words += LyricWord(
+                startMs = start.coerceAtLeast(0L),
+                endMs = (next ?: (start + TRAILING_WORD_MS)).coerceAtLeast(0L),
+                text = chunk,
+            )
+        }
+        return words
+    }
+
+    /** The visible text of an enhanced-LRC body: every chunk, stamps removed, spacing intact. */
+    private fun String.wordsText(): String = WORD_STAMP.replace(this, "").trim()
 
     private fun timeOf(match: MatchResult): Long? {
         val (_, minutes, seconds, fraction) = match.groupValues
@@ -86,4 +128,21 @@ fun List<LyricLine>.activeIndexAt(positionMs: Long, offsetMs: Long = 0L): Int {
         if (this[i].timeMs + offsetMs <= positionMs) index = i else break
     }
     return index
+}
+
+/**
+ * How many of this line's words have been sung at [positionMs] — i.e. the length of the highlighted
+ * prefix, `0` before the first word and `words.size` once the line is done.
+ *
+ * A count rather than an index because that is what the UI actually needs: the split point between the
+ * sung part of the line and the rest. Lines without word timings always return 0, so the caller falls
+ * back to lighting the whole line.
+ */
+fun LyricLine.sungWordCountAt(positionMs: Long, offsetMs: Long = 0L): Int {
+    if (words.isEmpty()) return 0
+    var count = 0
+    for (word in words) {
+        if (word.startMs + offsetMs <= positionMs) count++ else break
+    }
+    return count
 }

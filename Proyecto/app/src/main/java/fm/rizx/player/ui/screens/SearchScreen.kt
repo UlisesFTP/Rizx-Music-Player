@@ -25,8 +25,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
@@ -36,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -95,6 +102,7 @@ fun SearchScreen(
     val uiState by vm.uiState.collectAsStateWithLifecycle()
     val favoriteSources by vm.favoriteSources.collectAsStateWithLifecycle()
     val tab by vm.tab.collectAsStateWithLifecycle()
+    val suggestions by vm.suggestions.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -110,7 +118,28 @@ fun SearchScreen(
             if (queueCount > 0) QueueChip(count = queueCount, onClick = onOpenQueue)
         }
 
-        SearchField(query = query, onQueryChange = vm::onQueryChange, onClear = vm::clear)
+        // The suggestions hang *over* the tabs rather than pushing them down: a hint shouldn't move the
+        // page under the user's thumb while they type.
+        var fieldHeightPx by remember { mutableIntStateOf(0) }
+        // zIndex belongs on this Box, not on the list inside it: it orders siblings *within the Column*,
+        // which is what lifts the suggestions over the tab chips that follow.
+        Box(Modifier.zIndex(1f)) {
+            Box(Modifier.onSizeChanged { fieldHeightPx = it.height }) {
+                SearchField(
+                    query = query,
+                    onQueryChange = vm::onQueryChange,
+                    onClear = vm::clear,
+                    onSubmit = vm::dismissSuggestions,
+                )
+            }
+            // Offset by the measured field rather than aligned to it: the list is taller than the field,
+            // so any bottom-alignment would grow upwards and swallow the box being typed into.
+            SuggestionList(
+                suggestions = suggestions,
+                onPick = vm::applySuggestion,
+                modifier = Modifier.offset { IntOffset(0, fieldHeightPx) },
+            )
+        }
 
         // Source tabs: the normal catalog, or straight from YouTube + SoundCloud (remixes, edits, indies).
         Row(
@@ -175,7 +204,13 @@ private fun QueueChip(count: Int, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClear: () -> Unit) {
+private fun SearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClear: () -> Unit,
+    onSubmit: () -> Unit,
+) {
+    val keyboard = LocalSoftwareKeyboardController.current
     val c = RizxTheme.colors
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
@@ -201,6 +236,8 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClear:
             cursorBrush = SolidColor(c.redAccent),
             interactionSource = interaction,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            // The field asked for a Search key but never did anything with it.
+            keyboardActions = KeyboardActions(onSearch = { onSubmit(); keyboard?.hide() }),
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) {
@@ -217,6 +254,46 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClear:
                 tint = c.text2,
                 modifier = Modifier.size(20.dp).clickableScale(scale = 0.9f, onClick = onClear),
             )
+        }
+    }
+}
+
+/**
+ * Autocomplete under the field: at most a handful of one-line rows, drawn over whatever follows.
+ *
+ * Deliberately small. A suggestion is a shortcut for finishing a word, not a destination — taking the
+ * whole screen for it (as most apps do) hides the results the user may already be looking at, and turns
+ * every keystroke into a full-page repaint.
+ */
+@Composable
+private fun SuggestionList(suggestions: List<String>, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
+    if (suggestions.isEmpty()) return
+    val c = RizxTheme.colors
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(c.elev)
+            .border(1.dp, c.hardLine, RectangleShape),
+    ) {
+        suggestions.forEach { suggestion ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickableScale(scale = 0.99f, onClick = { onPick(suggestion) })
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(11.dp),
+            ) {
+                Icon(RizxIcons.Search, null, tint = c.muted, modifier = Modifier.size(15.dp))
+                Text(
+                    suggestion,
+                    style = mr(13, FontWeight.Medium),
+                    color = c.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }

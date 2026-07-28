@@ -1,0 +1,29 @@
+<resources>
+    <!-- Home: filas personalizadas de "Para ti" -->
+    <string name="home_mix_of">Mix · %1$s</string>
+    <string name="home_because_you_like">Porque te gusta %1$s</string>
+    <string name="home_artists_for_you">Artistas para ti</string>
+    <string name="home_albums_for_you">Álbumes para ti</string>
+    <string name="home_playlists_for_you">Playlists para ti</string>
+
+    <!-- Home: tarjeta de consentimiento regional (solo en la app — sin permiso del sistema, sin ubicación) -->
+    <string name="home_region_consent_title">¿Recomendaciones de tu región?</string>
+    <string name="home_region_consent_body">Detectamos %1$s (por tu SIM o el idioma del dispositivo). Solo se usa para elegir charts regionales — nunca ubicación, nunca rastreo.</string>
+    <string name="home_region_consent_body_unknown">Usar tu país (por tu SIM o el idioma del dispositivo) para elegir charts regionales — nunca ubicación, nunca rastreo.</string>
+    <string name="home_region_consent_accept">Usar región</string>
+    <string name="home_region_consent_decline">Ahora no</string>
+
+    <!-- Ajustes: sección de recomendaciones -->
+    <string name="settings_recs_section">Recomendaciones</string>
+    <string name="settings_regional_recs">Recomendaciones regionales</string>
+    <string name="settings_regional_recs_on">País: %1$s</string>
+    <string name="settings_regional_recs_off">Desactivadas — solo charts globales</string>
+    <string name="settings_regional_recs_unset">Aún sin decidir</string>
+
+    <!-- Ajustes: qué motor rellena "siguiente" tras reproducir una sola canción -->
+    <string name="pref_radio_algorithm">Algoritmo de A continuación</string>
+    <string name="radio_algorithm_youtube">YouTube Music</string>
+    <string name="radio_algorithm_youtube_caption">Sigue la canción, como la reproducción automática de YT Music</string>
+    <string name="radio_algorithm_deezer">Deezer</string>
+    <string name="radio_algorithm_deezer_caption">Sigue al artista, con sus temas similares</string>
+</resources>

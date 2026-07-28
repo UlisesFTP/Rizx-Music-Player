@@ -1,5 +1,6 @@
 package fm.rizx.player.data.repository
 
+import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.data.download.AudioTagWriter
 import fm.rizx.player.data.download.DownloadNotifier
 import fm.rizx.player.data.download.MediaStoreExporter
@@ -134,7 +135,7 @@ class DownloadRepositoryImpl(
                 throw e
             } catch (e: Exception) {
                 // A failed download must never take the app or the rest of the batch down with it.
-                setTransient(key, DownloadState(DownloadStatus.FAILED, error = e.message ?: "Download failed"))
+                setTransient(key, DownloadState(DownloadStatus.FAILED, error = e.toSafeMessage("Download failed")))
             } finally {
                 jobs.remove(key)
                 if (jobs.isEmpty()) notifier.stop()
@@ -256,7 +257,9 @@ class DownloadRepositoryImpl(
             is CandidateResult.Failure -> return null
         }
         for (candidate in candidates.filterNot { it.failed }) {
-            resolver.resolveStreamForCandidate(candidate).stream?.let { return it }
+            // forDownload: ask for a container the tag writer can actually write into (see
+            // StreamingProvider.getDownloadStreamUrl) — an untagged file is worse than a better codec.
+            resolver.resolveStreamForCandidate(candidate, forDownload = true).stream?.let { return it }
         }
         return null
     }

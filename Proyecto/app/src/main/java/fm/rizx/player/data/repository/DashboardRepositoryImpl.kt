@@ -9,9 +9,12 @@ import fm.rizx.player.domain.provider.ProviderKind
 import fm.rizx.player.domain.provider.ProviderRegistry
 import fm.rizx.player.domain.repository.DashboardRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 
 /**
  * Fans out over the **enabled** registered dashboard providers to assemble the [HomeFeed] (Phase 19;
@@ -23,9 +26,15 @@ class DashboardRepositoryImpl(
     private val registry: ProviderRegistry,
     private val enabled: EnabledProviderStore,
     private val limit: Int = DEFAULT_LIMIT,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : DashboardRepository {
 
-    override suspend fun homeFeed(): HomeFeed = coroutineScope {
+    /**
+     * On [io], not the caller's thread. `coroutineScope` alone inherits whatever the ViewModel is on —
+     * the main thread — so the DataStore read, the DTO→domain mapping of every chart and each
+     * provider's own work all ran there, janking the very frames the loading indicator needed.
+     */
+    override suspend fun homeFeed(): HomeFeed = withContext(io) {
         val all = registry.list(ProviderKind.DASHBOARD).filterIsInstance<DashboardProvider>()
         val enabledMap = enabled.snapshot(all.map { it.id })
         val providers = all.filter { enabledMap[it.id] != false } // absent/true = enabled

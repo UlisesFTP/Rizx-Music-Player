@@ -4,12 +4,15 @@ import fm.rizx.player.data.local.store.LyricsStore
 import fm.rizx.player.data.provider.DefaultProviderRegistry
 import fm.rizx.player.domain.model.LyricLine
 import fm.rizx.player.domain.model.Lyrics
+import fm.rizx.player.domain.model.LyricWord
 import fm.rizx.player.domain.model.LyricsCandidate
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.LyricsProvider
 import fm.rizx.player.domain.provider.ProviderKind
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -20,6 +23,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.IOException
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class LyricsRepositoryTest {
 
     @get:Rule val temp = TemporaryFolder()
@@ -29,6 +33,8 @@ class LyricsRepositoryTest {
         private val result: Lyrics?,
         private val error: Exception? = null,
         private val results: List<LyricsCandidate> = emptyList(),
+        /** Stands in for a provider that is up but not answering. */
+        private val delayMs: Long = 0L,
     ) : LyricsProvider {
         override val kind = ProviderKind.LYRICS
         override val name = id
@@ -37,11 +43,15 @@ class LyricsRepositoryTest {
 
         override suspend fun getLyrics(track: Track): Lyrics? {
             calls++
+            if (delayMs > 0) delay(delayMs)
             error?.let { throw it }
             return result
         }
 
-        override suspend fun searchLyrics(query: String): List<LyricsCandidate> = results
+        override suspend fun searchLyrics(query: String): List<LyricsCandidate> {
+            if (delayMs > 0) delay(delayMs)
+            return results
+        }
     }
 
     private fun track(id: String = "1") = Track(title = "Yellow", source = ProviderRef("itunes", id))
@@ -49,6 +59,11 @@ class LyricsRepositoryTest {
     private fun store(): LyricsStore = LyricsStore(File(temp.newFolder(), "lyrics.json"))
 
     private fun synced(text: String) = Lyrics(lines = listOf(LyricLine(0L, text)), sourceName = "fake")
+
+    private fun wordSynced(text: String) = Lyrics(
+        lines = listOf(LyricLine(0L, text, words = listOf(LyricWord(0L, 500L, text)))),
+        sourceName = "fake",
+    )
 
     @Test
     fun `dispatches to the active lyrics provider`() = runBlocking {
@@ -108,6 +123,71 @@ class LyricsRepositoryTest {
         assertThrows(IOException::class.java) {
             runBlocking { LyricsRepositoryImpl(registry).lyricsFor(track()) }
         }
+    }
+
+    @Test
+    fun `a hung provider does not hold up the one that has the song`() = runTest {
+        // The whole point of racing the chain: 'stuck' is registered first, so the old sequential walk
+        // would have burned its timeout before 'ovh' was even asked.
+        val stuck = FakeLyrics("stuck", synced("never arrives"), delayMs = 60_000)
+        val fallback = FakeLyrics("ovh", synced("here it is"))
+        val registry = DefaultProviderRegistry().apply { register(stuck); register(fallback) }
+
+        val result = LyricsRepositoryImpl(registry, providerTimeoutMs = 5_000).lyricsFor(track())
+
+        assertEquals("here it is", result?.lyrics?.lines?.first()?.text)
+    }
+
+    @Test
+    fun `a word-timed hit ends the race without waiting for the slow providers`() = runTest {
+        val slow = FakeLyrics("slow", synced("late"), delayMs = 4_000)
+        val karaoke = FakeLyrics("karaoke", wordSynced("bright"))
+        val registry = DefaultProviderRegistry().apply { register(slow); register(karaoke) }
+
+        val result = LyricsRepositoryImpl(registry, providerTimeoutMs = 10_000).lyricsFor(track())
+
+        assertEquals("bright", result?.lyrics?.lines?.first()?.text)
+        // Virtual time barely moved: the slow provider was cancelled, not awaited.
+        assertTrue(
+            "waited ${testScheduler.currentTime}ms for a result that had already arrived",
+            testScheduler.currentTime < 1_000,
+        )
+    }
+
+    @Test
+    fun `every provider timing out reads as no lyrics, not as an error`() = runTest {
+        val registry = DefaultProviderRegistry().apply {
+            register(FakeLyrics("a", synced("x"), delayMs = 60_000))
+            register(FakeLyrics("b", synced("y"), delayMs = 60_000))
+        }
+
+        assertNull(LyricsRepositoryImpl(registry, providerTimeoutMs = 1_000).lyricsFor(track()))
+    }
+
+    @Test
+    fun `a timed-out chain is not cached, so the next play tries again`() = runTest {
+        val stuck = FakeLyrics("stuck", synced("slow"), delayMs = 60_000)
+        val fallback = FakeLyrics("ovh", Lyrics(plain = "prose", sourceName = "ovh"))
+        val registry = DefaultProviderRegistry().apply { register(stuck); register(fallback) }
+        val repo = LyricsRepositoryImpl(registry, store(), providerTimeoutMs = 1_000)
+
+        repo.lyricsFor(track())
+        repo.lyricsFor(track())
+
+        assertEquals(2, fallback.calls)
+    }
+
+    @Test
+    fun `search skips a provider that never answers`() = runTest {
+        val candidate = LyricsCandidate(id = "1", title = "Yellow", artist = "Coldplay", lyrics = synced("hit"))
+        val registry = DefaultProviderRegistry().apply {
+            register(FakeLyrics("stuck", null, results = listOf(candidate), delayMs = 60_000))
+            register(FakeLyrics("ovh", null, results = listOf(candidate)))
+        }
+
+        val results = LyricsRepositoryImpl(registry, providerTimeoutMs = 2_000).search("yellow")
+
+        assertEquals(1, results.size)
     }
 
     @Test

@@ -14,6 +14,13 @@ enum class RepeatMode { OFF, ONE, ALL }
 enum class QueueSourceKind { MANUAL, ALBUM, ARTIST, PLAYLIST, LIKED, RECENTS, DOWNLOADS, LOCAL, RADIO }
 
 /**
+ * Which engine refills a [QueueSourceKind.RADIO] queue: [ARTIST] is the active metadata provider's
+ * artist-radio (Deezer); [YOUTUBE] is the YouTube Mix seeded from the current track — YT Music's own
+ * autoplay recommendations, used for search-originated plays.
+ */
+enum class RadioMode { ARTIST, YOUTUBE }
+
+/**
  * The origin of the current queue. [label] is a human name for the source (album/playlist/artist name,
  * or "Radio · <artist>"); [radioSeed] is the artist (or track) [ProviderRef] used to fetch more similar
  * tracks while [kind] is [QueueSourceKind.RADIO]. Set by `QueueRepository.setQueue`; a plain
@@ -23,6 +30,7 @@ data class QueueContext(
     val kind: QueueSourceKind = QueueSourceKind.MANUAL,
     val label: String = "",
     val radioSeed: ProviderRef? = null,
+    val radioMode: RadioMode = RadioMode.ARTIST,
 )
 
 /**

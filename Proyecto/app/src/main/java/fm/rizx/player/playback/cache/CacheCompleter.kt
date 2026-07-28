@@ -96,7 +96,7 @@ class CacheCompleter(
     }
 
     private fun worthCompleting(track: Track, liked: Boolean): Boolean {
-        val fraction = audioCache.cachedFraction(track.source.identityKey)
+        val fraction = audioCache.cachedFractionFor(track.source.identityKey)
         if (fraction <= 0f || fraction >= 1f) return false // never played, or already complete
         // A song abandoned after ten seconds isn't one the user "left half-finished" — finishing it would
         // spend a few megabytes on a track they actively skipped. Liked songs get the benefit of the doubt.
@@ -120,8 +120,9 @@ class CacheCompleter(
             val dataSpec = DataSpec.Builder()
                 .setUri(Uri.parse(stream.url))
                 // The identity key again — without it these bytes would land under a URL nothing will
-                // ever ask for again, and the song would still not be cached.
-                .setKey(track.source.identityKey)
+                // ever ask for again, and the song would still not be cached. Bucketed by format so this
+                // completes the copy it actually resolved, not a different codec's half-file.
+                .setKey(audioCacheKey(track.source.identityKey, stream.codec))
                 .setPosition(0)
                 .setLength(C.LENGTH_UNSET.toLong())
                 .build()
@@ -131,7 +132,7 @@ class CacheCompleter(
                 .setUpstreamDataSourceFactory(DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true))
                 .createDataSource()
             CacheWriter(source, dataSpec, null, null).cache()
-            log("finished “${track.title}” → ${(audioCache.cachedFraction(track.source.identityKey) * 100).toInt()}%")
+            log("finished “${track.title}” → ${(audioCache.cachedFractionFor(track.source.identityKey) * 100).toInt()}%")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -70,7 +70,8 @@ class DownloadRepositoryTest {
         val candidate = StreamCandidate(id = "c1", title = "Velvet Hours", source = ProviderRef("youtube", "c1"))
         return mockk<StreamingResolver> {
             coEvery { resolveCandidatesForTrack(any()) } returns CandidateResult.Success(listOf(candidate))
-            coEvery { resolveStreamForCandidate(candidate) } returns candidate.copy(stream = stream)
+            // forDownload = true: a download asks for a container it can write tags into.
+            coEvery { resolveStreamForCandidate(candidate, any()) } returns candidate.copy(stream = stream)
         }
     }
 

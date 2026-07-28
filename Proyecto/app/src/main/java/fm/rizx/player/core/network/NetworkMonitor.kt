@@ -7,8 +7,14 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Downstream estimates below this (kbps, but known) count as a weak signal → prefer a lower bitrate. */
-private const val BAD_SIGNAL_KBPS = 3_000
+/**
+ * Downstream estimates below this (kbps, but known) count as a weak signal → prefer a lower bitrate.
+ *
+ * Deliberately close to what the audio actually needs (~160 kbps). The old 3 Mbps threshold was 20× that
+ * and mislabelled ordinary Wi-Fi and LTE links as "weak", so the app quietly served its worst stream on
+ * connections that could carry the best one comfortably.
+ */
+private const val BAD_SIGNAL_KBPS = 600
 
 /**
  * A cheap, on-demand read of the active network's transport + estimated downstream bandwidth, used to

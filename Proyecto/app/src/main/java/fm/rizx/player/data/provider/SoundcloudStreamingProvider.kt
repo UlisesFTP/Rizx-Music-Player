@@ -54,10 +54,10 @@ class SoundcloudStreamingProvider(
             ?: throw AppError.ProviderFailure(name, "no audio stream for ${candidate.title}")
     }
 
-    /** Max quality by default; lower only on data saver + cellular, or a weak signal. */
+    /** Max quality by default; lower only when the user asked to save data (see the YouTube provider). */
     private suspend fun shouldPreferLow(): Boolean {
         val net = networkMonitor.snapshot()
-        return (settings.dataSaver.first() && net.isCellular) || net.isBadSignal
+        return settings.dataSaver.first() && (net.isCellular || net.isBadSignal)
     }
 
     private suspend fun <T> guarded(block: suspend () -> T): T = try {

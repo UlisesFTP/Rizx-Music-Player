@@ -3,7 +3,9 @@ package fm.rizx.player.ui.settings
 import app.cash.turbine.test
 import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.core.cache.CacheManager
+import fm.rizx.player.core.region.RegionResolver
 import fm.rizx.player.domain.playback.AudioEffectsController
+import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.playback.AudioOutputCapabilities
@@ -37,7 +39,7 @@ class PreferencesViewModelTest {
         every { describe() } returns "48 kHz output"
     }
 
-    private fun vm() = PreferencesViewModel(settings, effects, cache, audioOutput)
+    private fun vm() = PreferencesViewModel(settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }))
 
     @Test
     fun `toggling data saver persists and re-emits`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
@@ -97,6 +99,7 @@ class PreferencesViewModelTest {
         val crossfadeFlow = MutableStateFlow(false)
         val gaplessFlow = MutableStateFlow(true)
         val normalizeFlow = MutableStateFlow(false)
+        val radioAlgorithmFlow = MutableStateFlow(RadioMode.YOUTUBE)
 
         override val dataSaver = dataSaverFlow
         override suspend fun setDataSaver(enabled: Boolean) { dataSaverFlow.value = enabled }
@@ -125,6 +128,8 @@ class PreferencesViewModelTest {
         override suspend fun setActiveMetadataProviderId(id: String?) {}
         override val activeStreamingProviderId = flowOf<String?>(null)
         override suspend fun setActiveStreamingProviderId(id: String?) {}
+        override val activeLyricsProviderId = flowOf<String?>(null)
+        override suspend fun setActiveLyricsProviderId(id: String?) {}
         override val streamExpiryMs = flowOf(0L)
         override suspend fun setStreamExpiryMs(ms: Long) {}
         override val streamResolutionRetries = flowOf(0)
@@ -133,5 +138,9 @@ class PreferencesViewModelTest {
         override suspend fun setEqualizerEnabled(enabled: Boolean) {}
         override val equalizerBandLevels = flowOf(emptyList<Int>())
         override suspend fun setEqualizerBandLevels(levels: List<Int>) {}
+        override val recsRegionalConsent = flowOf<Boolean?>(null)
+        override suspend fun setRecsRegionalConsent(consented: Boolean) {}
+        override val radioAlgorithm = radioAlgorithmFlow
+        override suspend fun setRadioAlgorithm(mode: RadioMode) { radioAlgorithmFlow.value = mode }
     }
 }

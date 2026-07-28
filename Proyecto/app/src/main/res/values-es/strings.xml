@@ -20,8 +20,8 @@
     <string name="pref_gapless">Reproducción sin cortes</string>
     <string name="pref_normalize">Normalizar volumen</string>
     <string name="pref_hires">Salida Hi-Res</string>
-    <string name="pref_hires_best">Mejor con archivos locales sin pérdida</string>
-    <string name="pref_hires_applies">se aplica en la próxima reproducción</string>
+    <string name="pref_hires_best">Transmite el mejor códec disponible y mantiene el sin pérdida local a máxima profundidad</string>
+    <string name="pref_hires_applies">el ecualizador y la normalización se aplican después del reproductor y reducen el rango dinámico</string>
     <string name="pref_theme">Tema</string>
     <string name="theme_system">Sistema</string>
     <string name="theme_dark">Oscuro</string>

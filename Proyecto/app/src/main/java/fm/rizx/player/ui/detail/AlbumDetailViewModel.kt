@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.error.AppError
+import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.domain.model.Album
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.ProviderRef
@@ -66,7 +67,7 @@ class AlbumDetailViewModel @Inject constructor(
             } catch (e: AppError.Network) {
                 AlbumUiState.Offline
             } catch (e: Exception) {
-                AlbumUiState.Error(e.message ?: "Couldn't load album")
+                AlbumUiState.Error(e.toSafeMessage("Couldn't load album"))
             }
         }
     }

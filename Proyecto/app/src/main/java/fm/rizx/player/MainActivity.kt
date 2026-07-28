@@ -80,8 +80,11 @@ class MainActivity : ComponentActivity() {
 /**
  * How long the completed lockup holds before dissolving into the app. Deliberately short: the system
  * splash has already shown the mark for the whole cold start, so this stage only has to complete the logo.
+ *
+ * Cut from 750 ms: with the Home now rendering from its disk cache, this hold *was* the longest thing
+ * between launching the app and using it — an animation waiting on nothing.
  */
-private const val SPLASH_HOLD_MS = 750L
+private const val SPLASH_HOLD_MS = 250L
 
 /**
  * Asks for notifications once, on first launch.

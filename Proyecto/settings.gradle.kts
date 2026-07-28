@@ -29,3 +29,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Rizx"
 include(":app")
+// Generates the Baseline Profile consumed by :app. Never built by `assembleDebug` — it only runs on
+// demand (`:app:generateReleaseBaselineProfile`) against a rooted AOSP managed device.
+include(":baselineprofile")

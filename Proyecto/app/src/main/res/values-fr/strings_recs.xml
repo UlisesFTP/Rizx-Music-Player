@@ -1,0 +1,29 @@
+<resources>
+    <!-- Accueil : lignes personnalisées « Pour vous » -->
+    <string name="home_mix_of">Mix · %1$s</string>
+    <string name="home_because_you_like">Parce que vous aimez %1$s</string>
+    <string name="home_artists_for_you">Artistes pour vous</string>
+    <string name="home_albums_for_you">Albums pour vous</string>
+    <string name="home_playlists_for_you">Playlists pour vous</string>
+
+    <!-- Accueil : carte de consentement régional (dans l\'app uniquement — aucune permission système, aucune localisation) -->
+    <string name="home_region_consent_title">Des recommandations de votre région ?</string>
+    <string name="home_region_consent_body">Nous avons détecté %1$s (via votre SIM ou la langue de l\'appareil). Utilisé uniquement pour choisir les classements régionaux — jamais la localisation, jamais de pistage.</string>
+    <string name="home_region_consent_body_unknown">Utiliser votre pays (via la SIM ou la langue de l\'appareil) pour choisir les classements régionaux — jamais la localisation, jamais de pistage.</string>
+    <string name="home_region_consent_accept">Utiliser la région</string>
+    <string name="home_region_consent_decline">Pas maintenant</string>
+
+    <!-- Réglages : section recommandations -->
+    <string name="settings_recs_section">Recommandations</string>
+    <string name="settings_regional_recs">Recommandations régionales</string>
+    <string name="settings_regional_recs_on">Pays : %1$s</string>
+    <string name="settings_regional_recs_off">Désactivées — classements mondiaux uniquement</string>
+    <string name="settings_regional_recs_unset">Pas encore décidé</string>
+
+    <!-- Réglages : quel moteur alimente « à suivre » après la lecture d\'un seul titre -->
+    <string name="pref_radio_algorithm">Algorithme de À suivre</string>
+    <string name="radio_algorithm_youtube">YouTube Music</string>
+    <string name="radio_algorithm_youtube_caption">Suit le titre lui-même, comme la lecture auto de YT Music</string>
+    <string name="radio_algorithm_deezer">Deezer</string>
+    <string name="radio_algorithm_deezer_caption">Suit l\'artiste, avec ses morceaux similaires</string>
+</resources>

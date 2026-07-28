@@ -83,6 +83,22 @@ class AudioCache(
     }.getOrDefault(false)
 
     /**
+     * The fully-cached format bucket for this song, or null. Songs are keyed **per format** (see
+     * [audioCacheKey]), and any complete bucket plays offline — so switching Hi-Res on doesn't strand a
+     * song the user already has, it just prefers whichever copy is whole.
+     */
+    fun fullyCachedKeyFor(identityKey: String): String? = runCatching {
+        val prefix = identityKey + KEY_FORMAT_SEPARATOR
+        cache.keys.firstOrNull { it.startsWith(prefix) && isFullyCached(it) }
+    }.getOrNull()
+
+    /** The best-cached fraction across this song's format buckets, 0..1. */
+    fun cachedFractionFor(identityKey: String): Float = runCatching {
+        val prefix = identityKey + KEY_FORMAT_SEPARATOR
+        cache.keys.filter { it.startsWith(prefix) }.maxOfOrNull { cachedFraction(it) } ?: 0f
+    }.getOrDefault(0f)
+
+    /**
      * How much of [key] is on disk, 0..1. `0` also covers "never played" — the caller can't tell those
      * apart, and shouldn't: a song with no bytes cached is not one the user left half-finished.
      */
@@ -112,3 +128,17 @@ class AudioCache(
         const val DIRECTORY = "audio-cache"
     }
 }
+
+/** Separates a song's identity from the format its bytes are in. Never appears in a `ProviderRef` key. */
+internal const val KEY_FORMAT_SEPARATOR = "#"
+
+/**
+ * The byte-cache key for one song **in one format**.
+ *
+ * Content identity alone is not enough. The same song is fetched as AAC or as Opus depending on the
+ * Hi-Res setting, and under a single key Media3 would happily serve the first half from the cached AAC
+ * file and fetch the second half from the Opus one — a decoder error or noise mid-song, not a cache
+ * miss. Bucketing by format makes every key hold exactly one resource.
+ */
+fun audioCacheKey(identityKey: String, codec: String?): String =
+    identityKey + KEY_FORMAT_SEPARATOR + (codec?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: "raw")

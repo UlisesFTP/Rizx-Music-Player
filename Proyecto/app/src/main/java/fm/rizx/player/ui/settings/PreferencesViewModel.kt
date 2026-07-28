@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.cache.CacheManager
+import fm.rizx.player.core.region.RegionResolver
+import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl.Companion.DEFAULT_AUDIO_CACHE_BYTES
+import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.playback.AudioEffectsController
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.playback.AudioOutputCapabilities
@@ -30,7 +33,20 @@ class PreferencesViewModel @Inject constructor(
     private val audioEffects: AudioEffectsController,
     private val cache: CacheManager,
     private val audioOutput: AudioOutputCapabilities,
+    private val region: RegionResolver,
 ) : ViewModel() {
+
+    /** Regional-recommendations consent: null = never asked, true = on, false = declined. */
+    val regionalRecs: StateFlow<Boolean?> = settings.recsRegionalConsent.asState(null)
+
+    /** Which engine keeps "next" going after a song played from the feed or from search. */
+    val radioAlgorithm: StateFlow<RadioMode> =
+        settings.radioAlgorithm.asState(SettingsRepositoryImpl.DEFAULT_RADIO_ALGORITHM)
+
+    fun setRadioAlgorithm(mode: RadioMode) { viewModelScope.launch { settings.setRadioAlgorithm(mode) } }
+
+    /** The detected country's display name (SIM/locale — no permission), for the row caption. */
+    val regionCountry: String? get() = runCatching { region.countryDisplayName() }.getOrNull()
 
     val dataSaver: StateFlow<Boolean> = settings.dataSaver.asState(false)
     val crossfade: StateFlow<Boolean> = settings.crossfade.asState(false)
@@ -48,6 +64,9 @@ class PreferencesViewModel @Inject constructor(
     /** The offline-cache ceiling, as a label ("512 MB"). */
     val audioCacheLimitLabel: StateFlow<String> =
         settings.audioCacheBytes.map(::cacheLimitLabel).asState(cacheLimitLabel(DEFAULT_AUDIO_CACHE_BYTES))
+
+    /** The same consent the For-you card asks for — this row can grant or revoke it any time. */
+    fun setRegionalRecs(enabled: Boolean) { viewModelScope.launch { settings.setRecsRegionalConsent(enabled) } }
 
     fun setDataSaver(enabled: Boolean) { viewModelScope.launch { settings.setDataSaver(enabled) } }
     fun setCrossfade(enabled: Boolean) { viewModelScope.launch { settings.setCrossfade(enabled) } }

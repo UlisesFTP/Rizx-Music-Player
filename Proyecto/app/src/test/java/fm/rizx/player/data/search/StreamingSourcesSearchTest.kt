@@ -41,6 +41,7 @@ class StreamingSourcesSearchTest {
         override fun searchPlaylists(query: String, limit: Int): List<org.schabi.newpipe.extractor.playlist.PlaylistInfoItem> = error("not used")
         override fun streamInfo(videoUrl: String): StreamInfo = error("not used")
         override fun playlist(playlistUrl: String) = error("not used")
+        override fun mix(videoId: String, limit: Int): List<StreamInfoItem> = error("not used")
     }
 
     private class FakeSoundcloud(

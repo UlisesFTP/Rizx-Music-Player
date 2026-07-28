@@ -25,6 +25,7 @@
     <string name="lyrics_search_no_results">Nada encontrado. Tente apenas o título da música.</string>
     <string name="lyrics_untitled">Sem título</string>
     <string name="lyrics_synced_badge">Sincronizada</string>
+    <string name="lyrics_word_badge">Palavra</string>
 
     <!-- QueueScreen -->
     <string name="queue_back_cd">Voltar</string>

@@ -38,6 +38,7 @@ import fm.rizx.player.data.local.store.PlaybackSessionStore
 import fm.rizx.player.domain.model.PlaybackQueue
 import fm.rizx.player.domain.model.QueueItemStatus
 import fm.rizx.player.domain.model.QueueSourceKind
+import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.repository.QueueRepository
 import fm.rizx.player.domain.repository.RecentlyPlayedRepository
 import fm.rizx.player.domain.repository.SettingsRepository
@@ -54,6 +55,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -81,6 +83,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var visualizer: fm.rizx.player.playback.AudioVisualizer
     @Inject lateinit var sessionStore: PlaybackSessionStore
     @Inject lateinit var radioTracks: fm.rizx.player.domain.usecase.GetRadioTracksUseCase
+    @Inject lateinit var youtubeMixTracks: fm.rizx.player.domain.usecase.GetYoutubeMixTracksUseCase
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var audioCache: fm.rizx.player.playback.cache.AudioCache
     @Inject lateinit var cacheCompleter: fm.rizx.player.playback.cache.CacheCompleter
@@ -229,6 +232,12 @@ class PlaybackService : MediaSessionService() {
         scope.launch { settings.crossfade.collect { crossfadeOn = it; recomputeFade() } }
         scope.launch { settings.gapless.collect { gaplessOn = it; recomputeFade() } }
 
+        // Hi-Res also decides which *codec* gets requested, and resolved URLs are reused for hours — so
+        // without this, flipping the toggle would appear to do nothing until the cache aged out.
+        scope.launch {
+            settings.hiResOutput.distinctUntilChanged().drop(1).collect { streamResolver.clearUrlCache() }
+        }
+
         // Keep the notification's heart + repeat buttons in sync with the current track's favorite state
         // and the queue's repeat mode, so the glyphs reflect reality (filled heart, repeat-one).
         scope.launch {
@@ -337,13 +346,20 @@ class PlaybackService : MediaSessionService() {
     private fun maybeRefillRadio(q: PlaybackQueue) {
         if (q.context.kind != QueueSourceKind.RADIO || q.items.isEmpty()) return
         if (q.currentIndex < q.items.lastIndex - RADIO_REFILL_AHEAD) return // not near the end yet
+        if (q.items.size >= RADIO_MAX_QUEUE) return // Repeat ALL re-enters the tail forever — don't grow unbounded
         if (radioFetching) return
         val seed = q.current?.track ?: return
         radioFetching = true
         scope.launch {
             try {
                 // Seed from the current track and exclude everything already queued so nothing repeats.
-                val more = radioTracks(seed, q.items.map { it.track.source }.toSet())
+                val exclude = q.items.map { it.track.source }.toSet()
+                val more = when (q.context.radioMode) {
+                    // Search plays: YT Music's own autoplay; a dead mix falls back to the artist
+                    // radio so "next" never dies.
+                    RadioMode.YOUTUBE -> youtubeMixTracks(seed, exclude).ifEmpty { radioTracks(seed, exclude) }
+                    RadioMode.ARTIST -> radioTracks(seed, exclude)
+                }
                 if (more.isNotEmpty()) queue.addToQueue(more)
             } catch (_: Exception) {
                 // A failed radio fetch just means no new tracks this round — never break playback.
@@ -646,6 +662,10 @@ class PlaybackService : MediaSessionService() {
 
         /** Refill the radio when the cursor is within this many items of the end. */
         const val RADIO_REFILL_AHEAD = 2
+
+        /** Radio queues stop refilling at this size — with Repeat ALL the tail is re-entered forever,
+         *  which would otherwise grow the queue without bound. */
+        const val RADIO_MAX_QUEUE = 200
 
         /** Crossfade fade length (ms) applied at automatic track transitions. */
         const val CROSSFADE_MS = 2_000L

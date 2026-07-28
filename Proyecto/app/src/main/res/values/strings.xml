@@ -22,8 +22,8 @@
     <string name="pref_gapless">Gapless playback</string>
     <string name="pref_normalize">Normalize volume</string>
     <string name="pref_hires">Hi-Res output</string>
-    <string name="pref_hires_best">Best with local lossless files</string>
-    <string name="pref_hires_applies">applies on next playback</string>
+    <string name="pref_hires_best">Streams the best codec available and keeps local lossless at full depth</string>
+    <string name="pref_hires_applies">EQ and normalization apply after the player and reduce dynamic range</string>
     <string name="pref_theme">Theme</string>
     <string name="theme_system">System</string>
     <string name="theme_dark">Dark</string>

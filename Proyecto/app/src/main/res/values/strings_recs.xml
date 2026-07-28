@@ -1,0 +1,29 @@
+<resources>
+    <!-- Home: personalized For-you rows -->
+    <string name="home_mix_of">Mix · %1$s</string>
+    <string name="home_because_you_like">Because you like %1$s</string>
+    <string name="home_artists_for_you">Artists for you</string>
+    <string name="home_albums_for_you">Albums for you</string>
+    <string name="home_playlists_for_you">Playlists for you</string>
+
+    <!-- Home: regional-recommendations consent card (in-app only — no OS permission, no location) -->
+    <string name="home_region_consent_title">Recommendations from your region?</string>
+    <string name="home_region_consent_body">We detected %1$s (from your SIM or device language). It\'s used only to pick regional charts — never location, never tracking.</string>
+    <string name="home_region_consent_body_unknown">Use your country (from your SIM or device language) to pick regional charts — never location, never tracking.</string>
+    <string name="home_region_consent_accept">Use region</string>
+    <string name="home_region_consent_decline">Not now</string>
+
+    <!-- Settings: recommendations section -->
+    <string name="settings_recs_section">Recommendations</string>
+    <string name="settings_regional_recs">Regional recommendations</string>
+    <string name="settings_regional_recs_on">Country: %1$s</string>
+    <string name="settings_regional_recs_off">Off — global charts only</string>
+    <string name="settings_regional_recs_unset">Not decided yet</string>
+
+    <!-- Settings: which engine fills "next" after playing a single song -->
+    <string name="pref_radio_algorithm">Up next algorithm</string>
+    <string name="radio_algorithm_youtube">YouTube Music</string>
+    <string name="radio_algorithm_youtube_caption">Follows the song itself, like YT Music\'s autoplay</string>
+    <string name="radio_algorithm_deezer">Deezer</string>
+    <string name="radio_algorithm_deezer_caption">Follows the artist, with their similar tracks</string>
+</resources>

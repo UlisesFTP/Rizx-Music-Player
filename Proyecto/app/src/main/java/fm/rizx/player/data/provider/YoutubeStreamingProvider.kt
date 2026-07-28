@@ -52,19 +52,34 @@ class YoutubeStreamingProvider(
         }
     }
 
-    override suspend fun getStreamUrl(candidate: StreamCandidate): Stream = guarded {
+    override suspend fun getStreamUrl(candidate: StreamCandidate): Stream = stream(candidate, forDownload = false)
+
+    /**
+     * Downloads deliberately stay on the standard (M4A) pick even in Hi-Res mode: `AudioTagWriter` can
+     * only write tags into MP4/MP3/FLAC/Ogg containers, so an Opus-in-WebM download would land with no
+     * title, artist or cover and export to the music library that way. Streaming keeps the better codec.
+     */
+    override suspend fun getDownloadStreamUrl(candidate: StreamCandidate): Stream =
+        stream(candidate, forDownload = true)
+
+    private suspend fun stream(candidate: StreamCandidate, forDownload: Boolean): Stream = guarded {
         val url = candidate.source.url ?: youtubeWatchUrl(candidate.id)
-        client.streamInfo(url).toBestAudioStreamOrNull(candidate, preferLow = shouldPreferLow())
-            ?: throw AppError.ProviderFailure(name, "no audio stream for ${candidate.id}")
+        client.streamInfo(url).toBestAudioStreamOrNull(
+            candidate,
+            preferLow = shouldPreferLow(),
+            maxQuality = !forDownload && settings.hiResOutput.first(),
+        ) ?: throw AppError.ProviderFailure(name, "no audio stream for ${candidate.id}")
     }
 
     /**
-     * Max quality by default; drop to a lower bitrate only when the user turns on Data saver **and** is
-     * on cellular, or the active network reports a weak signal. Wi-Fi / good signal always stays at max.
+     * Max quality by default; drop to a lower bitrate only when the user turns on Data saver — on
+     * cellular, or on a link too weak to carry the good stream. A weak signal on its own no longer
+     * downgrades: the estimate is unreliable, and silently serving the worst stream to someone who never
+     * asked to save data was the app's biggest hidden quality leak.
      */
     private suspend fun shouldPreferLow(): Boolean {
         val net = networkMonitor.snapshot()
-        return (settings.dataSaver.first() && net.isCellular) || net.isBadSignal
+        return settings.dataSaver.first() && (net.isCellular || net.isBadSignal)
     }
 
     private suspend fun <T> guarded(block: suspend () -> T): T = try {

@@ -55,7 +55,29 @@ class SearchViewModelTest {
         repo: MetadataRepository,
         streaming: fm.rizx.player.data.search.StreamingSourcesSearch = emptyStreaming,
         playlists: fm.rizx.player.data.search.PlaylistSourcesSearch = emptyPlaylists,
-    ) = SearchViewModel(SearchMusicUseCase(repo), streaming, playlists, noopFavorites)
+        suggest: List<String> = emptyList(),
+    ) = SearchViewModel(
+        SearchMusicUseCase(repo),
+        streaming,
+        playlists,
+        noopFavorites,
+        youtube = suggestingClient(suggest),
+    )
+        // On the test scheduler, so `runTest` drains the suggestion lookup instead of leaving it in
+        // flight on a real IO thread after `Dispatchers.Main` has been torn down.
+        .useIoDispatcher(mainDispatcherRule.dispatcher)
+
+    /** Only `suggestions` matters here; everything else on the client is unused by the ViewModel. */
+    private fun suggestingClient(results: List<String>) =
+        object : fm.rizx.player.data.remote.youtube.YoutubeExtractorClient {
+            override fun searchSongs(query: String, limit: Int) = emptyList<org.schabi.newpipe.extractor.stream.StreamInfoItem>()
+            override fun searchVideos(query: String, limit: Int) = emptyList<org.schabi.newpipe.extractor.stream.StreamInfoItem>()
+            override fun searchPlaylists(query: String, limit: Int) = emptyList<org.schabi.newpipe.extractor.playlist.PlaylistInfoItem>()
+            override fun streamInfo(videoUrl: String): org.schabi.newpipe.extractor.stream.StreamInfo = error("not used")
+            override fun playlist(playlistUrl: String) = error("not used")
+            override fun mix(videoId: String, limit: Int) = emptyList<org.schabi.newpipe.extractor.stream.StreamInfoItem>()
+            override fun suggestions(query: String, limit: Int) = results.take(limit)
+        }
 
     private fun fakeRepo(block: suspend (SearchParams) -> SearchResults) = object : MetadataRepository {
         override suspend fun search(params: SearchParams): SearchResults = block(params)
@@ -94,13 +116,14 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `provider failure yields error`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+    fun `provider failure yields a safe error message, never the raw exception text`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
         val vm = vmWith(fakeRepo { throw RuntimeException("boom") })
         vm.onQueryChange("x")
         advanceUntilIdle()
         val state = vm.uiState.value
         assertTrue(state is SearchUiState.Error)
-        assertEquals("boom", (state as SearchUiState.Error).message)
+        assertEquals("Something went wrong", (state as SearchUiState.Error).message)
     }
 
     @Test

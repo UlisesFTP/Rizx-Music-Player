@@ -50,6 +50,21 @@ interface YoutubeExtractorClient {
      * page, so a single page would silently truncate a long playlist.
      */
     fun playlist(playlistUrl: String): YoutubePlaylistData
+
+    /**
+     * The YouTube **Mix** (auto-generated radio) seeded by [videoId] — YT Music's own autoplay
+     * recommendations (blocking network). Tries the music mix (`RDAMVM<id>`) first, then the standard
+     * mix (`RD<id>`). Mixes only resolve through a **watch URL carrying the list param** (a bare
+     * `playlist?list=RD…` URL is rejected upstream). First page only (~25 items) — each refill
+     * re-seeds from the then-current track, exactly how YT's own autoplay evolves.
+     */
+    fun mix(videoId: String, limit: Int): List<StreamInfoItem>
+
+    /**
+     * Autocomplete for a partial query (blocking network) — what the search box offers while typing.
+     * Defaults to empty so a client that doesn't do suggestions simply offers none.
+     */
+    fun suggestions(query: String, limit: Int): List<String> = emptyList()
 }
 
 /** Real client: lazily one-time-inits NewPipe with our OkHttp-backed downloader, then delegates. */
@@ -142,6 +157,30 @@ class NewPipeYoutubeExtractorClient(
             items = items.take(MAX_ITEMS),
             truncated = stoppedEarly || page != null || items.size > MAX_ITEMS,
         )
+    }
+
+    override fun mix(videoId: String, limit: Int): List<StreamInfoItem> {
+        ensureInit()
+        val service = ServiceList.YouTube
+        for (listId in listOf("RDAMVM$videoId", "RD$videoId")) {
+            val items = try {
+                PlaylistInfo.getInfo(service, "${youtubeWatchUrl(videoId)}&list=$listId").relatedItems
+            } catch (e: Exception) {
+                emptyList()
+            }
+            if (items.isNotEmpty()) return items.take(limit)
+        }
+        return emptyList()
+    }
+
+    override fun suggestions(query: String, limit: Int): List<String> {
+        ensureInit()
+        // NewPipe already wraps Google's suggest endpoint — the same source the big apps' search boxes
+        // use — so this needs no new API, key or dependency.
+        return runCatching { ServiceList.YouTube.suggestionExtractor.suggestionList(query) }
+            .getOrDefault(emptyList())
+            .filter { it.isNotBlank() }
+            .take(limit)
     }
 
     private companion object {

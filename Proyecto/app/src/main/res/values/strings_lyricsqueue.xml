@@ -25,6 +25,7 @@
     <string name="lyrics_search_no_results">Nothing found. Try just the song title.</string>
     <string name="lyrics_untitled">Untitled</string>
     <string name="lyrics_synced_badge">Synced</string>
+    <string name="lyrics_word_badge">Word</string>
 
     <!-- QueueScreen -->
     <string name="queue_back_cd">Back</string>

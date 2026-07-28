@@ -5,18 +5,25 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.playback.AudioVisualizer
+import fm.rizx.player.data.artwork.TrackArtworkEnricher
+import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.QueueItem
 import fm.rizx.player.domain.model.Track
+import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.playback.PlaybackState
 import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.domain.repository.QueueRepository
+import fm.rizx.player.domain.usecase.ResolveArtistRefUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -31,6 +38,8 @@ import javax.inject.Inject
 class PlaybackViewModel @Inject constructor(
     private val controller: PlaybackController,
     private val favorites: FavoritesRepository,
+    private val artwork: TrackArtworkEnricher,
+    private val resolveArtistRef: ResolveArtistRefUseCase,
     visualizer: AudioVisualizer,
     queue: QueueRepository,
 ) : ViewModel() {
@@ -44,10 +53,57 @@ class PlaybackViewModel @Inject constructor(
         .map { it.current }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /**
+     * The playing **track**, changing only when the song does.
+     *
+     * [currentItem] is a `QueueItem`, and its `status` walks IDLE → LOADING → SUCCESS while the stream
+     * resolves — so collecting it re-emits several times per song. Anything that answers a *question
+     * about the song* (its cover, its artist) must hang off this instead, or it restarts mid-flight and
+     * fires the same lookup three or four times over.
+     */
+    private val currentTrack: StateFlow<Track?> = currentItem
+        .map { it?.track }
+        .distinctUntilChangedBy { it?.source?.identityKey }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     /** Whether the currently-playing track is favorited (live, so the heart updates immediately). */
     val currentIsFavorite: StateFlow<Boolean> = currentItem
         .flatMapLatest { item -> item?.let { favorites.isFavoriteTrack(it.track.source) } ?: flowOf(false) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /**
+     * The cover to show for the current track, at the size a full-screen player needs.
+     *
+     * Emits twice on purpose: first whatever the track already carries, so the art appears instantly,
+     * then a better one if there is a better one. That second emission is what fixes a YouTube-Mix
+     * song, whose "cover" is a 16:9 video still that the player crops into a blurry band — the lookup
+     * is memoized and request-collapsed, so in practice it is free after the first time.
+     */
+    val currentArtworkUrl: StateFlow<String?> = currentTrack
+        .flatMapLatest { track ->
+            track ?: return@flatMapLatest flowOf<String?>(null)
+            flow {
+                val own = track.artwork.coverUrl()
+                emit(own)
+                val best = runCatching { artwork.coverFor(track) }.getOrNull()
+                if (best != null && best != own) emit(best)
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * The artist page to open when the player's artist name is tapped, or `null` when there is none to
+     * open — which leaves the name untappable rather than navigating somewhere wrong.
+     *
+     * A Deezer song already knows its artist; a YouTube-Mix song credits an uploader name and nothing
+     * else, so its Deezer equivalent is looked up by name (see [ResolveArtistRefUseCase]). Resolved
+     * ahead of the tap so the tap itself is instant.
+     */
+    val currentArtistRef: StateFlow<ProviderRef?> = currentTrack
+        // Keyed on the artist, not the track: an album's worth of songs by the same artist resolves once.
+        .distinctUntilChangedBy { it?.artists?.firstOrNull()?.let { c -> c.source?.identityKey ?: c.name } }
+        .mapLatest { track -> runCatching { resolveArtistRef(track) }.getOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun toggleCurrentFavorite() {
         val track = currentItem.value?.track ?: return
@@ -56,8 +112,14 @@ class PlaybackViewModel @Inject constructor(
 
     fun playQueueItem(id: String) = controller.playQueueItem(id)
 
-    /** Play [track] as a radio (feed/search): the service auto-fills similar tracks for next/prev. */
+    /** Play [track] as a radio (feed): the service auto-fills similar tracks for next/prev. */
     fun playRadio(track: Track) = controller.playRadio(track)
+
+    /** Play [track] as a YouTube-Mix radio (search): next/prev follow YT Music's own recommendations. */
+    fun playYoutubeRadio(track: Track) = controller.playYoutubeRadio(track)
+
+    /** Play [track] as a radio using the recommendation engine chosen in Settings. */
+    fun playAutoRadio(track: Track) = controller.playAutoRadio(track)
 
     fun toggle() = controller.toggle()
 

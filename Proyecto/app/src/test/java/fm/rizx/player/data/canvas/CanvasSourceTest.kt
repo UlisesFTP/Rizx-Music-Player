@@ -45,6 +45,7 @@ class CanvasSourceTest {
         }
         override fun searchPlaylists(query: String, limit: Int): List<org.schabi.newpipe.extractor.playlist.PlaylistInfoItem> = error("not used")
         override fun playlist(playlistUrl: String) = error("not used")
+        override fun mix(videoId: String, limit: Int): List<StreamInfoItem> = error("not used")
     }
 
     private fun video(url: String, resolution: String, progressive: Boolean = true, videoOnly: Boolean = false): VideoStream =
