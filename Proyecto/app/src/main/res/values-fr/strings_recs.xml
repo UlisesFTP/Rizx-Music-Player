@@ -36,4 +36,27 @@
     <string name="pref_feed_provider_caption">D\'où viennent les classements et les nouveautés</string>
     <string name="feed_provider_all">Toutes combinées</string>
     <string name="feed_provider_all_caption">Mélange toutes les sources actives, sans doublons</string>
-    <string name="feed_provider_only_caption">Uniquement depuis %1$s</string></resources>
+    <string name="feed_provider_only_caption">Uniquement depuis %1$s</string>
+
+    <!-- Accueil : les mosaïques — des mixes que Rizx compose à partir des statistiques d\'écoute -->
+    <string name="home_mixes_section">Tes mixes</string>
+    <string name="home_rizx_pick">Choix de Rizx</string>
+    <string name="home_play_now">Écouter</string>
+    <string name="home_mix_label">Mix</string>
+    <string name="home_mix_daily">Ton mix du jour</string>
+    <string name="home_mix_daily_caption">%1$d titres · %2$d artistes</string>
+    <string name="home_mix_artist">Mix %1$s</string>
+    <string name="home_mix_artist_caption">%1$d titres de %2$s</string>
+    <string name="home_mix_on_repeat">En boucle</string>
+    <string name="home_mix_on_repeat_caption">%1$d titres en boucle</string>
+    <string name="home_mix_rediscover">Redécouvre</string>
+    <string name="home_mix_rediscover_caption">%1$d titres d\'avant</string>
+    <string name="home_mix_discovery">Nouveau pour toi</string>
+    <string name="home_mix_discovery_caption">%1$d titres jamais écoutés</string>
+    <string name="home_mix_global">Autour du monde</string>
+    <string name="home_mix_global_caption">%1$d titres · toutes sources</string>
+
+    <!-- Accueil : l\'affiche de la découverte du jour — une reco et le titre qui l\'a amenée -->
+    <string name="home_daily_discover">Ta découverte du jour</string>
+    <string name="home_similar_to">Comme %1$s</string>
+</resources>

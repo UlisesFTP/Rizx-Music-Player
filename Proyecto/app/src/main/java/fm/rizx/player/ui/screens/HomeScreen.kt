@@ -55,19 +55,27 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fm.rizx.player.R
 import fm.rizx.player.domain.model.AlbumRef
+import fm.rizx.player.domain.model.AppMix
 import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.ForYouSection
 import fm.rizx.player.domain.model.HomeFeed
+import fm.rizx.player.domain.model.MixKind
 import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.CoverArt
+import fm.rizx.player.ui.components.DiscoverMosaic
+import fm.rizx.player.ui.components.DiscoverMosaicSkeleton
 import fm.rizx.player.ui.components.DotMatrixSpinner
 import fm.rizx.player.ui.components.Eyebrow
+import fm.rizx.player.ui.components.InkFrame
+import fm.rizx.player.ui.components.MosaicTile
+import fm.rizx.player.ui.components.PickMosaic
 import fm.rizx.player.ui.components.RizxChip
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.clickableScale
+import fm.rizx.player.ui.components.mosaicWall
 import fm.rizx.player.ui.components.tintFor
 import fm.rizx.player.ui.home.HomeUiState
 import fm.rizx.player.ui.home.HomeViewModel
@@ -98,6 +106,21 @@ enum class HomeTab(val labelRes: Int) {
 private const val PREVIEW_ITEMS = 10
 
 /**
+ * How many tiles the mosaic wall holds. Six lands on the wall's rhythm exactly (wide, pair, wide, pair)
+ * and is as much of the Home as the mosaics may take before the charts are pushed out of reach.
+ */
+private const val MOSAIC_TILES = 6
+
+/**
+ * Playlist mosaics are floored at two, so the wall still reads as a wall on a cold start where the only
+ * mix that can exist is the global one. Mixes take the rest.
+ */
+private const val MIN_PLAYLIST_TILES = 2
+
+/** How many covers a collage tile uses. */
+private const val COLLAGE_COVERS = 4
+
+/**
  * What a playlist card says under its name: its track count when the source gave one, else the
  * generic label. With sixty playlists on offer, "100 songs" separates a country chart from a
  * four-track mood row far better than sixty identical "Editorial" captions.
@@ -114,6 +137,31 @@ private fun forYouTitle(section: ForYouSection): String = when (section) {
     is ForYouSection.AlbumsForYou -> stringResource(R.string.home_albums_for_you)
 }
 
+/** A mix's name. The domain holds no resources, so the kind and its subject are formatted here. */
+@Composable
+private fun mixTitle(mix: AppMix): String = when (mix.kind) {
+    MixKind.DAILY -> stringResource(R.string.home_mix_daily)
+    MixKind.ARTIST -> stringResource(R.string.home_mix_artist, mix.subject)
+    MixKind.ON_REPEAT -> stringResource(R.string.home_mix_on_repeat)
+    MixKind.REDISCOVER -> stringResource(R.string.home_mix_rediscover)
+    MixKind.DISCOVERY -> stringResource(R.string.home_mix_discovery)
+    MixKind.GLOBAL -> stringResource(R.string.home_mix_global)
+}
+
+/**
+ * What the mix is made of, in numbers. Deliberately factual — the statistics behind a mix are the
+ * reason to trust it, and a vague mood line would be inventing something the app does not know.
+ */
+@Composable
+private fun mixCaption(mix: AppMix): String = when (mix.kind) {
+    MixKind.DAILY -> stringResource(R.string.home_mix_daily_caption, mix.tracks.size, mix.artistCount)
+    MixKind.ARTIST -> stringResource(R.string.home_mix_artist_caption, mix.tracks.size, mix.subject)
+    MixKind.ON_REPEAT -> stringResource(R.string.home_mix_on_repeat_caption, mix.tracks.size)
+    MixKind.REDISCOVER -> stringResource(R.string.home_mix_rediscover_caption, mix.tracks.size)
+    MixKind.DISCOVERY -> stringResource(R.string.home_mix_discovery_caption, mix.tracks.size)
+    MixKind.GLOBAL -> stringResource(R.string.home_mix_global_caption, mix.tracks.size)
+}
+
 @Composable
 private fun playlistSubtitle(playlist: PlaylistRef): String =
     playlist.trackCount?.takeIf { it > 0 }
@@ -123,11 +171,12 @@ private fun playlistSubtitle(playlist: PlaylistRef): String =
 /**
  * Charts & discovery.
  *
- * **All** is a scannable overview — a carousel per category, each with "See all" into its tab — and the
- * other tabs are the full 2-column grid for one category. Same shape as the Library: land on a summary
- * of everything, drill in when you know what you want. The old "See all" *screens* stay gone:
- * `AlbumsViewModel`/`ArtistsViewModel` re-loaded the very `dashboard.homeFeed()` this screen already
- * holds, so they were a second copy of this content; the tabs are the destination now.
+ * **All** is a scannable overview — the mosaic wall of Rizx's own mixes and the best playlists, then a
+ * carousel per category, each with "See all" into its tab — and the other tabs are the full 2-column
+ * grid for one category. Same shape as the Library: land on a summary of everything, drill in when you
+ * know what you want. The old "See all" *screens* stay gone: `AlbumsViewModel`/`ArtistsViewModel`
+ * re-loaded the very `dashboard.homeFeed()` this screen already holds, so they were a second copy of
+ * this content; the tabs are the destination now.
  */
 @Composable
 fun HomeScreen(
@@ -152,6 +201,7 @@ fun HomeScreen(
     val playlistsForYouTitle = stringResource(R.string.home_playlists_for_you)
     val newReleasesTitle = stringResource(R.string.home_new_releases)
     val forYouLabel = stringResource(R.string.home_tab_for_you)
+    val mixesTitle = stringResource(R.string.home_mixes_section)
     val continueTitle = stringResource(R.string.home_continue_listening)
     val continueListening by vm.continueListening.collectAsStateWithLifecycle()
     // Localized titles for the personalized rows, resolved here for the same reason as above.
@@ -164,6 +214,84 @@ fun HomeScreen(
     val forYouSkeletons = content?.forYouPending.orEmpty()
         .map { forYouTitle(it) }
         .filter { title -> forYouRows.none { it.first == title } }
+
+    // ---- The mosaics ---------------------------------------------------------------------------
+    // Built here, in composable scope, because every label and caption on them is localized; the wall
+    // itself (`mosaicWall`) is pure layout and knows nothing about mixes or playlists.
+    val homeMixes by vm.mixes.collectAsStateWithLifecycle()
+    val mosaicPadding = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 12.dp)
+    val heroMix = homeMixes.mixes.firstOrNull()
+    val hero: (@Composable () -> Unit)? = if (heroMix == null) null else {
+        {
+            val title = mixTitle(heroMix)
+            PickMosaic(
+                eyebrow = stringResource(R.string.home_rizx_pick),
+                title = title,
+                subtitle = heroMix.subject,
+                caption = mixCaption(heroMix),
+                playLabel = stringResource(R.string.home_play_now),
+                coverUrl = heroMix.leadTrack?.artwork.coverUrl(),
+                tintKey = heroMix.id,
+                weight = heroMix.weight,
+                modifier = mosaicPadding,
+                onClick = { vm.playMix(heroMix, title) },
+            )
+        }
+    }
+    val playlists = content?.feed?.editorialPlaylists.orEmpty().flatMap { it.items }
+    // Mixes lead the wall; playlists fill the rest of it, never fewer than [MIN_PLAYLIST_TILES] so the
+    // ask — "some playlists as widget mosaics" — holds even when the statistics have plenty to say.
+    val wallMixes = homeMixes.mixes.drop(1).take(MOSAIC_TILES - MIN_PLAYLIST_TILES)
+    val mosaicPlaylists = playlists.take(MOSAIC_TILES - wallMixes.size)
+    val mixLabel = stringResource(R.string.home_mix_label)
+    val playlistLabel = stringResource(R.string.home_editorial)
+    val mosaicTiles = wallMixes.map { mix ->
+        val title = mixTitle(mix)
+        MosaicTile(
+            key = mix.id,
+            label = mixLabel,
+            title = title,
+            caption = mixCaption(mix),
+            covers = mix.tracks.mapNotNull { it.artwork.coverUrl() }.distinct().take(COLLAGE_COVERS),
+            tintKey = mix.id,
+            weight = mix.weight,
+            onClick = { vm.playMix(mix, title) },
+        )
+    } + mosaicPlaylists.map { playlist ->
+        MosaicTile(
+            key = "pl-${playlist.source.identityKey}",
+            label = playlistLabel,
+            title = playlist.name,
+            caption = playlistSubtitle(playlist),
+            covers = listOf(playlist.artwork.coverUrl()),
+            tintKey = playlist.source.id,
+            // No meter: a playlist someone else curated has no statistics of ours behind it.
+            weight = null,
+            onClick = { onOpenEditorialPlaylist(playlist) },
+        )
+    }
+    // The day's single recommendation. It is the one mosaic that depends on the slow personalized half,
+    // so while that half is still announcing itself the card holds its own height — same key, same slot,
+    // filled in place. Otherwise it would drop a poster in above whatever the user was reading.
+    val pick = homeMixes.pick
+    val discover: (@Composable () -> Unit)? = if (pick != null) {
+        {
+            DiscoverMosaic(
+                eyebrow = stringResource(R.string.home_daily_discover),
+                title = pick.track.title,
+                artist = pick.track.artists.joinToString { it.name }.ifEmpty { "—" },
+                reason = stringResource(R.string.home_similar_to, pick.becauseOf),
+                coverUrl = pick.track.artwork.coverUrl(),
+                tintKey = pick.track.source.id,
+                modifier = mosaicPadding,
+                onClick = { vm.playTrack(pick.track) },
+            )
+        }
+    } else if (forYouSkeletons.isNotEmpty()) {
+        { DiscoverMosaicSkeleton(mosaicPadding) }
+    } else {
+        null
+    }
 
     Box(Modifier.fillMaxSize()) {
         Text(
@@ -239,6 +367,11 @@ fun HomeScreen(
                         forYouSkeletons = forYouSkeletons,
                         playlistsForYouTitle = playlistsForYouTitle,
                         forYouLabel = forYouLabel,
+                        mixesTitle = mixesTitle,
+                        hero = hero,
+                        mosaicTiles = mosaicTiles,
+                        discover = discover,
+                        promotedPlaylists = mosaicPlaylists.size,
                         regionalConsent = s.regionalConsent,
                         countryName = s.countryName,
                         onSetRegionalConsent = vm::setRegionalConsent,
@@ -251,14 +384,19 @@ fun HomeScreen(
                     }
                 }
                 // No feed, but the history is local — offline is exactly when a way back into what you
-                // were playing is worth most, so the row outlives the charts here.
+                // were playing is worth most, so the row outlives the charts here. The mixes built from
+                // that same history outlive it too.
                 // Retry means "go to the network", not "re-read the cache we just failed to fill".
                 HomeUiState.Offline -> {
                     trackCarousel(continueTitle, continueListening, vm::playTrack)
+                    if (hero != null) item(key = "pick-mosaic") { hero() }
+                    mosaicWall(mosaicTiles)
                     item { HomeMessage(stringResource(R.string.home_offline_message), vm::refresh) }
                 }
                 is HomeUiState.Error -> {
                     trackCarousel(continueTitle, continueListening, vm::playTrack)
+                    if (hero != null) item(key = "pick-mosaic") { hero() }
+                    mosaicWall(mosaicTiles)
                     item { HomeMessage(s.message, vm::refresh) }
                 }
             }
@@ -284,6 +422,13 @@ private fun LazyListScope.tabContent(
     forYouSkeletons: List<String>,
     playlistsForYouTitle: String,
     forYouLabel: String,
+    mixesTitle: String,
+    /** The pick band and the daily poster, already localized — see [HomeScreen]. */
+    hero: (@Composable () -> Unit)?,
+    mosaicTiles: List<MosaicTile>,
+    discover: (@Composable () -> Unit)?,
+    /** How many playlists the wall took, so the carousel below doesn't show them twice. */
+    promotedPlaylists: Int,
     regionalConsent: Boolean?,
     countryName: String?,
     onSetRegionalConsent: (Boolean) -> Unit,
@@ -296,7 +441,7 @@ private fun LazyListScope.tabContent(
             val playlists = feed.editorialPlaylists.flatMap { it.items }
             val newReleases = feed.newReleases.flatMap { it.items }
             if (tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() &&
-                playlists.isEmpty() && forYouRows.isEmpty()
+                playlists.isEmpty() && forYouRows.isEmpty() && mosaicTiles.isEmpty() && hero == null
             ) {
                 item { HomeEmpty(stringResource(R.string.home_empty_charts)) }
             }
@@ -304,7 +449,9 @@ private fun LazyListScope.tabContent(
             // ---- "For you": everything picked for this listener, under one label. Its own tab was
             // folded in here — the songs, artists, albums and playlists chosen for you read better as
             // the top of the overview than as a place you had to go looking for. ----
-            if (forYouRows.isNotEmpty() || forYouSkeletons.isNotEmpty() || playlists.isNotEmpty()) {
+            if (forYouRows.isNotEmpty() || forYouSkeletons.isNotEmpty() || playlists.isNotEmpty() ||
+                hero != null || mosaicTiles.isNotEmpty()
+            ) {
                 item(key = "for-you-label") {
                     Eyebrow(
                         forYouLabel,
@@ -312,14 +459,28 @@ private fun LazyListScope.tabContent(
                     )
                 }
             }
+
+            // ---- The mosaics: the pick band, then the wall, then the day's poster ----
+            if (hero != null) item(key = "pick-mosaic") { hero() }
+            if (mosaicTiles.isNotEmpty()) {
+                item(key = "mixes-header") {
+                    SectionHeader(
+                        mixesTitle,
+                        Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 4.dp),
+                    )
+                }
+                mosaicWall(mosaicTiles)
+            }
+            if (discover != null) item(key = "daily-pick") { discover() }
+
             forYouRows.forEach { (title, section) ->
                 when (section) {
                     is ForYouSection.Mix -> trackCarousel(title, section.items, onPlay)
                     is ForYouSection.BecauseYouLike -> trackCarousel(title, section.items, onPlay)
                     is ForYouSection.ArtistsForYou -> carousel(title, section.items, key = { it.source.identityKey }) { artist ->
                         CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
-                            CoverArt(
-                                tintFor(artist.source.id), initial = artist.name.take(1),
+                            HomeCover(
+                                artist.source.id, initial = artist.name.take(1),
                                 Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
                                 initialSize = 38, circle = true, imageUrl = artist.artwork.coverUrl(),
                             )
@@ -328,8 +489,8 @@ private fun LazyListScope.tabContent(
                     }
                     is ForYouSection.AlbumsForYou -> carousel(title, section.items, key = { it.source.identityKey }) { album ->
                         CarouselCell(onClick = { onOpenAlbum(album.source) }) {
-                            CoverArt(
-                                tintFor(album.source.id), initial = album.title.take(1),
+                            HomeCover(
+                                album.source.id, initial = album.title.take(1),
                                 Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
                                 imageUrl = album.artwork.coverUrl(),
                             )
@@ -344,10 +505,18 @@ private fun LazyListScope.tabContent(
             // whole screen. Each one now holds its own place from the moment it is announced.
             forYouSkeletons.forEach { title -> skeletonCarousel(title) }
 
-            carousel(playlistsForYouTitle, playlists, HomeTab.Playlists, onSeeAll, key = { it.source.identityKey }) { playlist ->
+            carousel(
+                playlistsForYouTitle,
+                // The wall already shows the first few as mosaics; showing them again here would be the
+                // same playlist twice in one screen.
+                playlists.drop(promotedPlaylists),
+                HomeTab.Playlists,
+                onSeeAll,
+                key = { it.source.identityKey },
+            ) { playlist ->
                 CarouselCell(onClick = { onOpenEditorialPlaylist(playlist) }) {
-                    CoverArt(
-                        tintFor(playlist.source.id), initial = playlist.name.take(1),
+                    HomeCover(
+                        playlist.source.id, initial = playlist.name.take(1),
                         Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
                         imageUrl = playlist.artwork.coverUrl(),
                     )
@@ -359,8 +528,8 @@ private fun LazyListScope.tabContent(
             // ---- The charts, each with "See all" into its own tab ----
             carousel(topSongsTitle, tracks, HomeTab.Songs, onSeeAll, key = { it.source.identityKey }) { track ->
                 CarouselCell(onClick = { onPlay(track) }) {
-                    CoverArt(
-                        tintFor(track.source.id), initial = null,
+                    HomeCover(
+                        track.source.id, initial = null,
                         Modifier.size(CAROUSEL_ART).paperElevation(),
                         imageUrl = track.artwork.coverUrl(),
                     )
@@ -371,8 +540,8 @@ private fun LazyListScope.tabContent(
 
             carousel(topAlbumsTitle, albums, HomeTab.Albums, onSeeAll, key = { it.source.identityKey }) { album ->
                 CarouselCell(onClick = { onOpenAlbum(album.source) }) {
-                    CoverArt(
-                        tintFor(album.source.id), initial = album.title.take(1),
+                    HomeCover(
+                        album.source.id, initial = album.title.take(1),
                         Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
                         imageUrl = album.artwork.coverUrl(),
                     )
@@ -383,8 +552,8 @@ private fun LazyListScope.tabContent(
 
             carousel(popularArtistsTitle, artists, HomeTab.Artists, onSeeAll, key = { it.source.identityKey }) { artist ->
                 CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
-                    CoverArt(
-                        tintFor(artist.source.id), initial = artist.name.take(1),
+                    HomeCover(
+                        artist.source.id, initial = artist.name.take(1),
                         Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
                         initialSize = 38, circle = true, imageUrl = artist.artwork.coverUrl(),
                     )
@@ -396,8 +565,8 @@ private fun LazyListScope.tabContent(
             // They share the Albums tab's grid because that is what they are.
             carousel(newReleasesTitle, newReleases, HomeTab.Albums, onSeeAll, key = { "nr-${it.source.identityKey}" }) { album ->
                 CarouselCell(onClick = { onOpenAlbum(album.source) }) {
-                    CoverArt(
-                        tintFor(album.source.id), initial = album.title.take(1),
+                    HomeCover(
+                        album.source.id, initial = album.title.take(1),
                         Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
                         imageUrl = album.artwork.coverUrl(),
                     )
@@ -425,8 +594,8 @@ private fun LazyListScope.tabContent(
             if (playlists.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_playlists)) }
             browseGrid(playlists, key = { "pl-${it.source.identityKey}" }) { playlist, index ->
                 GridCell(index, onClick = { onOpenEditorialPlaylist(playlist) }) {
-                    CoverArt(
-                        tintFor(playlist.source.id), initial = playlist.name.take(1),
+                    HomeCover(
+                        playlist.source.id, initial = playlist.name.take(1),
                         Modifier.fillMaxWidth().aspectRatio(1f).paperElevation(), initialSize = 40,
                         imageUrl = playlist.artwork.coverUrl(),
                     )
@@ -441,8 +610,8 @@ private fun LazyListScope.tabContent(
             if (tracks.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_songs)) }
             browseGrid(tracks, key = { "tr-${it.source.identityKey}" }) { track, index ->
                 GridCell(index, onClick = { onPlay(track) }) {
-                    CoverArt(
-                        tintFor(track.source.id), initial = null,
+                    HomeCover(
+                        track.source.id, initial = null,
                         Modifier.fillMaxWidth().aspectRatio(1f).paperElevation(),
                         imageUrl = track.artwork.coverUrl(),
                     )
@@ -457,8 +626,8 @@ private fun LazyListScope.tabContent(
             if (albums.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_albums)) }
             browseGrid(albums, key = { "al-${it.source.identityKey}" }) { album, index ->
                 GridCell(index, onClick = { onOpenAlbum(album.source) }) {
-                    CoverArt(
-                        tintFor(album.source.id), initial = album.title.take(1),
+                    HomeCover(
+                        album.source.id, initial = album.title.take(1),
                         Modifier.fillMaxWidth().aspectRatio(1f).paperElevation(), initialSize = 46,
                         imageUrl = album.artwork.coverUrl(),
                     )
@@ -473,8 +642,8 @@ private fun LazyListScope.tabContent(
             if (artists.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_artists)) }
             browseGrid(artists, key = { "ar-${it.source.identityKey}" }) { artist, index ->
                 GridCell(index, onClick = { onOpenArtist(artist.source) }, centered = true) {
-                    CoverArt(
-                        tintFor(artist.source.id), initial = artist.name.take(1),
+                    HomeCover(
+                        artist.source.id, initial = artist.name.take(1),
                         Modifier.fillMaxWidth().aspectRatio(1f).paperElevation(CircleShape),
                         initialSize = 42, circle = true, imageUrl = artist.artwork.coverUrl(),
                     )
@@ -487,6 +656,32 @@ private fun LazyListScope.tabContent(
 
 /** Carousel artwork size — big enough to read at a glance, small enough that ~2.5 peek past the edge. */
 private val CAROUSEL_ART = 152.dp
+
+/**
+ * A Home cover: [CoverArt] wearing the **ink frame**.
+ *
+ * Every album, song, artist and playlist on this screen goes through here, so the black margin that makes
+ * them read as brutalist blocks is one decision rather than a dozen call sites — and denser surfaces
+ * elsewhere in the app keep the hairline that suits them.
+ */
+@Composable
+private fun HomeCover(
+    tintKey: String,
+    initial: String?,
+    modifier: Modifier = Modifier,
+    initialSize: Int = 52,
+    circle: Boolean = false,
+    imageUrl: String? = null,
+) = CoverArt(
+    tintFor(tintKey),
+    initial,
+    modifier,
+    initialSize,
+    circle = circle,
+    imageUrl = imageUrl,
+    borderColor = RizxTheme.colors.hardLine,
+    borderWidth = InkFrame,
+)
 
 /**
  * One titled row of the [HomeTab.All] overview: a header with "See all" into the category's own tab,
@@ -601,7 +796,7 @@ private fun SkeletonCell(alpha: Float) {
                 .size(CAROUSEL_ART)
                 .paperElevation()
                 .background(c.elev)
-                .border(1.dp, c.line, RectangleShape),
+                .border(InkFrame, c.hardLine, RectangleShape),
         )
         SkeletonLine(mr(14, FontWeight.SemiBold), widthFraction = 0.85f, top = 9.dp, alpha = alpha)
         SkeletonLine(mr(12, FontWeight.Medium), widthFraction = 0.55f, top = 0.dp, alpha = alpha)
@@ -627,8 +822,8 @@ private fun SkeletonLine(style: TextStyle, widthFraction: Float, top: Dp, alpha:
 private fun LazyListScope.trackCarousel(title: String, tracks: List<Track>, onPlay: (Track) -> Unit) =
     carousel(title, tracks, key = { it.source.identityKey }) { track ->
         CarouselCell(onClick = { onPlay(track) }) {
-            CoverArt(
-                tintFor(track.source.id), initial = null,
+            HomeCover(
+                track.source.id, initial = null,
                 Modifier.size(CAROUSEL_ART).paperElevation(),
                 imageUrl = track.artwork.coverUrl(),
             )

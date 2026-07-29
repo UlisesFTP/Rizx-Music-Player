@@ -37,4 +37,26 @@
     <string name="feed_provider_all">All combined</string>
     <string name="feed_provider_all_caption">Blends every enabled source, without duplicates</string>
     <string name="feed_provider_only_caption">From %1$s only</string>
+
+    <!-- Home: the mosaic wall — mixes Rizx builds itself from play statistics -->
+    <string name="home_mixes_section">Your mixes</string>
+    <string name="home_rizx_pick">Rizx pick</string>
+    <string name="home_play_now">Play now</string>
+    <string name="home_mix_label">Mix</string>
+    <string name="home_mix_daily">Your daily mix</string>
+    <string name="home_mix_daily_caption">%1$d songs · %2$d artists</string>
+    <string name="home_mix_artist">%1$s mix</string>
+    <string name="home_mix_artist_caption">%1$d songs around %2$s</string>
+    <string name="home_mix_on_repeat">On repeat</string>
+    <string name="home_mix_on_repeat_caption">%1$d songs you replay</string>
+    <string name="home_mix_rediscover">Rediscover</string>
+    <string name="home_mix_rediscover_caption">%1$d songs from before</string>
+    <string name="home_mix_discovery">New to you</string>
+    <string name="home_mix_discovery_caption">%1$d songs, no plays yet</string>
+    <string name="home_mix_global">Around the world</string>
+    <string name="home_mix_global_caption">%1$d songs · all sources</string>
+
+    <!-- Home: the daily-discover poster — one recommendation and the song that earned it -->
+    <string name="home_daily_discover">Your daily discover</string>
+    <string name="home_similar_to">Similar to %1$s</string>
 </resources>

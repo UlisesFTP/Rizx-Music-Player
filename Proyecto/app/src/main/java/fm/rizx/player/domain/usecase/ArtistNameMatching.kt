@@ -49,6 +49,16 @@ object ArtistNameMatching {
         return keys
     }
 
+    /**
+     * **One** canonical key for this artist, for grouping credits in a map.
+     *
+     * [keys] returns the set of spellings that should *match*, which is what comparison needs but what a
+     * map key cannot be. This collapses the same name to a single value instead: de-channelized, folded,
+     * space-free — "ModjoOfficial", "Modjo" and "MODJO" all group under `modjo`, and "ROSALIA" meets
+     * "Rosalía". Used by [MixBuilder][MixBuilder] to count plays per artist.
+     */
+    fun key(name: String): String = blender.nameKey(searchName(name)).replace(" ", "")
+
     /** True when [a] and [b] name the same artist, allowing for channel decoration on either side. */
     fun sameArtist(a: String, b: String): Boolean {
         val left = keys(a)

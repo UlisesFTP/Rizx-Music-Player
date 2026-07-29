@@ -90,4 +90,13 @@ class ArtistNameMatchingTest {
     fun `a repeated name is proposed once, so a collaboration can't link to itself twice`() {
         assertEquals(listOf("Drake"), ArtistNameMatching.credits("Drake feat. DRAKE"))
     }
+
+    @Test
+    fun `one key groups every spelling of an artist, so play counts don't splinter`() {
+        // What `MixBuilder` counts plays by: a set of possible spellings cannot be a map key.
+        assertEquals(ArtistNameMatching.key("Dua Lipa"), ArtistNameMatching.key("DualipaVEVO"))
+        assertEquals(ArtistNameMatching.key("Radiohead"), ArtistNameMatching.key("Radiohead - Topic"))
+        assertEquals(ArtistNameMatching.key("Rosalía"), ArtistNameMatching.key("ROSALIA"))
+        assertFalse(ArtistNameMatching.key("Modjo") == ArtistNameMatching.key("Mojo"))
+    }
 }

@@ -6,17 +6,26 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.data.local.store.HomeFeedStore
+import fm.rizx.player.domain.model.AppMix
+import fm.rizx.player.domain.model.DailyPick
 import fm.rizx.player.domain.model.ForYouSection
 import fm.rizx.player.domain.model.HomeFeed
+import fm.rizx.player.domain.model.QueueContext
+import fm.rizx.player.domain.model.QueueSourceKind
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.repository.DashboardRepository
+import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.domain.repository.ForYouRepository
 import fm.rizx.player.domain.repository.QueueRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.domain.usecase.HomeFeedDeduper
+import fm.rizx.player.domain.usecase.MixBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -53,6 +62,19 @@ sealed interface HomeUiState {
 }
 
 /**
+ * The mosaic wall's data: the mixes Rizx built for itself, and the day's single pick.
+ *
+ * Kept out of [HomeUiState] because it is derived rather than loaded — [MixBuilder] computes it from the
+ * history, the likes and whatever feed is already on screen, so it has no load state of its own and no
+ * failure of its own. It also means the wall survives a feed error: a listener with a history still gets
+ * their mixes offline.
+ */
+data class HomeMixes(
+    val mixes: List<AppMix> = emptyList(),
+    val pick: DailyPick? = null,
+)
+
+/**
  * Loads the blended multi-source [HomeFeed] (Deezer + Spotify + Apple charts through the dashboard
  * fan-out + blender) and the personalized For-you sections. A failing provider degrades gracefully
  * upstream; a total network failure with nothing to show surfaces as [HomeUiState.Offline] with retry.
@@ -80,8 +102,15 @@ class HomeViewModel @Inject constructor(
     private val forYou: ForYouRepository,
     private val cache: HomeFeedStore,
     private val settings: SettingsRepository,
+    private val favorites: FavoritesRepository,
     recents: fm.rizx.player.domain.repository.RecentlyPlayedRepository,
 ) : ViewModel() {
+
+    /**
+     * The play history the statistics run on. Deeper than the row below shows, because the weighting
+     * needs a distribution to weigh — the recency decay only says anything across a few dozen plays.
+     */
+    private val history: Flow<List<Track>> = recents.recent(TASTE_ITEMS)
 
     /**
      * "Continue listening" — the songs you played last, newest first.
@@ -92,7 +121,7 @@ class HomeViewModel @Inject constructor(
      * failure must not take it away.
      */
     val continueListening: StateFlow<List<Track>> =
-        recents.recent(CONTINUE_ITEMS)
+        history.map { it.take(CONTINUE_ITEMS) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _state = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
@@ -100,6 +129,26 @@ class HomeViewModel @Inject constructor(
 
     /** Pure and stateless, like the blender it shares identity keys with — built, not injected. */
     private val deduper = HomeFeedDeduper()
+
+    /** Same reasoning: pure statistics over data this ViewModel already holds. */
+    private val mixBuilder = MixBuilder()
+
+    /**
+     * The mosaic wall. Recomputed whenever the history, the likes or the feed change — all three cheap,
+     * all three already in memory — and never on a timer, so the wall is stable while you read it.
+     *
+     * [MixBuilder.build] is fed the feed but **not** the personalized rows, so the set of mixes is
+     * settled on the first frame: a wall that gained a tile when the slow half landed would push the
+     * whole feed down. [MixBuilder.pick] is the exception, and the Home reserves its card's height.
+     */
+    val mixes: StateFlow<HomeMixes> =
+        combine(history, favorites.favoriteTracks(), state) { played, liked, ui ->
+            val content = ui as? HomeUiState.Content
+            HomeMixes(
+                mixes = mixBuilder.build(played, liked, content?.feed ?: HomeFeed()),
+                pick = mixBuilder.pick(played, liked, content?.forYouSections.orEmpty()),
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeMixes())
 
     // Raw halves, kept apart so either can be replaced without waiting for the other.
     private var rawFeed: HomeFeed? = null
@@ -243,6 +292,18 @@ class HomeViewModel @Inject constructor(
      */
     fun playTrack(track: Track) = playback.playAutoRadio(track)
 
+    /**
+     * Play a whole mix **as a context**, so next/previous walk the mix instead of wandering off into a
+     * radio the moment the first song ends — a mix the app assembled is a finished list, not a seed.
+     *
+     * [label] is the localized title the mosaic is already showing, passed in because the domain keeps no
+     * resources: this way the queue names the mix exactly as the tile the user tapped did.
+     */
+    fun playMix(mix: AppMix, label: String) {
+        if (mix.tracks.isEmpty()) return
+        playback.playContext(mix.tracks, 0, QueueContext(kind = QueueSourceKind.PLAYLIST, label = label))
+    }
+
     /** The consent card's buttons; the consent collector in [init] refreshes the feed afterwards. */
     fun setRegionalConsent(consented: Boolean) {
         viewModelScope.launch { forYou.setRegionalConsent(consented) }
@@ -251,5 +312,8 @@ class HomeViewModel @Inject constructor(
     private companion object {
         /** One carousel's worth of history — the row is a way back in, not the whole log. */
         const val CONTINUE_ITEMS = 12
+
+        /** How deep the statistics read. Enough for the recency decay to separate old plays from new. */
+        const val TASTE_ITEMS = 40
     }
 }

@@ -6,15 +6,20 @@ import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.local.store.HomeFeedStore
 import fm.rizx.player.data.repository.InMemoryQueueRepository
+import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.AttributedResult
 import fm.rizx.player.domain.model.ForYouSection
 import fm.rizx.player.domain.model.HomeFeed
+import fm.rizx.player.domain.model.MixKind
 import fm.rizx.player.domain.model.ProviderRef
+import fm.rizx.player.domain.model.QueueContext
+import fm.rizx.player.domain.model.QueueSourceKind
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.playback.PlaybackState
 import fm.rizx.player.domain.repository.DashboardRepository
+import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.domain.repository.ForYouRepository
 import fm.rizx.player.domain.repository.RecentlyPlayedRepository
 import kotlinx.coroutines.CompletableDeferred
@@ -52,7 +57,8 @@ class HomeViewModelTest {
         var lastYoutubeRadioTrack: Track? = null
         val autoRadioTracks = mutableListOf<Track>()
         override fun playAutoRadio(track: Track) { autoRadioTracks += track }
-        override fun playContext(tracks: List<Track>, startIndex: Int, context: fm.rizx.player.domain.model.QueueContext) {}
+        var lastContext: QueueContext? = null
+        override fun playContext(tracks: List<Track>, startIndex: Int, context: QueueContext) { lastContext = context }
         override fun playRadio(track: Track) { lastRadioTrack = track }
         override fun playYoutubeRadio(track: Track) { lastYoutubeRadioTrack = track }
         override fun play() {}
@@ -82,6 +88,20 @@ class HomeViewModelTest {
         override suspend fun clear() {}
     }
 
+    private class FakeFavorites(private val tracks: List<Track> = emptyList()) : FavoritesRepository {
+        override fun favoriteTracks(): Flow<List<Track>> = flowOf(tracks)
+        override fun favoriteAlbums(): Flow<List<AlbumRef>> = flowOf(emptyList())
+        override fun favoriteArtists(): Flow<List<ArtistRef>> = flowOf(emptyList())
+        override fun isFavoriteTrack(source: ProviderRef): Flow<Boolean> = flowOf(false)
+        override suspend fun addTrack(track: Track) {}
+        override suspend fun removeTrack(source: ProviderRef) {}
+        override suspend fun toggleTrack(track: Track): Boolean = true
+        override suspend fun addAlbum(album: AlbumRef) {}
+        override suspend fun removeAlbum(source: ProviderRef) {}
+        override suspend fun addArtist(artist: ArtistRef) {}
+        override suspend fun removeArtist(source: ProviderRef) {}
+    }
+
     /** Three artists — the shape of a real `ArtistsForYou` row. */
     private fun artists() = List(3) { ArtistRef(name = "Artist $it", source = ProviderRef("deezer", "artist:$it")) }
 
@@ -100,7 +120,7 @@ class HomeViewModelTest {
         HomeFeedStore(File(tmp.root, "home_feed.json"), io = mainDispatcherRule.dispatcher)
 
     private fun vm(repo: DashboardRepository, forYou: ForYouRepository = FakeForYou()) =
-        HomeViewModel(repo, InMemoryQueueRepository(), FakePlayback(), forYou, store(), FakeSettingsRepository(), FakeRecents())
+        HomeViewModel(repo, InMemoryQueueRepository(), FakePlayback(), forYou, store(), FakeSettingsRepository(), FakeFavorites(), FakeRecents())
 
     @Test
     fun `loads the feed into Content`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
@@ -127,7 +147,7 @@ class HomeViewModelTest {
             val recent = Track("Yesterday", source = ProviderRef("deezer", "9"))
             val vm = HomeViewModel(
                 FakeDash { throw AppError.Network("offline") },
-                InMemoryQueueRepository(), FakePlayback(), FakeForYou(), store(), FakeSettingsRepository(),
+                InMemoryQueueRepository(), FakePlayback(), FakeForYou(), store(), FakeSettingsRepository(), FakeFavorites(),
                 FakeRecents(listOf(recent)),
             )
 
@@ -231,7 +251,7 @@ class HomeViewModelTest {
             var networkCalls = 0
             val dash = FakeDash { networkCalls++; HomeFeed() }
 
-            val vm = HomeViewModel(dash, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeRecents())
+            val vm = HomeViewModel(dash, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeFavorites(), FakeRecents())
             val content = vm.state.first { it is HomeUiState.Content } as HomeUiState.Content
 
             assertEquals("From cache", content.feed.topTracks.single().items.single().title)
@@ -249,7 +269,7 @@ class HomeViewModelTest {
             )
             val vm = HomeViewModel(
                 FakeDash { throw AppError.Network("offline") },
-                InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeRecents(),
+                InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeFavorites(), FakeRecents(),
             )
 
             vm.state.first { it is HomeUiState.Content }
@@ -265,7 +285,7 @@ class HomeViewModelTest {
             // setting, resolved in one place (the controller), so every entry point agrees — this
             // screen just says "start a radio from this song".
             val playback = FakePlayback()
-            val vm = HomeViewModel(FakeDash { HomeFeed() }, InMemoryQueueRepository(), playback, FakeForYou(), store(), FakeSettingsRepository(), FakeRecents())
+            val vm = HomeViewModel(FakeDash { HomeFeed() }, InMemoryQueueRepository(), playback, FakeForYou(), store(), FakeSettingsRepository(), FakeFavorites(), FakeRecents())
             val youtube = Track("Mix song", source = ProviderRef("youtube", "abcdefghijk"))
             val deezer = Track("Chart song", source = ProviderRef("deezer", "1"))
 
@@ -275,4 +295,67 @@ class HomeViewModelTest {
             assertEquals(listOf(youtube, deezer), playback.autoRadioTracks)
             assertNull("the screen must not pick an engine itself", playback.lastYoutubeRadioTrack)
         }
+
+    @Test
+    fun `the mosaic wall is built from the feed and plays as a context, not a radio`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            val playback = FakePlayback()
+            val vm = HomeViewModel(
+                FakeDash { chartFeed(10) }, InMemoryQueueRepository(), playback, FakeForYou(), store(),
+                FakeSettingsRepository(), FakeFavorites(), FakeRecents(),
+            )
+
+            val mix = vm.mixes.first { it.mixes.isNotEmpty() }.mixes.first()
+            vm.playMix(mix, "Around the world")
+
+            // A mix the app assembled is a finished list: next/previous must walk it rather than wander
+            // off into a radio after the first song.
+            assertEquals(MixKind.GLOBAL, mix.kind)
+            assertEquals(10, mix.tracks.size)
+            assertEquals(QueueSourceKind.PLAYLIST, playback.lastContext?.kind)
+            assertEquals("Around the world", playback.lastContext?.label)
+        }
+
+    @Test
+    fun `the wall does not change when the slow personalized half lands — only the pick does`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            // The whole reason MixBuilder is not fed the For-you rows: a wall that gained a tile when
+            // they arrived would push the entire feed down, which is the jump the skeletons exist to
+            // prevent. The day's pick *does* come from them, and the Home reserves its card's height.
+            val gate = CompletableDeferred<Unit>()
+            // Three, because the Home's deduper drops any row thinner than that — a one-track row would
+            // never have reached the UI to be picked from.
+            val recommended = List(3) { Track("Recommended $it", source = ProviderRef("youtube", "yt$it")) }
+            val forYou = object : ForYouRepository {
+                override fun sections(): Flow<List<ForYouSection>> = flow {
+                    emit(listOf(ForYouSection.Mix("Timeless", emptyList())))
+                    gate.await()
+                    emit(listOf(ForYouSection.Mix("Timeless", recommended)))
+                }
+                override val regionalConsent: Flow<Boolean?> = MutableStateFlow(true)
+                override suspend fun setRegionalConsent(consented: Boolean) {}
+                override fun countryName(): String? = "México"
+            }
+            val vm = vm(FakeDash { chartFeed(10) }, forYou)
+
+            val before = vm.mixes.first { it.mixes.isNotEmpty() }
+            assertNull("nothing has been recommended yet", before.pick)
+
+            gate.complete(Unit)
+            val after = vm.mixes.first { it.pick != null }
+
+            assertEquals("the wall must be exactly what it was", before.mixes, after.mixes)
+            assertEquals(recommended.first(), after.pick?.track)
+            assertEquals("the reason line names the song that earned it", "Timeless", after.pick?.becauseOf)
+        }
+
+    /** A chart big enough to clear the global mix's minimum size. */
+    private fun chartFeed(count: Int) = HomeFeed(
+        topTracks = listOf(
+            AttributedResult(
+                "d", "Deezer",
+                List(count) { Track("Chart $it", source = ProviderRef("deezer", "t$it")) },
+            ),
+        ),
+    )
 }

@@ -36,4 +36,27 @@
     <string name="pref_feed_provider_caption">De dónde salen las listas y los lanzamientos</string>
     <string name="feed_provider_all">Todas combinadas</string>
     <string name="feed_provider_all_caption">Mezcla todas las fuentes activas, sin repetidos</string>
-    <string name="feed_provider_only_caption">Solo de %1$s</string></resources>
+    <string name="feed_provider_only_caption">Solo de %1$s</string>
+
+    <!-- Inicio: los mosaicos — mixes que Rizx arma con las estadísticas de reproducción -->
+    <string name="home_mixes_section">Tus mixes</string>
+    <string name="home_rizx_pick">Elección de Rizx</string>
+    <string name="home_play_now">Reproducir</string>
+    <string name="home_mix_label">Mix</string>
+    <string name="home_mix_daily">Tu mix diario</string>
+    <string name="home_mix_daily_caption">%1$d canciones · %2$d artistas</string>
+    <string name="home_mix_artist">Mix de %1$s</string>
+    <string name="home_mix_artist_caption">%1$d canciones de %2$s</string>
+    <string name="home_mix_on_repeat">En repetición</string>
+    <string name="home_mix_on_repeat_caption">%1$d canciones en bucle</string>
+    <string name="home_mix_rediscover">Redescubre</string>
+    <string name="home_mix_rediscover_caption">%1$d canciones de antes</string>
+    <string name="home_mix_discovery">Nuevo para ti</string>
+    <string name="home_mix_discovery_caption">%1$d canciones sin escuchar</string>
+    <string name="home_mix_global">Alrededor del mundo</string>
+    <string name="home_mix_global_caption">%1$d canciones · global</string>
+
+    <!-- Inicio: el póster del descubrimiento diario — una recomendación y la canción que la trajo -->
+    <string name="home_daily_discover">Tu descubrimiento diario</string>
+    <string name="home_similar_to">Parecido a %1$s</string>
+</resources>

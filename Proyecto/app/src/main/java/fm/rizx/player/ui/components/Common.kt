@@ -185,6 +185,11 @@ fun RizxChip(
  * Recurring square/circular cover: per-index tint + diagonal hatch + optional initial & corner label.
  * When [imageUrl] is non-null, the real cover art is loaded (Coil) over the gradient, which stays as the
  * loading/error placeholder.
+ *
+ * [borderColor]/[borderWidth] default to the hairline the app has always drawn. The Home passes the
+ * theme's full-strength ink instead — the black margin that makes those cards read as brutalist blocks
+ * rather than floating images — and it is opt-in so denser surfaces (search rows, queue thumbs) keep the
+ * hairline that suits them.
  */
 @Composable
 fun CoverArt(
@@ -195,6 +200,8 @@ fun CoverArt(
     label: String? = null,
     circle: Boolean = false,
     imageUrl: String? = null,
+    borderColor: Color = RizxTheme.colors.line,
+    borderWidth: Dp = 1.dp,
 ) {
     val c = RizxTheme.colors
     val shape = if (circle) CircleShape else RectangleShape
@@ -203,7 +210,7 @@ fun CoverArt(
             .clip(shape)
             .background(coverTint(tintIndex, c.isDark))
             .hatch(c.hatch)
-            .border(1.dp, c.line, shape),
+            .border(borderWidth, borderColor, shape),
     ) {
         if (imageUrl != null) {
             coil.compose.AsyncImage(
