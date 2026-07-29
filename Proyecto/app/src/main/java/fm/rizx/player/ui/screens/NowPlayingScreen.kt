@@ -87,7 +87,9 @@ import fm.rizx.player.ui.components.PulsingPlayButton
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.VerticalLabel
 import fm.rizx.player.ui.components.clickableScale
+import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.RepeatMode
+import fm.rizx.player.domain.usecase.LinkedArtist
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.brutalShadow
 import fm.rizx.player.ui.theme.cornerBrackets
@@ -124,8 +126,13 @@ fun NowPlayingScreen(
     onOpenDevices: () -> Unit = {},
     /** Starts an endless radio seeded from the current song (the service auto-fills similar tracks). */
     onStartRadio: () -> Unit = {},
-    /** Opens the artist's page. Null when the track's artist carries no `ProviderRef` to open. */
-    onOpenArtist: (() -> Unit)? = null,
+    /**
+     * The billed artists, already resolved to the pages they open. Empty falls back to plain [artist]
+     * text; an entry with a null `source` renders but stays untappable.
+     */
+    artistLinks: List<LinkedArtist> = emptyList(),
+    /** Opens one artist's page. */
+    onOpenArtist: (ProviderRef) -> Unit = {},
     album: String = "",
     trackIndex: Int = 0,
     trackCount: Int = 1,
@@ -517,26 +524,11 @@ fun NowPlayingScreen(
                                 // Marquee: a title too long for one line scrolls leftward instead of clipping.
                                 modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE),
                             )
-                            Text(
-                                animArtist,
-                                style = mr(14, FontWeight.Medium).copy(shadow = npTextShadow),
-                                color = c.text2,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                                // Tappable only when we actually know which artist this is: a track's
-                                // ArtistCredit carries no ProviderRef unless its metadata provider gave one
-                                // (Deezer does, YouTube doesn't), and a name alone is not an identity.
-                                modifier = Modifier
-                                    .padding(top = 5.dp)
-                                    .then(
-                                        if (onOpenArtist != null) {
-                                            Modifier.clickableScale(scale = 0.96f, onClick = onOpenArtist)
-                                        } else {
-                                            Modifier
-                                        },
-                                    )
-                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                            ArtistLine(
+                                fallback = animArtist,
+                                links = artistLinks,
+                                onOpenArtist = onOpenArtist,
+                                shadow = npTextShadow,
                             )
                         }
                     }
@@ -688,6 +680,68 @@ fun NowPlayingScreen(
                 onRemove = onRemoveQueueItem,
                 onMove = onMoveQueueItem,
                 onCollapse = { queueOpen = false },
+            )
+        }
+    }
+}
+
+/**
+ * The billing under the title, with **each artist its own destination**.
+ *
+ * A collaboration used to be one string and therefore one tap target, so the second artist was
+ * unreachable — and since no catalogue has an artist called "Omar Courtz & De La Rose", usually the
+ * first one was too. The names arrive already resolved ([LinkedArtist]); one that resolved to nothing
+ * still renders, just without a tap.
+ *
+ * Names carry `weight(fill = false)`: they shrink to fit and ellipsize individually, so a long billing
+ * can never push the row past the screen or move the controls below it.
+ */
+@Composable
+private fun ArtistLine(
+    fallback: String,
+    links: List<LinkedArtist>,
+    onOpenArtist: (ProviderRef) -> Unit,
+    shadow: Shadow?,
+) {
+    val c = RizxTheme.colors
+    val style = mr(14, FontWeight.Medium).copy(shadow = shadow)
+    if (links.isEmpty()) {
+        Text(
+            fallback,
+            style = style,
+            color = c.text2,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 5.dp).padding(horizontal = 10.dp, vertical = 4.dp),
+        )
+        return
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(top = 5.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        links.forEachIndexed { index, artist ->
+            if (index > 0) {
+                Text("·", style = style, color = c.text2.copy(alpha = 0.55f))
+            }
+            Text(
+                artist.name,
+                style = style,
+                color = c.text2,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .then(
+                        // Tappable only where we know which artist this is: a name alone is not an identity.
+                        artist.source
+                            ?.let { ref -> Modifier.clickableScale(scale = 0.96f) { onOpenArtist(ref) } }
+                            ?: Modifier,
+                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
             )
         }
     }

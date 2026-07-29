@@ -67,4 +67,27 @@ class ArtistNameMatchingTest {
         assertFalse(ArtistNameMatching.sameArtist("Modjo", "Mojo"))
         assertFalse(ArtistNameMatching.sameArtist("", "Modjo"))
     }
+
+    @Test
+    fun `a billing line proposes the artists it might be naming`() {
+        assertEquals(listOf("Omar Courtz", "De La Rose"), ArtistNameMatching.credits("Omar Courtz & De La Rose"))
+        assertEquals(listOf("Future", "Metro Boomin"), ArtistNameMatching.credits("Future, Metro Boomin"))
+        assertEquals(listOf("Bad Bunny", "Chencho Corleone"), ArtistNameMatching.credits("Bad Bunny feat. Chencho Corleone"))
+        assertEquals(listOf("Karol G", "Nicki Minaj"), ArtistNameMatching.credits("Karol G ft. Nicki Minaj"))
+        assertEquals(listOf("Feid", "Yandel"), ArtistNameMatching.credits("Feid x Yandel"))
+    }
+
+    @Test
+    fun `a single artist stays one credit`() {
+        assertEquals(listOf("Coldplay"), ArtistNameMatching.credits("Coldplay"))
+        // Only a proposal — the caller checks it against a catalogue — but "+" and " y " are not even
+        // proposed, because "Florence + the Machine" and "Jesse y Joy" are one act each.
+        assertEquals(listOf("Florence + the Machine"), ArtistNameMatching.credits("Florence + the Machine"))
+        assertEquals(listOf("Jesse y Joy"), ArtistNameMatching.credits("Jesse y Joy"))
+    }
+
+    @Test
+    fun `a repeated name is proposed once, so a collaboration can't link to itself twice`() {
+        assertEquals(listOf("Drake"), ArtistNameMatching.credits("Drake feat. DRAKE"))
+    }
 }

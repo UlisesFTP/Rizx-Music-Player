@@ -26,4 +26,15 @@
     <string name="radio_algorithm_youtube_caption">Follows the song itself, like YT Music\'s autoplay</string>
     <string name="radio_algorithm_deezer">Deezer</string>
     <string name="radio_algorithm_deezer_caption">Follows the artist, with their similar tracks</string>
+    <string name="radio_algorithm_apple">Apple Music</string>
+    <string name="radio_algorithm_apple_caption">The artist\'s catalogue, then more of the same genre</string>
+    <string name="radio_algorithm_soundcloud">SoundCloud</string>
+    <string name="radio_algorithm_soundcloud_caption">SoundCloud\'s own related tracks — indie and remixes</string>
+
+    <!-- Settings: which platform's charts fill the Home feed -->
+    <string name="pref_feed_provider">Home feed</string>
+    <string name="pref_feed_provider_caption">Where the charts and new releases come from</string>
+    <string name="feed_provider_all">All combined</string>
+    <string name="feed_provider_all_caption">Blends every enabled source, without duplicates</string>
+    <string name="feed_provider_only_caption">From %1$s only</string>
 </resources>

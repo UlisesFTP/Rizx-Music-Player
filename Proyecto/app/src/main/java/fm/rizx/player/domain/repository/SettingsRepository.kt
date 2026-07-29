@@ -115,6 +115,17 @@ interface SettingsRepository {
     suspend fun setRadioAlgorithm(mode: RadioMode)
 
     /**
+     * Which source fills the Home feed: the id of one registered dashboard provider, or
+     * `SettingsRepositoryImpl.FEED_PROVIDER_ALL` to blend every enabled one. Defaults to Deezer — the
+     * only source that fills all four sections on its own.
+     *
+     * A raw id rather than an enum, because the options come from the provider registry: a plugin's
+     * dashboard becomes selectable the moment it registers, with no code change here.
+     */
+    val feedProvider: Flow<String>
+    suspend fun setFeedProvider(id: String)
+
+    /**
      * How hard the karaoke lyrics view is allowed to work. Defaults to
      * [LyricsVisualQuality.AUTOMATIC], which turns the halo off and halves the frame rate by itself on a
      * device in power-save mode or short on RAM. This is the one screen in the app that asks for a frame

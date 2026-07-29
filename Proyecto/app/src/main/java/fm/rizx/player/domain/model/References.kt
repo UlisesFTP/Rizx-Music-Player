@@ -22,6 +22,15 @@ data class ArtistRef(
     val disambiguation: String? = null,
     val artwork: ArtworkSet? = null,
     val source: ProviderRef,
+    /**
+     * How many people follow this profile, when the catalogue says.
+     *
+     * Not decoration: catalogues carry **several entries under one artist's name** — the real one plus
+     * the thin duplicates a distributor created for a feature credit — and they are told apart by
+     * nothing else. Search rank does not do it (Deezer returns a 27-follower "The Weeknd" above the
+     * 14.6M one), so whoever picks between same-name candidates picks by this.
+     */
+    val followers: Long? = null,
 )
 
 @Serializable

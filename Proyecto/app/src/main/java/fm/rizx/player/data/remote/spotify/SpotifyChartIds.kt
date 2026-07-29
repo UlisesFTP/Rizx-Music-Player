@@ -33,4 +33,21 @@ object SpotifyChartIds {
     /** The country's Top 50 playlist id, or the Global chart when unknown/unmapped/no consent. */
     fun top50(country: String?): String =
         country?.lowercase()?.let { TOP_50_BY_COUNTRY[it] } ?: TOP_50_GLOBAL
+
+    /**
+     * Spotify's flagship editorial playlists, beyond the algorithmic charts. Each id was **verified
+     * live** through the embed page (name and track count both came back), because an id that has
+     * been retired renders a card that opens empty — worse than not offering it.
+     *
+     * Curated rather than discovered: Spotify publishes no keyless index of its editorial playlists,
+     * and its search needs the TOTP-minted bearer this project refuses (ADR 0018). These are the
+     * genre pillars that stay put for years; anything that does disappear degrades through the
+     * provider's own error isolation.
+     */
+    val EDITORIAL: List<Pair<String, String>> = listOf(
+        "37i9dQZF1DXcBWIGoYBM5M" to "Today's Top Hits",
+        "37i9dQZF1DX0XUsuxWHRQd" to "RapCaviar",
+        "37i9dQZF1DWY7IeIP1cdjF" to "Baila Reggaeton",
+        "37i9dQZF1DWXRqgorJj26U" to "Rock Classics",
+    )
 }

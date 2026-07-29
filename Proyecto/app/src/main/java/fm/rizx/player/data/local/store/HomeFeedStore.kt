@@ -15,12 +15,19 @@ import java.io.File
 import java.time.Duration
 import java.time.Instant
 
-/** The last Home the user saw, with the moment it was fetched so freshness can be judged. */
+/**
+ * The last Home the user saw, with the moment it was fetched so freshness can be judged and the feed
+ * selection it was built from so a changed selection can't serve the previous platform's charts.
+ *
+ * [feedSelection] defaults to empty, which never equals a real selection — so a cache written before
+ * this field existed is discarded exactly once, on the first read after updating.
+ */
 @Serializable
 data class CachedHomeFeed(
     val feed: HomeFeed = HomeFeed(),
     val sections: List<ForYouSection> = emptyList(),
     val savedAtIso: String,
+    val feedSelection: String = "",
 )
 
 /**
@@ -48,20 +55,21 @@ class HomeFeedStore(
     private val lock = Mutex()
 
     /**
-     * The cached Home, or `null` when there is none, it cannot be decoded, or it is older than
-     * [MAX_AGE] — week-old charts are worse than a short wait.
+     * The cached Home, or `null` when there is none, it cannot be decoded, it is older than [MAX_AGE]
+     * — week-old charts are worse than a short wait — or it was built from a different
+     * [feedSelection] than the one now in force.
      */
-    suspend fun read(): CachedHomeFeed? = withContext(io) {
+    suspend fun read(feedSelection: String = ""): CachedHomeFeed? = withContext(io) {
         lock.withLock {
             runCatching {
                 if (!file.exists()) return@runCatching null
                 val cached = json.decodeFromString(CachedHomeFeed.serializer(), file.readText())
-                cached.takeIf { age(it) < MAX_AGE }
+                cached.takeIf { age(it) < MAX_AGE && it.feedSelection == feedSelection }
             }.getOrNull()
         }
     }
 
-    suspend fun write(feed: HomeFeed, sections: List<ForYouSection>) {
+    suspend fun write(feed: HomeFeed, sections: List<ForYouSection>, feedSelection: String = "") {
         withContext(io) {
             lock.withLock {
                 runCatching {
@@ -71,6 +79,7 @@ class HomeFeedStore(
                             feed = feed.stripped(),
                             sections = sections.map { it.stripped() },
                             savedAtIso = now().toString(),
+                            feedSelection = feedSelection,
                         ),
                     )
                     val tmp = File(file.parentFile, "${file.name}.tmp")

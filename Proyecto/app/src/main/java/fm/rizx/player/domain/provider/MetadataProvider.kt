@@ -22,6 +22,31 @@ interface MetadataProvider : ProviderDescriptor {
     val searchCapabilities: Set<SearchCapability>
     suspend fun search(params: SearchParams): SearchResults
 
+    /**
+     * The `ProviderRef.provider` namespaces whose items belong to this provider.
+     *
+     * **This is not [id].** A provider's registry id names the *source you can select*
+     * (`applemusic-metadata`), while the refs it mints name the *catalogue* (`applemusic`) — and one
+     * catalogue can be served by more than one provider. Anything asking "who owns this item?" must
+     * go through here; looking a provider up by `source.provider` silently finds nothing for every
+     * provider whose two names differ, which is most of them.
+     *
+     * Defaults to [id] so a provider whose two names coincide needs no override.
+     */
+    val ownedNamespaces: Set<String> get() = setOf(id)
+
+    /** True when [source] came from this provider's catalogue. */
+    fun owns(source: ProviderRef): Boolean = source.provider in ownedNamespaces
+
+    /**
+     * The full [Track] behind one of **this provider's own** refs — an exact lookup by id, never a
+     * search. This is what makes "go back to the owner" possible: the owner knows precisely which
+     * recording a ref names, so its answer needs no matching and can never be the wrong song.
+     *
+     * Returns `null` when the provider can't resolve by id, doesn't own [source], or finds nothing.
+     */
+    suspend fun trackDetail(source: ProviderRef): Track? = null
+
     val detailCapabilities: Set<DetailCapability> get() = emptySet()
 
     /** Full album (incl. track list) for an album [source] ref, or `null` if unsupported/not found. */

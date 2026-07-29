@@ -75,13 +75,19 @@ class DeezerArtistSearch(
      * all (verified live) while "modjo" finds the band, so the name is de-channelized through
      * [ArtistNameMatching] first. A result is only accepted when it really is the same artist — a wrong
      * id would quietly seed the radio with someone else's music.
+     *
+     * Among the ones that *are* the same artist, the **most-followed** wins rather than the highest
+     * ranked. Deezer keeps a duplicate row per artist for feature credits — a "The Weeknd" with 27
+     * followers and no albums, returned above the 14.6M one — and seeding a radio off that entry
+     * yields three songs and then nothing.
      */
     suspend fun idFor(name: String?): String? {
         val artist = name?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         for (query in ArtistNameMatching.queries(artist)) {
             val hit = try {
                 byName(query, ARTIST_SEARCH_LIMIT)
-                    .firstOrNull { it.id != null && ArtistNameMatching.sameArtist(it.name.orEmpty(), artist) }
+                    .filter { it.id != null && ArtistNameMatching.sameArtist(it.name.orEmpty(), artist) }
+                    .maxByOrNull { it.nbFan ?: -1L }
                     ?.id
                     ?.toString()
             } catch (e: CancellationException) {
@@ -95,8 +101,12 @@ class DeezerArtistSearch(
     }
 
     private companion object {
-        /** A handful, so the right artist can still be a row or two down behind a tribute act. */
-        const val ARTIST_SEARCH_LIMIT = 5
+        /**
+         * Deep enough that the real artist is still in the page when tribute acts and the catalogue's
+         * own duplicate rows outrank them. Matches `ResolveTrackArtistsUseCase`'s limit so the two
+         * share this memo's entries instead of each fetching their own page.
+         */
+        const val ARTIST_SEARCH_LIMIT = 10
 
         /** Matches the OkHttp `max-age` on `api.deezer.com`: past this, the network is cheap again. */
         const val TTL_MS = 10 * 60_000L

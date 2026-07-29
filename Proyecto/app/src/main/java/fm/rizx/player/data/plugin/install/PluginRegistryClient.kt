@@ -11,8 +11,11 @@ import okhttp3.Request
 import java.io.IOException
 
 /**
- * Fetches Nuclear's official plugin registry (`plugins.json`) so the Store can list installable plugins
- * (ADR 0014). Keyless HTTP GET; the last good result is cached in memory for offline resilience.
+ * Fetches plugin registries (`plugins.json`) so the Store can list installable plugins (ADR 0014/0019).
+ * The official Nuclear registry is always first; the user can add further registry URLs (same JSON
+ * shape) and their plugins merge in — first registry wins on id collisions, so nobody can shadow an
+ * official plugin. Keyless HTTP GETs; the last good merged result is cached in memory for offline
+ * resilience. A broken extra registry is skipped, never fatal.
  */
 class PluginRegistryClient(
     private val client: OkHttpClient,
@@ -21,21 +24,29 @@ class PluginRegistryClient(
     @Volatile
     private var cache: List<RegistryPlugin>? = null
 
-    suspend fun fetch(): List<RegistryPlugin> = withContext(Dispatchers.IO) {
+    suspend fun fetch(extraRegistries: List<String> = emptyList()): List<RegistryPlugin> = withContext(Dispatchers.IO) {
         try {
-            client.newCall(Request.Builder().url(REGISTRY_URL).build()).execute().use { response ->
-                if (!response.isSuccessful) return@use cache ?: throw AppError.ProviderFailure("PluginRegistry", "HTTP ${response.code}")
-                val body = response.body?.string() ?: "{}"
-                json.decodeFromString<RegistryFile>(body).plugins.also { cache = it }
+            val merged = LinkedHashMap<String, RegistryPlugin>()
+            for (plugin in fetchOne(REGISTRY_URL)) merged.putIfAbsent(plugin.id, plugin)
+            for (url in extraRegistries) {
+                runCatching { for (plugin in fetchOne(url)) merged.putIfAbsent(plugin.id, plugin) }
             }
+            merged.values.toList().also { cache = it }
         } catch (e: IOException) {
             cache ?: throw AppError.Network(e.message ?: "registry unreachable", e)
         } catch (e: AppError) {
-            throw e
+            cache ?: throw e
         } catch (e: Exception) {
             cache ?: throw AppError.ProviderFailure("PluginRegistry", e.message ?: "bad registry payload", e)
         }
     }
+
+    private fun fetchOne(url: String): List<RegistryPlugin> =
+        client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+            if (!response.isSuccessful) throw AppError.ProviderFailure("PluginRegistry", "HTTP ${response.code}")
+            val body = response.body?.string() ?: "{}"
+            json.decodeFromString<RegistryFile>(body).plugins
+        }
 
     private companion object {
         const val REGISTRY_URL = "https://raw.githubusercontent.com/NuclearPlayer/plugin-registry/master/plugins.json"

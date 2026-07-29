@@ -97,7 +97,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     // The player's cover and its artist link both need a resolution step for tracks that came from
     // YouTube, so they're state rather than a straight read off the current track.
     val npArtworkUrl by playbackViewModel.currentArtworkUrl.collectAsStateWithLifecycle()
-    val npArtistRef by playbackViewModel.currentArtistRef.collectAsStateWithLifecycle()
+    val npArtists by playbackViewModel.currentArtists.collectAsStateWithLifecycle()
     // Held as a State (not read here) so the ~25fps spectrum only invalidates the waveform's draw.
     val levelsState = playbackViewModel.levels.collectAsStateWithLifecycle()
     // Library (favorites + playlists) shared for the app-wide "add to playlist" picker.
@@ -287,12 +287,11 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     // reuse the existing artist-radio the controller already knows how to fill.
                     onOpenDevices = { context.openAudioOutputSwitcher() },
                     onStartRadio = { np?.track?.let { playbackViewModel.playAutoRadio(it) } },
-                    // Resolved ahead of the tap: a Deezer song knows its own artist, a YouTube-Mix song
-                    // credits only an uploader name and gets looked up on Deezer by that name. No
-                    // equivalent found → null → the name simply isn't tappable.
-                    onOpenArtist = npArtistRef?.let { ref ->
-                        { nav.navigate(Routes.artistDetail(ref)) }
-                    },
+                    // One entry per artist, resolved ahead of the tap: a collaboration's names are
+                    // separately tappable, and each opens that artist's real profile rather than the
+                    // duplicate row a feature credit was filed under. No page found → not tappable.
+                    artistLinks = npArtists,
+                    onOpenArtist = { ref -> nav.navigate(Routes.artistDetail(ref)) },
                     album = np?.track?.album?.title ?: "",
                     trackIndex = queue.currentIndex,
                     trackCount = queue.items.size,

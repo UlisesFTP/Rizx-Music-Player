@@ -17,10 +17,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,11 +73,28 @@ fun PluginsScreen(vm: PluginsViewModel = hiltViewModel()) {
             Tab(stringResource(R.string.plugins_tab_store), storeTab) { storeTab = true }
         }
 
+        var sideloadOpen by remember { mutableStateOf(false) }
+        var registryOpen by remember { mutableStateOf(false) }
+
         if (storeTab) {
             // state.storeError is sourced from the ViewModel; left as a raw literal there (not localized here).
             state.storeError?.let { Text(it, style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 12.dp)) }
             Section(stringResource(R.string.plugins_section_nuclear_store))
             state.store.forEach { row -> StoreRow(row, onInstall = { vm.install(row.id) }) }
+
+            Section(stringResource(R.string.plugins_section_open))
+            ActionRow(
+                title = stringResource(R.string.plugins_sideload_title),
+                subtitle = stringResource(R.string.plugins_sideload_subtitle),
+                busy = state.sideloadBusy,
+            ) { sideloadOpen = true }
+            ActionRow(
+                title = stringResource(R.string.plugins_add_registry),
+                subtitle = stringResource(R.string.plugins_add_registry_subtitle),
+            ) { registryOpen = true }
+            state.registries.forEach { url ->
+                RegistryRow(url, onRemove = { vm.removeRegistry(url) })
+            }
         } else {
             if (state.installedPlugins.isNotEmpty()) {
                 Section(stringResource(R.string.plugins_section_installed_plugins))
@@ -80,6 +103,7 @@ fun PluginsScreen(vm: PluginsViewModel = hiltViewModel()) {
                         p,
                         onToggle = { vm.setPluginEnabled(p.id, it) },
                         onUninstall = { vm.uninstall(p.id) },
+                        onUpdate = { vm.update(p.id) },
                     )
                 }
             }
@@ -98,6 +122,92 @@ fun PluginsScreen(vm: PluginsViewModel = hiltViewModel()) {
             }
         }
         Spacer(Modifier.height(60.dp))
+
+        if (sideloadOpen) {
+            UrlInputDialog(
+                title = stringResource(R.string.plugins_sideload_title),
+                hint = stringResource(R.string.plugins_sideload_hint),
+                confirmLabel = stringResource(R.string.plugins_install),
+                onConfirm = { vm.installFromUrl(it) },
+                onDismiss = { sideloadOpen = false },
+            )
+        }
+        if (registryOpen) {
+            UrlInputDialog(
+                title = stringResource(R.string.plugins_add_registry),
+                hint = stringResource(R.string.plugins_add_registry_hint),
+                confirmLabel = stringResource(R.string.plugins_action_add),
+                onConfirm = { vm.addRegistry(it) },
+                onDismiss = { registryOpen = false },
+            )
+        }
+    }
+}
+
+/** One URL in, one action out — sideload and add-registry share it. */
+@Composable
+private fun UrlInputDialog(
+    title: String,
+    hint: String,
+    confirmLabel: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var url by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RectangleShape,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                singleLine = true,
+                placeholder = { Text(hint) },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(url); onDismiss() }, enabled = url.isNotBlank()) { Text(confirmLabel) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+
+@Composable
+private fun ActionRow(title: String, subtitle: String, busy: Boolean = false, onClick: () -> Unit) {
+    val c = RizxTheme.colors
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RectangleShape).background(c.elev).border(1.dp, c.line, RectangleShape)
+            .clickableScale(scale = 0.99f) { if (!busy) onClick() }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = mr(15, FontWeight.SemiBold), color = c.text)
+            Text(
+                if (busy) stringResource(R.string.plugins_installing) else subtitle,
+                style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Icon(Icons.Filled.Add, title, tint = c.text2, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun RegistryRow(url: String, onRemove: () -> Unit) {
+    val c = RizxTheme.colors
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RectangleShape).background(c.inset).border(1.dp, c.line, RectangleShape)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(url, style = mr(12, FontWeight.Medium), color = c.text2, modifier = Modifier.weight(1f), maxLines = 1)
+        Icon(
+            Icons.Filled.Close, stringResource(R.string.plugins_remove_registry), tint = c.text2,
+            modifier = Modifier.size(18.dp).clickableScale(scale = 0.86f, onClick = onRemove),
+        )
     }
 }
 
@@ -166,11 +276,18 @@ private fun StoreRow(row: StoreRow, onInstall: () -> Unit) {
             if (row.description.isNotBlank()) {
                 Text(row.description, style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 2.dp))
             }
+            if (row.status == StoreStatus.UNSUPPORTED) {
+                Text(
+                    unsupportedReasonLabel(row.unsupportedReason),
+                    style = mr(12, FontWeight.Medium), color = c.redAccent, modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
         val (label, actionable) = when (row.status) {
             StoreStatus.AVAILABLE -> stringResource(R.string.plugins_install) to true
             StoreStatus.INSTALLING -> stringResource(R.string.plugins_installing) to false
             StoreStatus.INSTALLED -> stringResource(R.string.plugins_installed) to false
+            StoreStatus.UNSUPPORTED -> stringResource(R.string.plugins_not_compatible) to false
             StoreStatus.ERROR -> stringResource(R.string.action_retry) to true
         }
         Text(
@@ -187,16 +304,36 @@ private fun StoreRow(row: StoreRow, onInstall: () -> Unit) {
 }
 
 @Composable
-private fun InstalledPluginRow(row: InstalledPluginRow, onToggle: (Boolean) -> Unit, onUninstall: () -> Unit) {
+private fun InstalledPluginRow(
+    row: InstalledPluginRow,
+    onToggle: (Boolean) -> Unit,
+    onUninstall: () -> Unit,
+    onUpdate: () -> Unit,
+) {
     val c = RizxTheme.colors
     Row(
-        Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RectangleShape).background(c.elev).border(1.dp, c.line, RectangleShape).padding(horizontal = 14.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RectangleShape).background(c.elev)
+            .border(1.dp, if (row.quarantined) c.redAccent else c.line, RectangleShape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Column(Modifier.weight(1f)) {
             Text("${row.name}  ·  v${row.version}", style = mr(15, FontWeight.SemiBold), color = c.text)
-            Text(stringResource(R.string.plugins_plugin_category, row.category), style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 2.dp))
+            if (row.quarantined) {
+                Text(
+                    stringResource(R.string.plugins_quarantined) + if (row.lastError.isNotBlank()) " · ${row.lastError}" else "",
+                    style = mr(12, FontWeight.Medium), color = c.redAccent, modifier = Modifier.padding(top = 2.dp),
+                )
+            } else {
+                Text(stringResource(R.string.plugins_plugin_category, row.category), style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 2.dp))
+            }
+        }
+        if (row.canUpdate) {
+            Icon(
+                Icons.Filled.Refresh, stringResource(R.string.plugins_update), tint = c.text2,
+                modifier = Modifier.size(22.dp).clickableScale(scale = 0.86f, onClick = onUpdate),
+            )
         }
         Icon(
             Icons.Filled.DeleteOutline, stringResource(R.string.plugins_uninstall), tint = c.text2,
@@ -204,6 +341,13 @@ private fun InstalledPluginRow(row: InstalledPluginRow, onToggle: (Boolean) -> U
         )
         Switch(checked = row.enabled, onCheckedChange = onToggle)
     }
+}
+
+/** Maps a stable unsupported-reason key to its localized explanation. */
+@Composable
+private fun unsupportedReasonLabel(reason: String?): String = when (reason) {
+    "native-equivalent" -> stringResource(R.string.plugins_reason_native_equivalent)
+    else -> stringResource(R.string.plugins_not_compatible)
 }
 
 @Composable

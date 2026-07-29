@@ -5,6 +5,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,10 +43,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -78,12 +86,39 @@ import fm.rizx.player.ui.theme.staggeredReveal
 enum class HomeTab(val labelRes: Int) {
     All(R.string.home_tab_all),
     Songs(R.string.home_tab_songs),
+    // Playlists earn a tab now that the feed carries sixty-odd of them (Apple's Top 100 per country,
+    // its curated rows, Spotify's editorial, Deezer's regionals). Without a destination the overview
+    // silently kept ten and dropped the rest.
+    Playlists(R.string.home_tab_playlists),
     Albums(R.string.home_tab_albums),
     Artists(R.string.home_tab_artists),
 }
 
 /** How many items a carousel previews on the [HomeTab.All] overview before "See all". */
 private const val PREVIEW_ITEMS = 10
+
+/**
+ * What a playlist card says under its name: its track count when the source gave one, else the
+ * generic label. With sixty playlists on offer, "100 songs" separates a country chart from a
+ * four-track mood row far better than sixty identical "Editorial" captions.
+ */
+/**
+ * A personalized row's heading. Shared by the real rows and by the skeletons that stand in for them,
+ * so a row keeps one title — and therefore one LazyColumn key — from announcement to arrival.
+ */
+@Composable
+private fun forYouTitle(section: ForYouSection): String = when (section) {
+    is ForYouSection.Mix -> stringResource(R.string.home_mix_of, section.seedTitle)
+    is ForYouSection.BecauseYouLike -> stringResource(R.string.home_because_you_like, section.artistName)
+    is ForYouSection.ArtistsForYou -> stringResource(R.string.home_artists_for_you)
+    is ForYouSection.AlbumsForYou -> stringResource(R.string.home_albums_for_you)
+}
+
+@Composable
+private fun playlistSubtitle(playlist: PlaylistRef): String =
+    playlist.trackCount?.takeIf { it > 0 }
+        ?.let { pluralStringResource(R.plurals.home_playlist_tracks, it, it) }
+        ?: stringResource(R.string.home_editorial)
 
 /**
  * Charts & discovery.
@@ -115,16 +150,20 @@ fun HomeScreen(
     val topAlbumsTitle = stringResource(R.string.home_top_albums)
     val popularArtistsTitle = stringResource(R.string.home_popular_artists)
     val playlistsForYouTitle = stringResource(R.string.home_playlists_for_you)
+    val newReleasesTitle = stringResource(R.string.home_new_releases)
     val forYouLabel = stringResource(R.string.home_tab_for_you)
+    val continueTitle = stringResource(R.string.home_continue_listening)
+    val continueListening by vm.continueListening.collectAsStateWithLifecycle()
     // Localized titles for the personalized rows, resolved here for the same reason as above.
-    val forYouRows = ((state as? HomeUiState.Content)?.forYouSections.orEmpty()).map { section ->
-        when (section) {
-            is ForYouSection.Mix -> stringResource(R.string.home_mix_of, section.seedTitle)
-            is ForYouSection.BecauseYouLike -> stringResource(R.string.home_because_you_like, section.artistName)
-            is ForYouSection.ArtistsForYou -> stringResource(R.string.home_artists_for_you)
-            is ForYouSection.AlbumsForYou -> stringResource(R.string.home_albums_for_you)
-        } to section
-    }
+    val content = state as? HomeUiState.Content
+    val forYouRows = content?.forYouSections.orEmpty().map { forYouTitle(it) to it }
+    // Rows the feed has announced but not yet filled. They are drawn at their real height, so the
+    // personalized half lands *in place* — it used to arrive as a screen of content shoved in above
+    // whatever the user had started reading. Titles that already have a real row are dropped: the two
+    // lists share LazyColumn keys, and a duplicate key is a crash.
+    val forYouSkeletons = content?.forYouPending.orEmpty()
+        .map { forYouTitle(it) }
+        .filter { title -> forYouRows.none { it.first == title } }
 
     Box(Modifier.fillMaxSize()) {
         Text(
@@ -184,14 +223,20 @@ fun HomeScreen(
                             }
                         }
                     }
+                    // "Continue listening" — under the tabs, over everything the feed brings. It sits
+                    // outside `tabContent` so it stays put as you switch tabs, and it is local and
+                    // instant: no load state, nothing to wait for. Empty history draws nothing at all
+                    // rather than an empty shelf.
+                    trackCarousel(continueTitle, continueListening, vm::playTrack)
                     tabContent(
                         s.feed, tab, onOpenAlbum, onOpenArtist, onOpenEditorialPlaylist, vm::playTrack,
                         onSeeAll = { tabName = it.name },
                         topSongsTitle = topSongsTitle,
                         topAlbumsTitle = topAlbumsTitle,
                         popularArtistsTitle = popularArtistsTitle,
+                        newReleasesTitle = newReleasesTitle,
                         forYouRows = forYouRows,
-                        forYouLoading = s.forYouLoading,
+                        forYouSkeletons = forYouSkeletons,
                         playlistsForYouTitle = playlistsForYouTitle,
                         forYouLabel = forYouLabel,
                         regionalConsent = s.regionalConsent,
@@ -205,9 +250,17 @@ fun HomeScreen(
                         DotMatrixSpinner(color = c.accent, diameter = 34.dp)
                     }
                 }
+                // No feed, but the history is local — offline is exactly when a way back into what you
+                // were playing is worth most, so the row outlives the charts here.
                 // Retry means "go to the network", not "re-read the cache we just failed to fill".
-                HomeUiState.Offline -> item { HomeMessage(stringResource(R.string.home_offline_message), vm::refresh) }
-                is HomeUiState.Error -> item { HomeMessage(s.message, vm::refresh) }
+                HomeUiState.Offline -> {
+                    trackCarousel(continueTitle, continueListening, vm::playTrack)
+                    item { HomeMessage(stringResource(R.string.home_offline_message), vm::refresh) }
+                }
+                is HomeUiState.Error -> {
+                    trackCarousel(continueTitle, continueListening, vm::playTrack)
+                    item { HomeMessage(s.message, vm::refresh) }
+                }
             }
 
             item { Spacer(Modifier.height(LocalBottomInset.current + 16.dp)) }
@@ -226,8 +279,9 @@ private fun LazyListScope.tabContent(
     topSongsTitle: String,
     topAlbumsTitle: String,
     popularArtistsTitle: String,
+    newReleasesTitle: String,
     forYouRows: List<Pair<String, ForYouSection>>,
-    forYouLoading: Boolean,
+    forYouSkeletons: List<String>,
     playlistsForYouTitle: String,
     forYouLabel: String,
     regionalConsent: Boolean?,
@@ -240,6 +294,7 @@ private fun LazyListScope.tabContent(
             val albums = feed.topAlbums.flatMap { it.items }
             val artists = feed.topArtists.flatMap { it.items }
             val playlists = feed.editorialPlaylists.flatMap { it.items }
+            val newReleases = feed.newReleases.flatMap { it.items }
             if (tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() &&
                 playlists.isEmpty() && forYouRows.isEmpty()
             ) {
@@ -249,38 +304,12 @@ private fun LazyListScope.tabContent(
             // ---- "For you": everything picked for this listener, under one label. Its own tab was
             // folded in here — the songs, artists, albums and playlists chosen for you read better as
             // the top of the overview than as a place you had to go looking for. ----
-            if (regionalConsent == null) {
-                item(key = "region-consent") {
-                    RegionConsentCard(
-                        countryName = countryName,
-                        onAccept = { onSetRegionalConsent(true) },
-                        onDecline = { onSetRegionalConsent(false) },
-                    )
-                }
-            }
-            if (forYouRows.isNotEmpty() || playlists.isNotEmpty() || forYouLoading) {
+            if (forYouRows.isNotEmpty() || forYouSkeletons.isNotEmpty() || playlists.isNotEmpty()) {
                 item(key = "for-you-label") {
                     Eyebrow(
                         forYouLabel,
                         Modifier.padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 2.dp),
                     )
-                }
-            }
-            // The personalized rows are the slow half (YouTube-backed mixes). They no longer hold the
-            // charts hostage — this small strip marks where they will land while everything below is
-            // already usable.
-            if (forYouLoading && forYouRows.isEmpty()) {
-                item(key = "for-you-loading") {
-                    Box(
-                        Modifier.fillMaxWidth().height(72.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        DotMatrixSpinner(
-                            color = RizxTheme.colors.accent,
-                            diameter = 20.dp,
-                            modifier = Modifier.padding(start = 22.dp),
-                        )
-                    }
                 }
             }
             forYouRows.forEach { (title, section) ->
@@ -310,7 +339,12 @@ private fun LazyListScope.tabContent(
                     }
                 }
             }
-            carousel(playlistsForYouTitle, playlists, key = { it.source.identityKey }) { playlist ->
+            // The personalized rows are the slow half (YouTube-backed mixes) and they no longer hold
+            // the charts hostage — but arriving late they used to push everything below them down a
+            // whole screen. Each one now holds its own place from the moment it is announced.
+            forYouSkeletons.forEach { title -> skeletonCarousel(title) }
+
+            carousel(playlistsForYouTitle, playlists, HomeTab.Playlists, onSeeAll, key = { it.source.identityKey }) { playlist ->
                 CarouselCell(onClick = { onOpenEditorialPlaylist(playlist) }) {
                     CoverArt(
                         tintFor(playlist.source.id), initial = playlist.name.take(1),
@@ -318,7 +352,7 @@ private fun LazyListScope.tabContent(
                         imageUrl = playlist.artwork.coverUrl(),
                     )
                     CellTitle(playlist.name)
-                    CellSubtitle(stringResource(R.string.home_editorial))
+                    CellSubtitle(playlistSubtitle(playlist))
                 }
             }
 
@@ -355,6 +389,49 @@ private fun LazyListScope.tabContent(
                         initialSize = 38, circle = true, imageUrl = artist.artwork.coverUrl(),
                     )
                     CellTitle(artist.name, centered = true)
+                }
+            }
+
+            // New releases were being fetched, blended and deduped on every load, then never drawn.
+            // They share the Albums tab's grid because that is what they are.
+            carousel(newReleasesTitle, newReleases, HomeTab.Albums, onSeeAll, key = { "nr-${it.source.identityKey}" }) { album ->
+                CarouselCell(onClick = { onOpenAlbum(album.source) }) {
+                    CoverArt(
+                        tintFor(album.source.id), initial = album.title.take(1),
+                        Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
+                        imageUrl = album.artwork.coverUrl(),
+                    )
+                    CellTitle(album.title)
+                    CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+                }
+            }
+
+            // The consent ask sits *after* the music, not before it. It improves the personalised
+            // rows, so it belongs next to them — opening a music app on a permission card is the
+            // wrong first impression, and this one is easy to miss precisely because it can wait.
+            if (regionalConsent == null) {
+                item(key = "region-consent") {
+                    RegionConsentCard(
+                        countryName = countryName,
+                        onAccept = { onSetRegionalConsent(true) },
+                        onDecline = { onSetRegionalConsent(false) },
+                    )
+                }
+            }
+        }
+
+        HomeTab.Playlists -> {
+            val playlists = feed.editorialPlaylists.flatMap { it.items }
+            if (playlists.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_playlists)) }
+            browseGrid(playlists, key = { "pl-${it.source.identityKey}" }) { playlist, index ->
+                GridCell(index, onClick = { onOpenEditorialPlaylist(playlist) }) {
+                    CoverArt(
+                        tintFor(playlist.source.id), initial = playlist.name.take(1),
+                        Modifier.fillMaxWidth().aspectRatio(1f).paperElevation(), initialSize = 40,
+                        imageUrl = playlist.artwork.coverUrl(),
+                    )
+                    CellTitle(playlist.name)
+                    CellSubtitle(playlistSubtitle(playlist))
                 }
             }
         }
@@ -469,6 +546,80 @@ private fun <T> LazyListScope.carousel(
         ) {
             items(items.take(PREVIEW_ITEMS), key = key) { item -> cell(item) }
         }
+    }
+}
+
+/** How many placeholder cells a skeleton row draws — enough to fill the widest phone. */
+private const val SKELETON_CELLS = 4
+
+/**
+ * A row whose title is already known but whose cards are not yet: the real [SectionHeader] over a
+ * strip of placeholder cells built the same size as the real ones.
+ *
+ * It shares its item keys with [carousel], so when the row lands the LazyColumn reuses these very
+ * slots — the header never redraws and the cards swap in without a single pixel of movement. That is
+ * the whole point: the For-you block is the slowest half of the Home, and arriving after the charts
+ * it used to insert ~900dp above them while a 72dp spinner was all that had been reserved.
+ */
+private fun LazyListScope.skeletonCarousel(title: String) {
+    item(key = "hdr-$title") {
+        SectionHeader(
+            title,
+            Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 8.dp),
+        )
+    }
+    item(key = "car-$title") {
+        // One pulse drives the whole row: every cell in it is waiting on the same request.
+        val alpha by rememberInfiniteTransition(label = "skeleton").animateFloat(
+            initialValue = 0.30f,
+            targetValue = 0.70f,
+            animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+            label = "skeletonAlpha",
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 22.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            userScrollEnabled = false, // nothing to scroll to yet
+        ) {
+            items(SKELETON_CELLS) { SkeletonCell(alpha) }
+        }
+    }
+}
+
+/**
+ * One placeholder card, laid out exactly like [CarouselCell] + [CoverArt] + [CellTitle] +
+ * [CellSubtitle]: same width, same artwork box, and text bars measured by rendering the real type
+ * styles invisibly. Matching the height by construction rather than by a hand-tuned dp is what makes
+ * the swap free — a guessed constant drifts the moment the type scale changes.
+ */
+@Composable
+private fun SkeletonCell(alpha: Float) {
+    val c = RizxTheme.colors
+    Column(Modifier.width(CAROUSEL_ART)) {
+        Box(
+            Modifier
+                .size(CAROUSEL_ART)
+                .paperElevation()
+                .background(c.elev)
+                .border(1.dp, c.line, RectangleShape),
+        )
+        SkeletonLine(mr(14, FontWeight.SemiBold), widthFraction = 0.85f, top = 9.dp, alpha = alpha)
+        SkeletonLine(mr(12, FontWeight.Medium), widthFraction = 0.55f, top = 0.dp, alpha = alpha)
+    }
+}
+
+/** A text-shaped bar: a transparent glyph in the real style reserves the line, the bar paints over it. */
+@Composable
+private fun SkeletonLine(style: TextStyle, widthFraction: Float, top: Dp, alpha: Float) {
+    val c = RizxTheme.colors
+    Box(Modifier.padding(top = top).fillMaxWidth(widthFraction)) {
+        Text("A", style = style, color = Color.Transparent, maxLines = 1)
+        Box(
+            Modifier
+                .matchParentSize()
+                .padding(vertical = 2.dp)
+                .background(c.line2.copy(alpha = alpha)),
+        )
     }
 }
 

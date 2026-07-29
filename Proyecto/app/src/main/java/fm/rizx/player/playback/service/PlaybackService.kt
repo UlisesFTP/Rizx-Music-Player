@@ -84,6 +84,9 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var sessionStore: PlaybackSessionStore
     @Inject lateinit var radioTracks: fm.rizx.player.domain.usecase.GetRadioTracksUseCase
     @Inject lateinit var youtubeMixTracks: fm.rizx.player.domain.usecase.GetYoutubeMixTracksUseCase
+
+    /** Song-seeded "up next" engines by mode; a mode with no entry uses the artist radio. */
+    @Inject lateinit var mixSources: Map<RadioMode, @JvmSuppressWildcards fm.rizx.player.domain.provider.RadioMixSource>
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var audioCache: fm.rizx.player.playback.cache.AudioCache
     @Inject lateinit var cacheCompleter: fm.rizx.player.playback.cache.CacheCompleter
@@ -354,12 +357,13 @@ class PlaybackService : MediaSessionService() {
             try {
                 // Seed from the current track and exclude everything already queued so nothing repeats.
                 val exclude = q.items.map { it.track.source }.toSet()
-                val more = when (q.context.radioMode) {
-                    // Search plays: YT Music's own autoplay; a dead mix falls back to the artist
-                    // radio so "next" never dies.
-                    RadioMode.YOUTUBE -> youtubeMixTracks(seed, exclude).ifEmpty { radioTracks(seed, exclude) }
-                    RadioMode.ARTIST -> radioTracks(seed, exclude)
-                }
+                // The artist radio is both an engine and everyone else's floor: a song-seeded engine
+                // that comes back empty (or has no implementation registered) falls back to it, so
+                // "next" never dies whichever the user picked.
+                val engine = mixSources[q.context.radioMode]
+                val more = engine
+                    ?.let { youtubeMixTracks(seed, exclude, source = it).ifEmpty { radioTracks(seed, exclude) } }
+                    ?: radioTracks(seed, exclude)
                 if (more.isNotEmpty()) queue.addToQueue(more)
             } catch (_: Exception) {
                 // A failed radio fetch just means no new tracks this round — never break playback.

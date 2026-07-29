@@ -25,4 +25,16 @@
     <string name="plugins_uninstall">Désinstaller</string>
     <string name="plugins_plugin_category">Plugin · %1$s</string>
     <string name="plugins_health_down">Hors service</string>
-</resources>
+    <string name="plugins_not_compatible">Non compatible</string>
+    <string name="plugins_reason_native_equivalent">Android le fait déjà nativement (session média Media3)</string>
+    <string name="plugins_quarantined">Désactivé automatiquement après plusieurs échecs</string>
+    <string name="plugins_update">Mettre à jour</string>
+    <string name="plugins_section_open">Écosystème ouvert</string>
+    <string name="plugins_sideload_title">Installer depuis une URL</string>
+    <string name="plugins_sideload_subtitle">Un plugin.zip de release ou un lien zipball GitHub</string>
+    <string name="plugins_sideload_hint">Collez l\'URL d\'un zip de plugin…</string>
+    <string name="plugins_add_registry">Ajouter un dépôt</string>
+    <string name="plugins_add_registry_subtitle">Un autre catalogue plugins.json à parcourir</string>
+    <string name="plugins_add_registry_hint">Collez l\'URL d\'un plugins.json…</string>
+    <string name="plugins_action_add">Ajouter</string>
+    <string name="plugins_remove_registry">Retirer le dépôt</string></resources>

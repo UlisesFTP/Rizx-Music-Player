@@ -26,4 +26,14 @@
     <string name="radio_algorithm_youtube_caption">Sigue la canción, como la reproducción automática de YT Music</string>
     <string name="radio_algorithm_deezer">Deezer</string>
     <string name="radio_algorithm_deezer_caption">Sigue al artista, con sus temas similares</string>
-</resources>
+    <string name="radio_algorithm_apple">Apple Music</string>
+    <string name="radio_algorithm_apple_caption">El catálogo del artista y luego más del mismo género</string>
+    <string name="radio_algorithm_soundcloud">SoundCloud</string>
+    <string name="radio_algorithm_soundcloud_caption">Los temas relacionados de SoundCloud: indie y remixes</string>
+
+    <!-- Ajustes: de qué plataforma vienen las listas del inicio -->
+    <string name="pref_feed_provider">Feed de inicio</string>
+    <string name="pref_feed_provider_caption">De dónde salen las listas y los lanzamientos</string>
+    <string name="feed_provider_all">Todas combinadas</string>
+    <string name="feed_provider_all_caption">Mezcla todas las fuentes activas, sin repetidos</string>
+    <string name="feed_provider_only_caption">Solo de %1$s</string></resources>

@@ -4,6 +4,9 @@ import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.remote.itunes.ItunesApi
 import fm.rizx.player.data.remote.itunes.ItunesIds
 import fm.rizx.player.data.remote.itunes.toSearchResults
+import fm.rizx.player.data.remote.itunes.toTrackOrNull
+import fm.rizx.player.domain.model.ProviderRef
+import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.SearchCapability
 import fm.rizx.player.domain.model.SearchParams
 import fm.rizx.player.domain.model.SearchResults
@@ -30,6 +33,22 @@ class ItunesMetadataProvider(
     override val kind: ProviderKind = ProviderKind.METADATA
     override val name: String = "iTunes Search"
     override val searchCapabilities: Set<SearchCapability> = setOf(SearchCapability.UNIFIED)
+
+    /** Refs are minted as `itunes`, not under this provider's registry id. */
+    override val ownedNamespaces: Set<String> = setOf("itunes")
+
+    /** Exact lookup by iTunes track id — no matching, so it cannot return a different song. */
+    override suspend fun trackDetail(source: ProviderRef): Track? {
+        if (!owns(source) || ':' in source.id) return null
+        val trackId = source.id.takeIf { it.isNotBlank() && it.all(Char::isDigit) } ?: return null
+        return try {
+            withContext(io) { api.lookup(id = trackId).results.firstNotNullOfOrNull { it.toTrackOrNull() } }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     override suspend fun search(params: SearchParams): SearchResults {
         val query = params.query.trim()

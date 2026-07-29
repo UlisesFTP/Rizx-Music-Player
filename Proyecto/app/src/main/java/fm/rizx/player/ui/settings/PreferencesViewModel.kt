@@ -10,6 +10,8 @@ import fm.rizx.player.data.local.settings.SettingsRepositoryImpl.Companion.DEFAU
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.playback.AudioEffectsController
+import fm.rizx.player.domain.provider.ProviderKind
+import fm.rizx.player.domain.provider.ProviderRegistry
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.playback.AudioOutputCapabilities
 import kotlinx.coroutines.flow.Flow
@@ -35,7 +37,11 @@ class PreferencesViewModel @Inject constructor(
     private val cache: CacheManager,
     private val audioOutput: AudioOutputCapabilities,
     private val region: RegionResolver,
+    private val registry: ProviderRegistry,
 ) : ViewModel() {
+
+    /** A selectable Home-feed source: a registered dashboard provider. */
+    data class FeedSource(val id: String, val name: String)
 
     /** Regional-recommendations consent: null = never asked, true = on, false = declined. */
     val regionalRecs: StateFlow<Boolean?> = settings.recsRegionalConsent.asState(null)
@@ -45,6 +51,30 @@ class PreferencesViewModel @Inject constructor(
         settings.radioAlgorithm.asState(SettingsRepositoryImpl.DEFAULT_RADIO_ALGORITHM)
 
     fun setRadioAlgorithm(mode: RadioMode) { viewModelScope.launch { settings.setRadioAlgorithm(mode) } }
+
+    /** Which source fills Home: one dashboard provider's id, or `FEED_PROVIDER_ALL`. */
+    val feedProvider: StateFlow<String> =
+        settings.feedProvider.asState(SettingsRepositoryImpl.DEFAULT_FEED_PROVIDER)
+
+    /**
+     * The pickable feed sources, read from the registry rather than hard-coded — a dashboard plugin
+     * (ListenBrainz, Bandcamp…) shows up here the moment it registers, with no change to this screen.
+     */
+    private val _feedSources = MutableStateFlow(readFeedSources())
+    val feedSources: StateFlow<List<FeedSource>> = _feedSources.asStateFlow()
+
+    /**
+     * Re-reads the registry. The picker calls this as it opens because installing a plugin happens on
+     * the Plugins screen, which this one navigates *to* — so this ViewModel survives the round trip
+     * and would otherwise still be listing the sources from before the install.
+     */
+    fun refreshFeedSources() { _feedSources.value = readFeedSources() }
+
+    private fun readFeedSources(): List<FeedSource> =
+        runCatching { registry.list(ProviderKind.DASHBOARD).map { FeedSource(it.id, it.name) } }
+            .getOrDefault(emptyList())
+
+    fun setFeedProvider(id: String) { viewModelScope.launch { settings.setFeedProvider(id) } }
 
     /** How much the karaoke lyrics renderer is allowed to spend. */
     val lyricsQuality: StateFlow<LyricsVisualQuality> =

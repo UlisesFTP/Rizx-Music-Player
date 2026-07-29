@@ -60,10 +60,17 @@ class SpotifyChartsDashboardProvider(
         return preview.tracks.take(limit)
     }
 
+    /**
+     * The regional Top 50 and Viral 50, then Spotify's flagship editorial playlists.
+     *
+     * All fetched **concurrently** and memoized for [ttlMs]: each ref needs the playlist's real name,
+     * cover and length, and only the embed page carries those. The charts come first because they are
+     * regional and change daily; the editorial pillars behind them are the same for everyone.
+     */
     override suspend fun editorialPlaylists(limit: Int): List<PlaylistRef> = coroutineScope {
-        val topId = SpotifyChartIds.top50(consentedCountry())
-        val ids = listOf(topId, SpotifyChartIds.VIRAL_50_GLOBAL).distinct()
-        ids.map { pid -> async { preview(pid)?.toRef(pid) } }.awaitAll().filterNotNull().take(limit)
+        val charts = listOf(SpotifyChartIds.top50(consentedCountry()), SpotifyChartIds.VIRAL_50_GLOBAL)
+        val ids = (charts + SpotifyChartIds.EDITORIAL.map { it.first }).distinct().take(limit)
+        ids.map { pid -> async { preview(pid)?.toRef(pid) } }.awaitAll().filterNotNull()
     }
 
     private suspend fun regionalTopOrGlobal(): PlaylistPreview? {

@@ -33,22 +33,69 @@ class PluginRepositoryImpl(
     private val settings: SettingsRepository,
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
     private val nowIso: () -> String = { Instant.now().toString() },
+    private val kv: PluginKvStore? = null,
 ) : PluginRepository {
 
-    override suspend fun registry(): List<RegistryPlugin> = registryClient.fetch()
+    init {
+        // The runtime detects the misbehaviour; this side makes it stick: providers unregistered
+        // (runtime already did), plugin disabled with the failure on record. Re-enabling clears it.
+        runtime.onQuarantine = { id, lastError ->
+            runCatching { store.setHealth(id, InstalledPlugin.HEALTH_QUARANTINED, lastError) }
+        }
+    }
+
+    override suspend fun registry(): List<RegistryPlugin> = registryClient.fetch(store.registriesSnapshot())
 
     override val installed: Flow<List<InstalledPlugin>> = store.installed
 
+    override val registries: Flow<List<String>> = store.registries
+
+    override suspend fun addRegistry(url: String) {
+        store.addRegistry(url)
+    }
+
+    override suspend fun removeRegistry(url: String) {
+        store.removeRegistry(url)
+    }
+
     override suspend fun install(entry: RegistryPlugin): InstalledPlugin {
         val extracted = installer.install(entry.id, entry.repo, entry.downloadUrl)
-        runtime.loadTsPluginModules(entry.id, extracted.tsFiles, extracted.entryPath)
+        return loadAndPersist(entry.id, extracted, fallbackDescription = entry.description, fallbackAuthor = entry.author, fallbackCategory = entry.category)
+    }
+
+    override suspend fun update(entry: RegistryPlugin): InstalledPlugin {
+        // Same pipeline: the installer preserves settings.json/storage.json across the re-install,
+        // and the runtime replaces the loaded module graph wholesale.
+        runtime.unregisterPlugin(entry.id)
+        return install(entry)
+    }
+
+    override suspend fun installFromUrl(url: String): InstalledPlugin {
+        val extracted = installer.installFromUrl(url)
+        val pluginId = extracted.dir.name
+        runtime.unregisterPlugin(pluginId) // re-sideload of an existing id replaces it
+        return loadAndPersist(pluginId, extracted)
+    }
+
+    private suspend fun loadAndPersist(
+        pluginId: String,
+        extracted: fm.rizx.player.data.plugin.install.ExtractedPlugin,
+        fallbackDescription: String = "",
+        fallbackAuthor: String = "",
+        fallbackCategory: String = "",
+    ): InstalledPlugin {
+        runtime.clearQuarantine(pluginId)
+        runtime.loadTsPluginModules(
+            pluginId, extracted.sources, extracted.entryPath,
+            version = extracted.manifest.version, cacheDir = extracted.dir,
+        )
         val plugin = InstalledPlugin(
-            id = entry.id,
+            id = pluginId,
             version = extracted.manifest.version,
             name = extracted.manifest.displayName.ifBlank { extracted.manifest.name },
-            description = entry.description,
-            author = extracted.manifest.author.ifBlank { entry.author },
-            category = extracted.manifest.category.ifBlank { entry.category },
+            description = extracted.manifest.description.ifBlank { fallbackDescription },
+            author = extracted.manifest.author.ifBlank { fallbackAuthor },
+            category = extracted.manifest.category.ifBlank { fallbackCategory.ifBlank { "other" } },
             dir = extracted.dir.absolutePath,
             entryPath = extracted.entryPath,
             enabled = true,
@@ -62,6 +109,7 @@ class PluginRepositoryImpl(
         store.setEnabled(id, enabled)
         val plugin = store.snapshot().firstOrNull { it.id == id } ?: return
         if (enabled) {
+            runtime.clearQuarantine(id)
             if (!runtime.isLoaded(id)) loadFromDisk(plugin)
         } else {
             runtime.unregisterPlugin(id)
@@ -71,6 +119,7 @@ class PluginRepositoryImpl(
     override suspend fun uninstall(id: String) {
         runtime.unregisterPlugin(id)
         store.snapshot().firstOrNull { it.id == id }?.let { File(it.dir).deleteRecursively() }
+        kv?.evict(id) // drop the in-memory settings/storage mirror with the files
         store.remove(id)
     }
 
@@ -96,10 +145,16 @@ class PluginRepositoryImpl(
         settings.activeStreamingProviderId.first()?.let { id ->
             runCatching { providerRegistry.setActive(ProviderKind.STREAMING, id) }
         }
+        settings.activeLyricsProviderId.first()?.let { id ->
+            runCatching { providerRegistry.setActive(ProviderKind.LYRICS, id) }
+        }
     }
 
     private suspend fun loadFromDisk(plugin: InstalledPlugin) {
         val files = installer.readSources(File(plugin.dir))
-        runtime.loadTsPluginModules(plugin.id, files, plugin.entryPath)
+        runtime.loadTsPluginModules(
+            plugin.id, files, plugin.entryPath,
+            version = plugin.version, cacheDir = File(plugin.dir),
+        )
     }
 }

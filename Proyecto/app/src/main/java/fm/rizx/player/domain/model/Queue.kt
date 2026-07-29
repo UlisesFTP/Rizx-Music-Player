@@ -14,11 +14,18 @@ enum class RepeatMode { OFF, ONE, ALL }
 enum class QueueSourceKind { MANUAL, ALBUM, ARTIST, PLAYLIST, LIKED, RECENTS, DOWNLOADS, LOCAL, RADIO }
 
 /**
- * Which engine refills a [QueueSourceKind.RADIO] queue: [ARTIST] is the active metadata provider's
- * artist-radio (Deezer); [YOUTUBE] is the YouTube Mix seeded from the current track — YT Music's own
- * autoplay recommendations, used for search-originated plays.
+ * Which engine refills a [QueueSourceKind.RADIO] queue.
+ *
+ * - [ARTIST] — the active metadata provider's artist radio (Deezer). Follows the *artist*.
+ * - [YOUTUBE] — the YouTube Mix seeded from the current track (YT Music's own autoplay). Follows the
+ *   *song*, and is the default because it is what a search-originated play already followed.
+ * - [APPLEMUSIC] — the artist's own catalogue plus same-genre songs from Apple's public catalogue.
+ * - [SOUNDCLOUD] — SoundCloud's own related-tracks for the current track.
+ *
+ * Every non-[ARTIST] engine falls back to the artist radio when it returns nothing, so "next" can
+ * never dead-end. Persisted **by name**, so adding entries here is safe for stored preferences.
  */
-enum class RadioMode { ARTIST, YOUTUBE }
+enum class RadioMode { ARTIST, YOUTUBE, APPLEMUSIC, SOUNDCLOUD }
 
 /**
  * The origin of the current queue. [label] is a human name for the source (album/playlist/artist name,

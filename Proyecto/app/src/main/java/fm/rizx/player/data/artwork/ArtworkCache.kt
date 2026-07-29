@@ -90,7 +90,7 @@ class ArtworkCache(
                 }
                 val text = json.encodeToString(
                     PersistedArtwork.serializer(),
-                    PersistedArtwork(snapshot.map { ArtworkEntry(it.key, it.value) }),
+                    PersistedArtwork(snapshot.map { ArtworkEntry(it.key, it.value) }, EPOCH),
                 )
                 val tmp = File(target.parentFile, "${target.name}.tmp")
                 tmp.writeText(text)
@@ -137,27 +137,38 @@ class ArtworkCache(
         val source = file ?: return map
         runCatching {
             if (!source.exists()) return@runCatching
-            json.decodeFromString(PersistedArtwork.serializer(), source.readText())
-                .entries
-                .forEach { map[it.key] = it.artwork }
+            val stored = json.decodeFromString(PersistedArtwork.serializer(), source.readText())
+            // A cache written by an older, wronger resolver is discarded whole rather than trusted.
+            // Entries used to be keyed by a search string and accepted without verifying the match,
+            // so the file can hold a remix's cover under the original's name — and it outlived every
+            // restart. Bumping EPOCH is how that gets repaired on real installs.
+            if (stored.epoch != EPOCH) return@runCatching
+            stored.entries.forEach { map[it.key] = it.artwork }
         }
         return map
     }
 
     private class Wrapped(val value: ArtworkSet?)
 
-    private companion object {
+    companion object {
+        /**
+         * Bump whenever the resolver's notion of a correct cover changes, to discard every entry the
+         * old one wrote. 2 = owner-first resolution, verified borrowing, and keys that are
+         * `ProviderRef` identities rather than search strings.
+         */
+        const val EPOCH = 2
+
         /** A few hundred covers is tens of KB of URLs and covers any realistic browsing session. */
-        const val MAX_ENTRIES = 800
-        const val INITIAL_CAPACITY = 64
-        const val LOAD_FACTOR = 0.75f
+        private const val MAX_ENTRIES = 800
+        private const val INITIAL_CAPACITY = 64
+        private const val LOAD_FACTOR = 0.75f
     }
 }
 
 // ---- On-disk shape (private) ----
 
 @Serializable
-private data class PersistedArtwork(val entries: List<ArtworkEntry>)
+private data class PersistedArtwork(val entries: List<ArtworkEntry>, val epoch: Int = 1)
 
 @Serializable
 private data class ArtworkEntry(val key: String, val artwork: ArtworkSet)

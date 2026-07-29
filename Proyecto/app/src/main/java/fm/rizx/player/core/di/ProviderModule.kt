@@ -8,6 +8,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import fm.rizx.player.core.region.RegionResolver
 import fm.rizx.player.data.provider.AppleMusicDashboardProvider
+import fm.rizx.player.data.provider.AppleMusicMetadataProvider
+import fm.rizx.player.data.provider.AppleMusicPlaylistProvider
 import fm.rizx.player.data.provider.DefaultProviderRegistry
 import fm.rizx.player.data.provider.FakeStreamingProvider
 import fm.rizx.player.data.provider.FakeStreamingProviderB
@@ -26,6 +28,8 @@ import fm.rizx.player.data.provider.RizxUrlPlaylistProvider
 import fm.rizx.player.data.provider.SpotifyChartsDashboardProvider
 import fm.rizx.player.data.provider.SpotifyPlaylistProvider
 import fm.rizx.player.data.provider.YoutubePlaylistProvider
+import fm.rizx.player.data.provider.SoundcloudChartsDashboardProvider
+import fm.rizx.player.data.provider.SoundcloudMetadataProvider
 import fm.rizx.player.data.provider.SoundcloudStreamingProvider
 import fm.rizx.player.data.provider.YoutubeStreamingProvider
 import fm.rizx.player.data.remote.applemusic.AppleMusicRssApi
@@ -104,6 +108,15 @@ object ProviderModule {
             register(ItunesMetadataProvider(itunes))
             // Deezer (Phase 17): keyless metadata — unified search + album/artist detail (track lists).
             register(DeezerMetadataProvider(deezer, artists = deezerArtists))
+            // Apple Music and SoundCloud as selectable catalogues (ADR 0018): Search's Songs/Artists/
+            // Albums tabs follow whichever metadata provider is active, so these cost nothing until
+            // chosen. Both are keyless — Apple over the public iTunes Search API, SoundCloud over
+            // NewPipe — and both are metadata-only; audio still comes from the streaming chain.
+            val appleCatalogue = AppleMusicMetadataProvider(itunes)
+            val applePlaylistPage = fm.rizx.player.data.remote.applemusic.AppleMusicPlaylistPage(okHttp, json)
+            val appleBrowse = fm.rizx.player.data.remote.applemusic.AppleMusicBrowsePage(okHttp)
+            register(appleCatalogue)
+            register(SoundcloudMetadataProvider(soundcloud))
             // Deezer charts (Phase 19): dashboard fan-out source for the real Home feed.
             register(DeezerDashboardProvider(deezer))
             // Regional/global charts (recs): Spotify Top 50 / Viral 50 via the keyless embed page and
@@ -111,7 +124,12 @@ object ProviderModule {
             // their own enable toggle in Plugins (dashboard = fan-out kind), and the blending decorator
             // dedups their overlap with Deezer keeping Deezer's copy.
             register(SpotifyChartsDashboardProvider(spotifyPlaylists, region, settings))
-            register(AppleMusicDashboardProvider(appleRss, region, settings))
+            // Apple contributes the most here: its 20+ "Top 100" country charts are discovered from
+            // the browse page (one hourly request) alongside the RSS's curated rows.
+            register(AppleMusicDashboardProvider(appleRss, region, settings, browse = appleBrowse))
+            // SoundCloud's own chart kiosks — the fourth feed source, so "SoundCloud only" is a real
+            // choice in the feed selector rather than an empty screen.
+            register(SoundcloudChartsDashboardProvider(soundcloud))
             // Streaming providers in fallback priority (StreamingRepositoryImpl chains active-first,
             // then registration order): YouTube full tracks → Audius full tracks → iTunes 30s preview.
             // ADR 0014: native full-length YouTube audio. Gets NetworkMonitor + settings so quality can
@@ -138,6 +156,9 @@ object ProviderModule {
             // Keyless: NewPipe for YouTube/YT-Music playlists, the public embed page for Spotify.
             register(YoutubePlaylistProvider(youtube))
             register(spotifyPlaylists)
+            // Apple's editorial playlists. Registered as a real PlaylistProvider so the cards the
+            // dashboard emits can actually be opened — a card that opens empty is worse than absent.
+            register(AppleMusicPlaylistProvider(applePlaylistPage, appleCatalogue))
             register(RizxUrlPlaylistProvider(okHttp))
             // Restore the persisted active selection over first-wins (preserve-then-reconcile, §4):
             // apply a persisted id only when it is actually registered; otherwise pick a sensible real
@@ -175,16 +196,17 @@ object ProviderModule {
         MetadataRepositoryImpl(registry)
 
     /**
-     * Turns "whoever this song credits" into an artist page the active provider can actually open —
-     * for a YouTube-sourced track, by looking its name up on Deezer. Singleton so its memo is shared.
+     * Turns a song's billing line into artist pages the active provider can actually open — one per
+     * artist, each the most complete profile of that name rather than whichever row ranked first.
+     * Singleton so its memo is shared.
      */
     @Provides
     @Singleton
-    fun provideResolveArtistRef(
+    fun provideResolveTrackArtists(
         metadata: MetadataRepository,
         registry: ProviderRegistry,
-    ): fm.rizx.player.domain.usecase.ResolveArtistRefUseCase =
-        fm.rizx.player.domain.usecase.ResolveArtistRefUseCase(metadata, registry)
+    ): fm.rizx.player.domain.usecase.ResolveTrackArtistsUseCase =
+        fm.rizx.player.domain.usecase.ResolveTrackArtistsUseCase(metadata, registry)
 
     @Provides
     @Singleton
@@ -223,14 +245,17 @@ object ProviderModule {
         fm.rizx.player.data.remote.deezer.DeezerArtistSearch(deezer)
 
     // Fan-out, then blend: dedup (Deezer's copy wins) + weighted interleave + borrowed covers.
+    // The feed selection is read per call (a suspend lambda, not a snapshot) so switching platforms in
+    // Settings takes effect on the very next load without rebuilding the graph.
     @Provides
     @Singleton
     fun provideDashboardRepository(
         registry: ProviderRegistry,
         enabled: EnabledProviderStore,
         artwork: fm.rizx.player.data.artwork.TrackArtworkEnricher,
+        settings: SettingsRepository,
     ): DashboardRepository = BlendingDashboardRepository(
-        inner = DashboardRepositoryImpl(registry, enabled),
+        inner = DashboardRepositoryImpl(registry, enabled, selection = { settings.feedProvider.first() }),
         blender = fm.rizx.player.domain.usecase.RecsBlender(),
         artwork = artwork,
     )

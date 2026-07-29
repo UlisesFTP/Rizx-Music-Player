@@ -1,14 +1,17 @@
 package fm.rizx.player.ui.settings
 
 import app.cash.turbine.test
+import fm.rizx.player.FakeSettingsRepository
 import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.core.cache.CacheManager
 import fm.rizx.player.core.region.RegionResolver
+import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
+import fm.rizx.player.data.provider.DefaultProviderRegistry
+import fm.rizx.player.domain.model.DashboardCapability
+import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.playback.AudioEffectsController
-import fm.rizx.player.domain.model.LyricsVisualQuality
-import fm.rizx.player.domain.model.RadioMode
-import fm.rizx.player.domain.model.ThemeMode
-import fm.rizx.player.domain.repository.SettingsRepository
+import fm.rizx.player.domain.provider.DashboardProvider
+import fm.rizx.player.domain.provider.ProviderKind
 import fm.rizx.player.playback.AudioOutputCapabilities
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -30,7 +33,7 @@ class PreferencesViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private val settings = FakeSettings()
+    private val settings = FakeSettingsRepository()
     private val effects = mockk<AudioEffectsController>(relaxed = true)
     private val cache = mockk<CacheManager> {
         every { diskSizeLabel() } returns "12.0 MB"
@@ -40,7 +43,52 @@ class PreferencesViewModelTest {
         every { describe() } returns "48 kHz output"
     }
 
-    private fun vm() = PreferencesViewModel(settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }))
+    private fun vm() = PreferencesViewModel(
+        settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }), DefaultProviderRegistry(),
+    )
+
+    @Test
+    fun `feed provider defaults to Deezer and persists a pick`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        val vm = vm()
+        vm.feedProvider.test {
+            assertEquals(SettingsRepositoryImpl.DEFAULT_FEED_PROVIDER, awaitItem())
+            vm.setFeedProvider(SettingsRepositoryImpl.FEED_PROVIDER_ALL)
+            assertEquals(SettingsRepositoryImpl.FEED_PROVIDER_ALL, awaitItem())
+        }
+    }
+
+    @Test
+    fun `feed sources come from the registry, so a plugin dashboard is selectable`() {
+        val registry = DefaultProviderRegistry().apply { register(FakeDash()) }
+        val vm = PreferencesViewModel(
+            settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }), registry,
+        )
+        assertEquals(listOf("dash" to "Dash"), vm.feedSources.value.map { it.id to it.name })
+    }
+
+    @Test
+    fun `a dashboard registered after this screen opened appears once the picker refreshes`() {
+        // The real sequence: Settings → Plugins → install → back. This ViewModel outlives that trip.
+        val registry = DefaultProviderRegistry()
+        val vm = PreferencesViewModel(
+            settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }), registry,
+        )
+        assertEquals(emptyList<String>(), vm.feedSources.value.map { it.id })
+
+        registry.register(FakeDash())
+        vm.refreshFeedSources()
+
+        assertEquals(listOf("dash"), vm.feedSources.value.map { it.id })
+    }
+
+    /** Stands in for any dashboard provider — including one a JS plugin registered. */
+    private class FakeDash : DashboardProvider {
+        override val id = "dash"
+        override val kind = ProviderKind.DASHBOARD
+        override val name = "Dash"
+        override val dashboardCapabilities = setOf(DashboardCapability.TOP_TRACKS)
+        override suspend fun topTracks(limit: Int) = emptyList<Track>()
+    }
 
     @Test
     fun `toggling data saver persists and re-emits`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
@@ -94,57 +142,4 @@ class PreferencesViewModelTest {
             assertEquals("0 B", vm.cacheSize.value)
         }
 
-    /** Backs only the four Settings toggles with live flows; everything else is inert. */
-    private class FakeSettings : SettingsRepository {
-        val dataSaverFlow = MutableStateFlow(false)
-        val crossfadeFlow = MutableStateFlow(false)
-        val gaplessFlow = MutableStateFlow(true)
-        val normalizeFlow = MutableStateFlow(false)
-        val radioAlgorithmFlow = MutableStateFlow(RadioMode.YOUTUBE)
-        val lyricsQualityFlow = MutableStateFlow(LyricsVisualQuality.AUTOMATIC)
-
-        override val dataSaver = dataSaverFlow
-        override suspend fun setDataSaver(enabled: Boolean) { dataSaverFlow.value = enabled }
-        override val crossfade = crossfadeFlow
-        override suspend fun setCrossfade(enabled: Boolean) { crossfadeFlow.value = enabled }
-        override val gapless = gaplessFlow
-        override suspend fun setGapless(enabled: Boolean) { gaplessFlow.value = enabled }
-        override val normalizeVolume = normalizeFlow
-        override suspend fun setNormalizeVolume(enabled: Boolean) { normalizeFlow.value = enabled }
-        val hiResFlow = MutableStateFlow(false)
-        override val hiResOutput = hiResFlow
-        override suspend fun setHiResOutput(enabled: Boolean) { hiResFlow.value = enabled }
-        private val canvasFlow = MutableStateFlow(false)
-        override val canvasEnabled = canvasFlow
-        override suspend fun setCanvasEnabled(enabled: Boolean) { canvasFlow.value = enabled }
-        private val syncedLyricsFlow = MutableStateFlow(true)
-        override val syncedLyricsMode = syncedLyricsFlow
-        override suspend fun setSyncedLyricsMode(enabled: Boolean) { syncedLyricsFlow.value = enabled }
-        val audioCacheFlow = MutableStateFlow(512L * 1024 * 1024)
-        override val audioCacheBytes = audioCacheFlow
-        override suspend fun setAudioCacheBytes(bytes: Long) { audioCacheFlow.value = bytes }
-
-        override val themeMode = flowOf(ThemeMode.SYSTEM)
-        override suspend fun setThemeMode(mode: ThemeMode) {}
-        override val activeMetadataProviderId = flowOf<String?>(null)
-        override suspend fun setActiveMetadataProviderId(id: String?) {}
-        override val activeStreamingProviderId = flowOf<String?>(null)
-        override suspend fun setActiveStreamingProviderId(id: String?) {}
-        override val activeLyricsProviderId = flowOf<String?>(null)
-        override suspend fun setActiveLyricsProviderId(id: String?) {}
-        override val streamExpiryMs = flowOf(0L)
-        override suspend fun setStreamExpiryMs(ms: Long) {}
-        override val streamResolutionRetries = flowOf(0)
-        override suspend fun setStreamResolutionRetries(retries: Int) {}
-        override val equalizerEnabled = flowOf(false)
-        override suspend fun setEqualizerEnabled(enabled: Boolean) {}
-        override val equalizerBandLevels = flowOf(emptyList<Int>())
-        override suspend fun setEqualizerBandLevels(levels: List<Int>) {}
-        override val recsRegionalConsent = flowOf<Boolean?>(null)
-        override suspend fun setRecsRegionalConsent(consented: Boolean) {}
-        override val radioAlgorithm = radioAlgorithmFlow
-        override suspend fun setRadioAlgorithm(mode: RadioMode) { radioAlgorithmFlow.value = mode }
-        override val lyricsVisualQuality = lyricsQualityFlow
-        override suspend fun setLyricsVisualQuality(quality: LyricsVisualQuality) { lyricsQualityFlow.value = quality }
-    }
 }

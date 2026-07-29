@@ -15,6 +15,11 @@ import kotlinx.coroutines.withContext
  * [AttributedResult], so `HomeScreen`'s existing `flatMap { it.items }` renders the blend with zero
  * UI churn. Also borrows Deezer covers for the first blended tracks that came without artwork
  * (Spotify's embed rows carry none) — enrichment is cosmetic and never fails the feed.
+ *
+ * When the user has pinned the feed to a single platform, the inner fan-out already returns one
+ * source per section, and the blend becomes a no-op that would only replace that platform's name with
+ * "Rizx". So a single-source section passes straight through, keeping its real attribution — the
+ * whole point of choosing a platform is seeing that it is that platform's chart.
  */
 class BlendingDashboardRepository(
     private val inner: DashboardRepository,
@@ -26,20 +31,34 @@ class BlendingDashboardRepository(
     /** On [io]: the blender normalizes (regex + Unicode NFD) every item of every section. */
     override suspend fun homeFeed(): HomeFeed = withContext(io) {
         val feed = inner.homeFeed()
-        val tracks = blender.blendTracks(feed.topTracks)
+        val tracks = if (feed.topTracks.size <= 1) feed.topTracks.flatMap { it.items } else blender.blendTracks(feed.topTracks)
         val visible = tracks.take(ENRICH_LIMIT)
         val enriched = runCatching { artwork.enrich(visible) }.getOrDefault(visible) + tracks.drop(ENRICH_LIMIT)
         HomeFeed(
-            topTracks = attributed(enriched),
-            topArtists = attributed(blender.blendArtists(feed.topArtists)),
-            topAlbums = attributed(blender.blendAlbums(feed.topAlbums)),
-            editorialPlaylists = attributed(blender.blendPlaylists(feed.editorialPlaylists)),
-            newReleases = attributed(blender.blendAlbums(feed.newReleases)),
+            topTracks = withAttribution(feed.topTracks, enriched),
+            topArtists = blended(feed.topArtists) { blender.blendArtists(it) },
+            topAlbums = blended(feed.topAlbums) { blender.blendAlbums(it) },
+            editorialPlaylists = blended(feed.editorialPlaylists) { blender.blendPlaylists(it) },
+            newReleases = blended(feed.newReleases) { blender.blendAlbums(it) },
         )
     }
 
-    private fun <T> attributed(items: List<T>): List<AttributedResult<T>> =
-        if (items.isEmpty()) emptyList() else listOf(AttributedResult(ID, NAME, items))
+    /** One source needs no blending — skip the normalization work entirely and keep it as it came. */
+    private fun <T> blended(
+        original: List<AttributedResult<T>>,
+        blend: (List<AttributedResult<T>>) -> List<T>,
+    ): List<AttributedResult<T>> =
+        if (original.size <= 1) original else withAttribution(original, blend(original))
+
+    /** Keeps a single source's own attribution; synthesizes "Rizx" only for a real blend. */
+    private fun <T> withAttribution(
+        original: List<AttributedResult<T>>,
+        items: List<T>,
+    ): List<AttributedResult<T>> = when {
+        items.isEmpty() -> emptyList()
+        original.size <= 1 -> listOf(original.first().copy(items = items))
+        else -> listOf(AttributedResult(ID, NAME, items))
+    }
 
     companion object {
         const val ID = "blended"

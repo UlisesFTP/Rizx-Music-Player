@@ -42,7 +42,12 @@ private fun yearOf(releaseDate: String?): Int? = releaseDate?.take(4)?.toIntOrNu
 
 fun DeezerArtistShortDto.toArtistRef(): ArtistRef? {
     val n = name ?: return null
-    return ArtistRef(name = n, artwork = coverSet(pictureXl, pictureMedium), source = DeezerIds.artist(id ?: 0))
+    return ArtistRef(
+        name = n,
+        artwork = coverSet(pictureXl, pictureMedium),
+        source = DeezerIds.artist(id ?: 0),
+        followers = nbFan,
+    )
 }
 
 fun DeezerAlbumShortDto.toAlbumRef(): AlbumRef? {

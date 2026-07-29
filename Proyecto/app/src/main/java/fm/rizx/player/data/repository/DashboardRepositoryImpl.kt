@@ -1,6 +1,10 @@
 package fm.rizx.player.data.repository
 
+import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
+import fm.rizx.player.data.provider.PlaylistUrls
 import fm.rizx.player.domain.model.AttributedResult
+import fm.rizx.player.domain.model.PlaylistRef
+import fm.rizx.player.domain.provider.PlaylistProvider
 import fm.rizx.player.domain.model.DashboardCapability
 import fm.rizx.player.domain.model.HomeFeed
 import fm.rizx.player.domain.provider.DashboardProvider
@@ -21,12 +25,19 @@ import kotlinx.coroutines.withContext
  * enabled-filter Phase 21). Each provider contributes concurrently, and each section call is isolated
  * ([safe]) so one failing/slow section degrades to empty without dropping the rest — "a broken provider
  * must never crash the app".
+ *
+ * [selection] narrows the fan-out to a single source when the user picked one in Settings. It stays a
+ * filter here rather than `registry.setActive` because DASHBOARD is a multi-active kind by design
+ * (ADR 0012) — its active slot is inert, and using it would quietly break the per-source toggles.
+ * A selection naming a provider that isn't registered (uninstalled plugin) falls back to the blend
+ * rather than an empty Home.
  */
 class DashboardRepositoryImpl(
     private val registry: ProviderRegistry,
     private val enabled: EnabledProviderStore,
     private val limit: Int = DEFAULT_LIMIT,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val selection: suspend () -> String = { SettingsRepositoryImpl.FEED_PROVIDER_ALL },
 ) : DashboardRepository {
 
     /**
@@ -37,15 +48,36 @@ class DashboardRepositoryImpl(
     override suspend fun homeFeed(): HomeFeed = withContext(io) {
         val all = registry.list(ProviderKind.DASHBOARD).filterIsInstance<DashboardProvider>()
         val enabledMap = enabled.snapshot(all.map { it.id })
-        val providers = all.filter { enabledMap[it.id] != false } // absent/true = enabled
+        val chosen = runCatching { selection() }.getOrDefault(SettingsRepositoryImpl.FEED_PROVIDER_ALL)
+        val providers = all
+            .filter { enabledMap[it.id] != false } // absent/true = enabled
+            // A single-source feed ignores the enable toggles' fan-out and asks only that provider —
+            // unless it has gone away, in which case blending beats showing nothing.
+            .let { list -> if (chosen == SettingsRepositoryImpl.FEED_PROVIDER_ALL) list else list.filter { it.id == chosen }.ifEmpty { list } }
         val contribs = providers.map { p -> async { contributionOf(p) } }.awaitAll()
+        val canOpen = playlistOpeners()
         HomeFeed(
             topTracks = contribs.attributed { it.topTracks },
             topArtists = contribs.attributed { it.topArtists },
             topAlbums = contribs.attributed { it.topAlbums },
-            editorialPlaylists = contribs.attributed { it.editorialPlaylists },
+            // A playlist card that opens empty is worse than no card, and the two sides are separate
+            // registry entries: a dashboard can offer YouTube playlists while YouTube Playlists is
+            // disabled in Sources. So anything nothing can open is dropped before it is ever drawn.
+            editorialPlaylists = contribs.attributed { c -> c.editorialPlaylists.filter(canOpen) },
             newReleases = contribs.attributed { it.newReleases },
         )
+    }
+
+    /** A predicate over playlist refs: true when some **enabled** playlist provider can fetch it. */
+    private suspend fun playlistOpeners(): (PlaylistRef) -> Boolean {
+        val all = registry.list(ProviderKind.PLAYLISTS).filterIsInstance<PlaylistProvider>()
+        if (all.isEmpty()) return { false }
+        val enabledMap = enabled.snapshot(all.map { it.id })
+        val usable = all.filter { enabledMap[it.id] != false }
+        return { ref ->
+            val url = PlaylistUrls.canonical(ref.source)
+            url != null && usable.any { runCatching { it.canHandle(url) }.getOrDefault(false) }
+        }
     }
 
     private suspend fun contributionOf(p: DashboardProvider): Contribution = coroutineScope {
@@ -53,7 +85,11 @@ class DashboardRepositoryImpl(
         val tracks = async { safe(DashboardCapability.TOP_TRACKS in caps) { p.topTracks(limit) } }
         val artists = async { safe(DashboardCapability.TOP_ARTISTS in caps) { p.topArtists(limit) } }
         val albums = async { safe(DashboardCapability.TOP_ALBUMS in caps) { p.topAlbums(limit) } }
-        val playlists = async { safe(DashboardCapability.EDITORIAL_PLAYLISTS in caps) { p.editorialPlaylists(limit) } }
+        // Playlists get a far higher ceiling than the other sections. They have their own tab, which
+        // is an inventory rather than a preview, and a provider's whole catalogue of them is cheap:
+        // Apple's 45 come from one hourly-cached page plus one RSS call, Deezer's from its existing
+        // chart response. The chart sections keep the small limit — those are per-item work.
+        val playlists = async { safe(DashboardCapability.EDITORIAL_PLAYLISTS in caps) { p.editorialPlaylists(PLAYLIST_LIMIT) } }
         val releases = async { safe(DashboardCapability.NEW_RELEASES in caps) { p.newReleases(limit) } }
         Contribution(p.id, p.name, tracks.await(), artists.await(), albums.await(), playlists.await(), releases.await())
     }
@@ -86,5 +122,8 @@ class DashboardRepositoryImpl(
 
     companion object {
         private const val DEFAULT_LIMIT = 12
+
+        /** Enough for every country chart plus a platform's curated rows, per provider. */
+        private const val PLAYLIST_LIMIT = 60
     }
 }

@@ -1,6 +1,8 @@
 package fm.rizx.player.ui.home
 
+import fm.rizx.player.FakeSettingsRepository
 import fm.rizx.player.MainDispatcherRule
+import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.local.store.HomeFeedStore
 import fm.rizx.player.data.repository.InMemoryQueueRepository
@@ -14,12 +16,15 @@ import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.playback.PlaybackState
 import fm.rizx.player.domain.repository.DashboardRepository
 import fm.rizx.player.domain.repository.ForYouRepository
+import fm.rizx.player.domain.repository.RecentlyPlayedRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -65,11 +70,23 @@ class HomeViewModelTest {
         consent: Boolean? = null,
     ) : ForYouRepository {
         val consentFlow = MutableStateFlow(consent)
-        override suspend fun sections(): List<ForYouSection> = rows
+        override fun sections(): Flow<List<ForYouSection>> = flowOf(rows)
         override val regionalConsent: Flow<Boolean?> = consentFlow
         override suspend fun setRegionalConsent(consented: Boolean) { consentFlow.value = consented }
         override fun countryName(): String? = "México"
     }
+
+    private class FakeRecents(private val tracks: List<Track> = emptyList()) : RecentlyPlayedRepository {
+        override fun recent(limit: Int): Flow<List<Track>> = flowOf(tracks.take(limit))
+        override suspend fun record(track: Track) {}
+        override suspend fun clear() {}
+    }
+
+    /** Three artists — the shape of a real `ArtistsForYou` row. */
+    private fun artists() = List(3) { ArtistRef(name = "Artist $it", source = ProviderRef("deezer", "artist:$it")) }
+
+    private fun feedWith(title: String) =
+        HomeFeed(topTracks = listOf(AttributedResult("d", "Deezer", listOf(Track(title, source = ProviderRef("deezer", "1"))))))
 
     @get:Rule
     val tmp = TemporaryFolder()
@@ -83,7 +100,7 @@ class HomeViewModelTest {
         HomeFeedStore(File(tmp.root, "home_feed.json"), io = mainDispatcherRule.dispatcher)
 
     private fun vm(repo: DashboardRepository, forYou: ForYouRepository = FakeForYou()) =
-        HomeViewModel(repo, InMemoryQueueRepository(), FakePlayback(), forYou, store())
+        HomeViewModel(repo, InMemoryQueueRepository(), FakePlayback(), forYou, store(), FakeSettingsRepository(), FakeRecents())
 
     @Test
     fun `loads the feed into Content`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
@@ -101,6 +118,22 @@ class HomeViewModelTest {
 
         assertEquals(HomeUiState.Offline, vm.state.first { it !is HomeUiState.Loading })
     }
+
+    @Test
+    fun `continue listening survives a feed that never loads`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            // It is local and deliberately outside HomeUiState: an offline Home still offers a way
+            // back into what you were playing, and no provider gets to take that away.
+            val recent = Track("Yesterday", source = ProviderRef("deezer", "9"))
+            val vm = HomeViewModel(
+                FakeDash { throw AppError.Network("offline") },
+                InMemoryQueueRepository(), FakePlayback(), FakeForYou(), store(), FakeSettingsRepository(),
+                FakeRecents(listOf(recent)),
+            )
+
+            assertEquals(HomeUiState.Offline, vm.state.first { it !is HomeUiState.Loading })
+            assertEquals(listOf(recent), vm.continueListening.first { it.isNotEmpty() })
+        }
 
     @Test
     fun `an empty feed yields Error`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
@@ -124,35 +157,68 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `the charts render without waiting for the personalized rows`() =
+    fun `the charts render without waiting for the personalized rows, which hold their own place`() =
         runTest(mainDispatcherRule.dispatcher.scheduler) {
             // The For-you rows are the slow half (YouTube-backed mixes). They used to hold the whole
-            // screen on a spinner; now they arrive into content that is already usable.
-            val feed = HomeFeed(topTracks = listOf(AttributedResult("d", "Deezer", listOf(Track("Yellow", source = ProviderRef("deezer", "1"))))))
+            // screen on a spinner; now they arrive into content that is already usable — and they
+            // announce themselves first, so their height is reserved instead of shoving the charts
+            // down a screen when they land.
             val gate = CompletableDeferred<Unit>()
-            val artists = List(3) { ArtistRef(name = "Artist $it", source = ProviderRef("deezer", "artist:$it")) }
+            val artists = artists()
             val forYou = object : ForYouRepository {
-                override suspend fun sections(): List<ForYouSection> {
+                override fun sections(): Flow<List<ForYouSection>> = flow {
+                    emit(listOf(ForYouSection.ArtistsForYou(emptyList()))) // the plan
                     gate.await()
-                    return listOf(ForYouSection.ArtistsForYou(artists))
+                    emit(listOf(ForYouSection.ArtistsForYou(artists)))
                 }
                 override val regionalConsent: Flow<Boolean?> = MutableStateFlow(true)
                 override suspend fun setRegionalConsent(consented: Boolean) {}
                 override fun countryName(): String? = "México"
             }
-            val vm = vm(FakeDash { feed }, forYou)
+            val vm = vm(FakeDash { feedWith("Yellow") }, forYou)
 
             val early = vm.state.first { it is HomeUiState.Content } as HomeUiState.Content
             assertEquals(1, early.feed.topTracks.size)
-            assertTrue("the rows should still be marked as loading", early.forYouLoading)
             assertTrue(early.forYouSections.isEmpty())
+            assertEquals("the row's space must already be reserved", 1, early.forYouPending.size)
 
             gate.complete(Unit)
             val complete = vm.state.first { it is HomeUiState.Content && it.forYouSections.isNotEmpty() }
 
             assertEquals(1, (complete as HomeUiState.Content).forYouSections.size)
+            assertTrue("the skeleton must go when the row it stood in for lands", complete.forYouPending.isEmpty())
             // Nothing the user was already looking at was taken away.
             assertEquals(1, complete.feed.topTracks.size)
+        }
+
+    @Test
+    fun `a refresh never draws skeletons under rows that are already on screen`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            // The plan is emitted on every load, refreshes included. Drawing it while the real rows are
+            // still up would append an empty copy of them — the very jump the reservation prevents.
+            val second = CompletableDeferred<Unit>()
+            val forYou = object : ForYouRepository {
+                var loads = 0
+                override fun sections(): Flow<List<ForYouSection>> = flow {
+                    val first = loads++ == 0
+                    emit(listOf(ForYouSection.ArtistsForYou(emptyList())))
+                    if (!first) second.await() // the refresh parks after announcing
+                    emit(listOf(ForYouSection.ArtistsForYou(artists())))
+                }
+                override val regionalConsent: Flow<Boolean?> = MutableStateFlow(true)
+                override suspend fun setRegionalConsent(consented: Boolean) {}
+                override fun countryName(): String? = "México"
+            }
+            val vm = vm(FakeDash { feedWith("Yellow") }, forYou)
+            vm.state.first { it is HomeUiState.Content && it.forYouSections.isNotEmpty() }
+
+            vm.refresh()
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+            val during = vm.state.value as HomeUiState.Content
+            assertEquals("the rows stay put", 1, during.forYouSections.size)
+            assertTrue("no second, empty copy of them below", during.forYouPending.isEmpty())
+            second.complete(Unit)
         }
 
     @Test
@@ -160,11 +226,12 @@ class HomeViewModelTest {
         runTest(mainDispatcherRule.dispatcher.scheduler) {
             val cache = store()
             val cached = HomeFeed(topTracks = listOf(AttributedResult("d", "Deezer", listOf(Track("From cache", source = ProviderRef("deezer", "1"))))))
-            cache.write(cached, emptyList())
+            // Written under the selection the ViewModel will read with — the cache is keyed by it.
+            cache.write(cached, emptyList(), SettingsRepositoryImpl.DEFAULT_FEED_PROVIDER)
             var networkCalls = 0
             val dash = FakeDash { networkCalls++; HomeFeed() }
 
-            val vm = HomeViewModel(dash, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache)
+            val vm = HomeViewModel(dash, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeRecents())
             val content = vm.state.first { it is HomeUiState.Content } as HomeUiState.Content
 
             assertEquals("From cache", content.feed.topTracks.single().items.single().title)
@@ -178,10 +245,11 @@ class HomeViewModelTest {
             cache.write(
                 HomeFeed(topTracks = listOf(AttributedResult("d", "Deezer", listOf(Track("From cache", source = ProviderRef("deezer", "1")))))),
                 emptyList(),
+                SettingsRepositoryImpl.DEFAULT_FEED_PROVIDER,
             )
             val vm = HomeViewModel(
                 FakeDash { throw AppError.Network("offline") },
-                InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache,
+                InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeRecents(),
             )
 
             vm.state.first { it is HomeUiState.Content }
@@ -197,7 +265,7 @@ class HomeViewModelTest {
             // setting, resolved in one place (the controller), so every entry point agrees — this
             // screen just says "start a radio from this song".
             val playback = FakePlayback()
-            val vm = HomeViewModel(FakeDash { HomeFeed() }, InMemoryQueueRepository(), playback, FakeForYou(), store())
+            val vm = HomeViewModel(FakeDash { HomeFeed() }, InMemoryQueueRepository(), playback, FakeForYou(), store(), FakeSettingsRepository(), FakeRecents())
             val youtube = Track("Mix song", source = ProviderRef("youtube", "abcdefghijk"))
             val deezer = Track("Chart song", source = ProviderRef("deezer", "1"))
 

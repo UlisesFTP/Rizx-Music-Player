@@ -40,6 +40,7 @@ import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.ui.components.RizxToggle
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
+import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.ui.settings.AppLanguage
 import fm.rizx.player.ui.settings.PreferencesViewModel
 import fm.rizx.player.ui.settings.currentAppLanguage
@@ -81,6 +82,24 @@ fun PreferencesScreen(
     var themeDialogOpen by remember { mutableStateOf(false) }
     var radioDialogOpen by remember { mutableStateOf(false) }
     var lyricsQualityDialogOpen by remember { mutableStateOf(false) }
+    val feedProvider by vm.feedProvider.collectAsStateWithLifecycle()
+    val feedSources by vm.feedSources.collectAsStateWithLifecycle()
+    var feedDialogOpen by remember { mutableStateOf(false) }
+    // "All combined" first: it is the option that isn't a provider, and building the list here keeps
+    // the ViewModel free of string resources.
+    val feedOptions = listOf(
+        FeedOption(
+            id = SettingsRepositoryImpl.FEED_PROVIDER_ALL,
+            name = stringResource(R.string.feed_provider_all),
+            caption = stringResource(R.string.feed_provider_all_caption),
+        ),
+    ) + feedSources.map { source ->
+        FeedOption(
+            id = source.id,
+            name = source.name,
+            caption = stringResource(R.string.feed_provider_only_caption, source.name),
+        )
+    }
 
     // stringResource can't be called inside the non-composable buildString lambda, so resolve first.
     val hiresBest = stringResource(R.string.pref_hires_best)
@@ -149,6 +168,15 @@ fun PreferencesScreen(
             caption = stringResource(radioAlgorithmCaption(radioAlgorithm)),
             onClick = { radioDialogOpen = true },
         )
+        // Which platform's charts fill Home. The options come from the registry, so a dashboard
+        // plugin appears here on its own.
+        SettingRow(
+            title = stringResource(R.string.pref_feed_provider),
+            value = feedOptions.firstOrNull { it.id == feedProvider }?.name
+                ?: stringResource(R.string.feed_provider_all),
+            caption = stringResource(R.string.pref_feed_provider_caption),
+            onClick = { vm.refreshFeedSources(); feedDialogOpen = true },
+        )
         ToggleRowDetail(
             title = stringResource(R.string.settings_regional_recs),
             caption = when (regionalRecs) {
@@ -208,18 +236,36 @@ fun PreferencesScreen(
             onDismiss = { lyricsQualityDialogOpen = false },
         )
     }
+    if (feedDialogOpen) {
+        CaptionedOptionDialog(
+            title = stringResource(R.string.pref_feed_provider),
+            options = feedOptions,
+            current = feedOptions.firstOrNull { it.id == feedProvider } ?: feedOptions.first(),
+            label = { it.name },
+            caption = { it.caption },
+            onSelect = { option -> vm.setFeedProvider(option.id); feedDialogOpen = false },
+            onDismiss = { feedDialogOpen = false },
+        )
+    }
 }
+
+/** One row of the feed-source picker: a registered dashboard provider, or the "all combined" option. */
+private data class FeedOption(val id: String, val name: String, val caption: String)
 
 /** The @StringRes name of a [RadioMode], as the user thinks of it — by the service, not the mechanism. */
 private fun radioAlgorithmLabel(mode: RadioMode): Int = when (mode) {
     RadioMode.YOUTUBE -> R.string.radio_algorithm_youtube
     RadioMode.ARTIST -> R.string.radio_algorithm_deezer
+    RadioMode.APPLEMUSIC -> R.string.radio_algorithm_apple
+    RadioMode.SOUNDCLOUD -> R.string.radio_algorithm_soundcloud
 }
 
-/** One line on what each engine actually does, so the choice isn't two opaque brand names. */
+/** One line on what each engine actually does, so the choice isn't a row of opaque brand names. */
 private fun radioAlgorithmCaption(mode: RadioMode): Int = when (mode) {
     RadioMode.YOUTUBE -> R.string.radio_algorithm_youtube_caption
     RadioMode.ARTIST -> R.string.radio_algorithm_deezer_caption
+    RadioMode.APPLEMUSIC -> R.string.radio_algorithm_apple_caption
+    RadioMode.SOUNDCLOUD -> R.string.radio_algorithm_soundcloud_caption
 }
 
 /**

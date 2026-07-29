@@ -1,16 +1,24 @@
 package fm.rizx.player.data.remote.soundcloud
 
 import fm.rizx.player.domain.model.ArtistCredit
+import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.Artwork
 import fm.rizx.player.domain.model.ArtworkSet
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.Track
+import org.schabi.newpipe.extractor.channel.ChannelInfoItem
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 
-/** Registry id for the native SoundCloud streaming provider. */
+/** Registry ids for the native SoundCloud providers. */
 object SoundcloudIds {
     const val STREAMING = "soundcloud"
+    const val METADATA = "soundcloud-metadata"
+    const val DASHBOARD = "soundcloud-charts"
+
+    /** NewPipe kiosk ids for SoundCloud's chart pages. */
+    const val KIOSK_TOP_50 = "Top 50"
+    const val KIOSK_NEW_HOT = "New & hot"
 }
 
 /**
@@ -32,6 +40,22 @@ fun StreamInfoItem.toSoundcloudTrackOrNull(): Track? {
         durationMs = duration.takeIf { it > 0 }?.let { it * 1000L },
         artwork = thumbnails.lastOrNull()?.url?.let { ArtworkSet(listOf(Artwork(url = it))) },
         source = soundcloudRef(trackUrl),
+    )
+}
+
+/**
+ * A SoundCloud user row → an [ArtistRef] for the Search "Artists" tab.
+ *
+ * Identity is the profile permalink for the same reason tracks use theirs: SoundCloud exposes no stable
+ * short id through NewPipe's search rows.
+ */
+fun ChannelInfoItem.toSoundcloudArtistOrNull(): ArtistRef? {
+    val profileUrl = url?.takeIf { it.isNotBlank() } ?: return null
+    val artistName = name?.takeIf { it.isNotBlank() } ?: return null
+    return ArtistRef(
+        name = artistName,
+        artwork = thumbnails.lastOrNull()?.url?.let { ArtworkSet(listOf(Artwork(url = it))) },
+        source = ProviderRef(SoundcloudIds.METADATA, profileUrl, profileUrl),
     )
 }
 

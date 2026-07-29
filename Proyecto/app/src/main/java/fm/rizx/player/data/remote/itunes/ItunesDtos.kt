@@ -35,4 +35,8 @@ data class ItunesResultDto(
     val collectionViewUrl: String? = null,
     val artistViewUrl: String? = null,
     val primaryGenreName: String? = null,
+    /** Present on `album` rows (`wrapperType = "collection"`). */
+    val trackCount: Int? = null,
+    val releaseDate: String? = null,
+    val collectionArtistName: String? = null,
 )

@@ -1,5 +1,6 @@
 package fm.rizx.player.ui.plugins
 
+import fm.rizx.player.FakeSettingsRepository
 import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.data.provider.DefaultProviderRegistry
 import fm.rizx.player.data.provider.FakeMetadataProvider
@@ -49,59 +50,23 @@ class PluginsViewModelTest {
         override suspend fun snapshot(ids: Collection<String>) = ids.associateWith { map[it] ?: true }
     }
 
-    private class NoopSettings : SettingsRepository {
-        override val themeMode: Flow<ThemeMode> = flowOf(ThemeMode.SYSTEM)
-        override suspend fun setThemeMode(mode: ThemeMode) {}
-        override val activeMetadataProviderId: Flow<String?> = flowOf(null)
-        override suspend fun setActiveMetadataProviderId(id: String?) {}
-        override val activeStreamingProviderId: Flow<String?> = flowOf(null)
-        override suspend fun setActiveStreamingProviderId(id: String?) {}
-        override val activeLyricsProviderId: Flow<String?> = flowOf(null)
-        override suspend fun setActiveLyricsProviderId(id: String?) {}
-        override val streamExpiryMs: Flow<Long> = flowOf(0L)
-        override suspend fun setStreamExpiryMs(ms: Long) {}
-        override val streamResolutionRetries: Flow<Int> = flowOf(0)
-        override suspend fun setStreamResolutionRetries(retries: Int) {}
-        override val equalizerEnabled: Flow<Boolean> = flowOf(false)
-        override suspend fun setEqualizerEnabled(enabled: Boolean) {}
-        override val equalizerBandLevels: Flow<List<Int>> = flowOf(emptyList())
-        override suspend fun setEqualizerBandLevels(levels: List<Int>) {}
-        override val dataSaver: Flow<Boolean> = flowOf(false)
-        override suspend fun setDataSaver(enabled: Boolean) {}
-        override val crossfade: Flow<Boolean> = flowOf(false)
-        override suspend fun setCrossfade(enabled: Boolean) {}
-        override val gapless: Flow<Boolean> = flowOf(true)
-        override suspend fun setGapless(enabled: Boolean) {}
-        override val normalizeVolume: Flow<Boolean> = flowOf(false)
-        override suspend fun setNormalizeVolume(enabled: Boolean) {}
-        override val hiResOutput: Flow<Boolean> = flowOf(false)
-        override suspend fun setHiResOutput(enabled: Boolean) {}
-        override val canvasEnabled: Flow<Boolean> = flowOf(false)
-        override suspend fun setCanvasEnabled(enabled: Boolean) {}
-        override val syncedLyricsMode: Flow<Boolean> = flowOf(true)
-        override suspend fun setSyncedLyricsMode(enabled: Boolean) {}
-        override val audioCacheBytes: Flow<Long> = flowOf(0L)
-        override suspend fun setAudioCacheBytes(bytes: Long) {}
-        override val recsRegionalConsent: Flow<Boolean?> = flowOf(null)
-        override suspend fun setRecsRegionalConsent(consented: Boolean) {}
-        override val radioAlgorithm: Flow<RadioMode> = flowOf(RadioMode.YOUTUBE)
-        override suspend fun setRadioAlgorithm(mode: RadioMode) {}
-        override val lyricsVisualQuality: Flow<LyricsVisualQuality> = flowOf(LyricsVisualQuality.AUTOMATIC)
-        override suspend fun setLyricsVisualQuality(quality: LyricsVisualQuality) {}
-    }
-
     private class NoopPlugins : PluginRepository {
         override suspend fun registry(): List<RegistryPlugin> = emptyList()
         override val installed: Flow<List<InstalledPlugin>> = flowOf(emptyList())
         override suspend fun install(entry: RegistryPlugin): InstalledPlugin = error("not installable in test")
+        override suspend fun update(entry: RegistryPlugin): InstalledPlugin = error("not installable in test")
+        override suspend fun installFromUrl(url: String): InstalledPlugin = error("not installable in test")
         override suspend fun setEnabled(id: String, enabled: Boolean) {}
         override suspend fun uninstall(id: String) {}
         override suspend fun reloadInstalled() {}
+        override val registries: Flow<List<String>> = flowOf(emptyList())
+        override suspend fun addRegistry(url: String) {}
+        override suspend fun removeRegistry(url: String) {}
     }
 
     private fun vm(enabled: FakeEnabled = FakeEnabled()) = PluginsViewModel(
         DefaultProviderRegistry().apply { register(FakeMetadataProvider()); register(FakeDash()) },
-        NoopSettings(),
+        FakeSettingsRepository(),
         enabled,
         ProviderHealthProbe(),
         NoopPlugins(),

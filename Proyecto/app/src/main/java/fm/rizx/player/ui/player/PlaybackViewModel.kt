@@ -6,7 +6,6 @@ import androidx.media3.common.util.UnstableApi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.playback.AudioVisualizer
 import fm.rizx.player.data.artwork.TrackArtworkEnricher
-import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.QueueItem
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
@@ -14,7 +13,8 @@ import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.playback.PlaybackState
 import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.domain.repository.QueueRepository
-import fm.rizx.player.domain.usecase.ResolveArtistRefUseCase
+import fm.rizx.player.domain.usecase.LinkedArtist
+import fm.rizx.player.domain.usecase.ResolveTrackArtistsUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +39,7 @@ class PlaybackViewModel @Inject constructor(
     private val controller: PlaybackController,
     private val favorites: FavoritesRepository,
     private val artwork: TrackArtworkEnricher,
-    private val resolveArtistRef: ResolveArtistRefUseCase,
+    private val resolveTrackArtists: ResolveTrackArtistsUseCase,
     visualizer: AudioVisualizer,
     queue: QueueRepository,
 ) : ViewModel() {
@@ -92,18 +92,21 @@ class PlaybackViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
-     * The artist page to open when the player's artist name is tapped, or `null` when there is none to
-     * open — which leaves the name untappable rather than navigating somewhere wrong.
+     * The song's artists, each with the page a tap should open — empty `source` meaning "nowhere safe
+     * to go", which leaves that name untappable rather than navigating somewhere wrong.
      *
-     * A Deezer song already knows its artist; a YouTube-Mix song credits an uploader name and nothing
-     * else, so its Deezer equivalent is looked up by name (see [ResolveArtistRefUseCase]). Resolved
+     * One entry per *artist*, not per credit: a YouTube-Mix song bills "Omar Courtz & De La Rose" as a
+     * single string, and [ResolveTrackArtistsUseCase] is what turns that into two links — and what
+     * keeps each link on the artist's real profile instead of the catalogue's duplicate row. Resolved
      * ahead of the tap so the tap itself is instant.
      */
-    val currentArtistRef: StateFlow<ProviderRef?> = currentTrack
-        // Keyed on the artist, not the track: an album's worth of songs by the same artist resolves once.
-        .distinctUntilChangedBy { it?.artists?.firstOrNull()?.let { c -> c.source?.identityKey ?: c.name } }
-        .mapLatest { track -> runCatching { resolveArtistRef(track) }.getOrNull() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val currentArtists: StateFlow<List<LinkedArtist>> = currentTrack
+        // Keyed on the billing, not the track: an album's worth of songs by the same artist resolves once.
+        .distinctUntilChangedBy { track ->
+            track?.artists.orEmpty().joinToString("|") { it.source?.identityKey ?: it.name }
+        }
+        .mapLatest { track -> runCatching { resolveTrackArtists(track) }.getOrDefault(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun toggleCurrentFavorite() {
         val track = currentItem.value?.track ?: return

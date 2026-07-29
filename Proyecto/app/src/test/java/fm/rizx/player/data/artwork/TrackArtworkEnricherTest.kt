@@ -1,6 +1,7 @@
 package fm.rizx.player.data.artwork
 
 import fm.rizx.player.data.provider.DefaultProviderRegistry
+import fm.rizx.player.domain.model.ArtistCredit
 import fm.rizx.player.domain.model.Artwork
 import fm.rizx.player.domain.model.ArtworkSet
 import fm.rizx.player.domain.model.ProviderRef
@@ -14,11 +15,16 @@ import fm.rizx.player.domain.provider.ProviderKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TrackArtworkEnricherTest {
 
-    /** Stands in for Deezer: answers every search with one track carrying a real cover. */
+    /**
+     * Stands in for Deezer. Answers with the **same recording** it was asked about, because a
+     * candidate that doesn't verify is no longer accepted — see [ArtworkOwnerFirstTest] for the
+     * rejections.
+     */
     private class CoverProvider(override val id: String = "deezer") : MetadataProvider {
         var searches = 0
         override val kind = ProviderKind.METADATA
@@ -29,7 +35,8 @@ class TrackArtworkEnricherTest {
             return SearchResults(
                 tracks = listOf(
                     Track(
-                        title = params.query,
+                        title = "Song",
+                        artists = listOf(ArtistCredit("Artist")),
                         artwork = ArtworkSet(listOf(Artwork(url = "https://deezer/cover.jpg"))),
                         source = ProviderRef("deezer", "1"),
                     ),
@@ -41,8 +48,9 @@ class TrackArtworkEnricherTest {
     private fun enricher(provider: MetadataProvider) =
         TrackArtworkEnricher(DefaultProviderRegistry().apply { register(provider) }, io = Dispatchers.Unconfined)
 
-    private fun track(provider: String, cover: String?) = Track(
+    private fun track(provider: String, cover: String?, artist: String? = "Artist") = Track(
         title = "Song",
+        artists = listOfNotNull(artist?.let { ArtistCredit(it) }),
         artwork = cover?.let { ArtworkSet(listOf(Artwork(url = it))) },
         source = ProviderRef(provider, "x"),
     )
@@ -87,6 +95,18 @@ class TrackArtworkEnricherTest {
         val out = enricher(provider).enrich(listOf(track("youtube", "https://i.ytimg.com/still.jpg")))
 
         assertEquals("https://i.ytimg.com/still.jpg", out.single().artwork.coverUrl())
+        assertEquals(0, provider.searches)
+    }
+
+    @Test
+    fun `a track with no artist is left alone instead of matched on its title`() = runTest {
+        // The behaviour change this rewrite exists for. A bare title is not an identity: searching
+        // "Intro" returned a stranger's song, and the answer was cached under "intro" for every
+        // other track of that name — persisted to disk, surviving restarts.
+        val provider = CoverProvider()
+        val out = enricher(provider).enrich(listOf(track("import", cover = null, artist = null)))
+
+        assertNull(out.single().artwork.coverUrl())
         assertEquals(0, provider.searches)
     }
 }

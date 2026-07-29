@@ -35,14 +35,19 @@ class TsTranspiler(
         return qjs
     }
 
-    /** Transpile TypeScript/ESM [tsSource] to CommonJS ES2020, or throw [PluginException]. */
-    suspend fun transpile(tsSource: String): String = withContext(dispatcher) {
+    /**
+     * Transpile TypeScript/ESM [tsSource] to CommonJS ES2020, or throw [PluginException].
+     * [jsx] adds Sucrase's JSX transform (`.tsx` sources — the runtime's React stub renders nothing,
+     * but the file must still parse).
+     */
+    suspend fun transpile(tsSource: String, jsx: Boolean = false): String = withContext(dispatcher) {
         val qjs = engine()
+        val transforms = if (jsx) "['jsx', 'typescript', 'imports']" else "['typescript', 'imports']"
         // Pass the (possibly large) source via a global to avoid embedding it in the eval string.
         qjs.evaluate<Any?>("globalThis.__ts_src = ${enc(tsSource)};")
         val code = try {
             qjs.evaluate<Any?>(
-                "globalThis.Sucrase.transform(globalThis.__ts_src, { transforms: ['typescript', 'imports'] }).code",
+                "globalThis.Sucrase.transform(globalThis.__ts_src, { transforms: $transforms }).code",
             ) as? String
         } catch (e: Exception) {
             throw PluginException("TypeScript transpile failed: ${e.message}", e)
@@ -50,10 +55,22 @@ class TsTranspiler(
         code ?: throw PluginException("TypeScript transpile produced no output")
     }
 
+    /**
+     * Lower a plain-JS module to CommonJS only when it is actually ESM; a bundled CJS release (the
+     * lastfm `dist/index.js` case) passes through untouched — no point re-chewing a 100 KB bundle.
+     */
+    suspend fun transpileJsIfEsm(jsSource: String): String =
+        if (ESM_SYNTAX.containsMatchIn(jsSource)) transpile(jsSource) else jsSource
+
     suspend fun close() = withContext(dispatcher) {
         runCatching { quickJs?.close() }
         quickJs = null
     }
 
     private fun enc(s: String): String = json.encodeToString(String.serializer(), s)
+
+    private companion object {
+        /** Top-level `import`/`export` statements mark a file as ESM needing the imports transform. */
+        val ESM_SYNTAX = Regex("""(?m)^\s*(?:import\s|export\s)""")
+    }
 }

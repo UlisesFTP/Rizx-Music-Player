@@ -21,6 +21,7 @@
     <string name="home_empty_artists">Nenhum artista nas paradas no momento.</string>
 
     <!-- Home screen: carousels + cells -->
+    <string name="home_continue_listening">Continuar ouvindo</string>
     <string name="home_top_songs">Principais músicas</string>
     <string name="home_made_for_you">Feito para você</string>
     <string name="home_top_albums">Principais álbuns</string>
@@ -75,4 +76,10 @@
     <string name="search_genre_country">Country</string>
     <string name="search_genre_folk">Folk</string>
     <string name="search_genre_dance">Dance</string>
-</resources>
+    <string name="home_tab_playlists">Playlists</string>
+    <string name="home_new_releases">Novidades</string>
+    <string name="home_empty_playlists">Nenhuma playlist por enquanto.</string>
+    <plurals name="home_playlist_tracks">
+        <item quantity="one">%1$d música</item>
+        <item quantity="other">%1$d músicas</item>
+    </plurals></resources>

@@ -103,7 +103,14 @@ class MediaControllerPlaybackController @Inject constructor(
         playContext(listOf(track), 0, QueueContext(kind = QueueSourceKind.RADIO, label = label, radioSeed = seed))
     }
 
-    override fun playYoutubeRadio(track: Track) {
+    override fun playYoutubeRadio(track: Track) = playMixRadio(track, RadioMode.YOUTUBE)
+
+    /**
+     * A song-seeded radio for any engine but [RadioMode.ARTIST]: the seed is the **track** (the
+     * engines continue from the song, not the performer) and the label names the song. The artist
+     * radio keeps its own shape in [playRadio].
+     */
+    private fun playMixRadio(track: Track, mode: RadioMode) {
         val label = track.title.takeIf { it.isNotBlank() }?.let { "Mix · $it" } ?: "Mix"
         playContext(
             listOf(track),
@@ -112,14 +119,14 @@ class MediaControllerPlaybackController @Inject constructor(
                 kind = QueueSourceKind.RADIO,
                 label = label,
                 radioSeed = track.source,
-                radioMode = RadioMode.YOUTUBE,
+                radioMode = mode,
             ),
         )
     }
 
-    override fun playAutoRadio(track: Track) = when (radioAlgorithm) {
-        RadioMode.YOUTUBE -> playYoutubeRadio(track)
+    override fun playAutoRadio(track: Track) = when (val mode = radioAlgorithm) {
         RadioMode.ARTIST -> playRadio(track)
+        else -> playMixRadio(track, mode)
     }
 
     override fun play() {

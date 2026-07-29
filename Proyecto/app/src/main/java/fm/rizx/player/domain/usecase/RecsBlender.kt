@@ -102,6 +102,9 @@ class RecsBlender(
             "deezer-dashboard" to 0.40,
             "spotify-charts" to 0.20,
             "applemusic-charts" to 0.15,
+            // SoundCloud's charts are indie/emerging rather than mainstream, so they season the blend
+            // instead of leading it — the same share an unlisted source would get.
+            "soundcloud-charts" to 0.10,
         )
 
         /** Unknown/future sources still get through, just with the smallest voice. */

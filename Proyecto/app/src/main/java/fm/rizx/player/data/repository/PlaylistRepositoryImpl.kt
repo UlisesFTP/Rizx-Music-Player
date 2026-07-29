@@ -149,10 +149,13 @@ class PlaylistRepositoryImpl(
         if (items.isEmpty()) return
 
         val decoded = items.map { it to TrackJson.decodeTrack(it.trackJson) }
-        if (entity.artworkUrl != null && decoded.all { (_, track) -> track.artwork.coverUrl() != null }) return
+        // Deliberately no early-out on "everything already has a cover": a playlist saved by the old
+        // unverified resolver has covers on every row, and some of them are the wrong record's. Those
+        // are re-checked (and withdrawn if they no longer verify) — the artwork cache makes the pass
+        // free from the second open onwards.
 
         runCatching {
-            val enriched = enricher.enrich(decoded.map { (_, track) -> track })
+            val enriched = enricher.enrich(decoded.map { (_, track) -> track }, repairBorrowed = true)
             decoded.forEachIndexed { index, (item, before) ->
                 val after = enriched[index]
                 if (after.artwork.coverUrl() != before.artwork.coverUrl()) {
@@ -172,20 +175,11 @@ class PlaylistRepositoryImpl(
     }
 
     /**
-     * The canonical playlist URL for a remote [source] — its [ProviderRef.url] if present, else rebuilt
-     * from the namespaced id (`playlist:<raw>`). Mirrors the ids each search mapper emits, so the URL a
-     * playlist provider's `canHandle` sees is the same shape a pasted link would be.
+     * The canonical playlist URL for a remote [source]. Lives in [PlaylistUrls] because the Home feed
+     * asks the same question before drawing a card, to avoid showing one that would open empty.
      */
-    private fun playlistUrl(source: ProviderRef): String? {
-        source.url?.takeIf { it.isNotBlank() }?.let { return it }
-        val raw = source.id.substringAfter(':').takeIf { it.isNotBlank() } ?: return null
-        return when (source.provider) {
-            "deezer" -> "https://www.deezer.com/playlist/$raw"
-            "youtube" -> "https://www.youtube.com/playlist?list=$raw"
-            "spotify" -> "https://open.spotify.com/playlist/$raw"
-            else -> null
-        }
-    }
+    private fun playlistUrl(source: ProviderRef): String? =
+        fm.rizx.player.data.provider.PlaylistUrls.canonical(source)
 
     /** The first enabled playlist provider that can handle [url] (registration order = priority). */
     private suspend fun playlistProviderFor(url: String): PlaylistProvider? {

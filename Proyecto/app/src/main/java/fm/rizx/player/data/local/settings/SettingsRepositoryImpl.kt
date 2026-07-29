@@ -171,6 +171,19 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.RADIO_ALGORITHM] = mode.name }
     }
 
+    /**
+     * Which source fills the Home feed: a dashboard provider's id, or [FEED_PROVIDER_ALL] to blend
+     * them. Stored as the raw id (not an enum) because the choices are discovered from the registry —
+     * a plugin's dashboard is selectable the moment it registers.
+     */
+    override val feedProvider: Flow<String> = pref { prefs ->
+        prefs[Keys.FEED_PROVIDER]?.takeIf { it.isNotBlank() } ?: DEFAULT_FEED_PROVIDER
+    }
+
+    override suspend fun setFeedProvider(id: String) {
+        dataStore.edit { it[Keys.FEED_PROVIDER] = id }
+    }
+
     // Same by-name storage as the radio algorithm, for the same reason.
     override val lyricsVisualQuality: Flow<LyricsVisualQuality> = pref { prefs ->
         prefs[Keys.LYRICS_QUALITY]
@@ -204,6 +217,7 @@ class SettingsRepositoryImpl(
         val AUDIO_CACHE_BYTES = longPreferencesKey("core.cache.audioBytes")
         val RECS_REGIONAL_CONSENT = booleanPreferencesKey("core.recs.regionalConsent")
         val RADIO_ALGORITHM = stringPreferencesKey("core.recs.radioAlgorithm")
+        val FEED_PROVIDER = stringPreferencesKey("core.recs.feedProvider")
         val LYRICS_QUALITY = stringPreferencesKey("core.ui.lyricsQuality")
     }
 
@@ -217,6 +231,16 @@ class SettingsRepositoryImpl(
          * mix comes back empty — so "next" can't dead-end.
          */
         val DEFAULT_RADIO_ALGORITHM = RadioMode.YOUTUBE
+
+        /** Sentinel for "blend every enabled dashboard source" — never a real provider id. */
+        const val FEED_PROVIDER_ALL = "all"
+
+        /**
+         * Deezer alone by default. It is the only source with all four sections (tracks, artists,
+         * albums, editorial playlists), so a fresh install gets a complete Home; the blend and the
+         * single-platform feeds are both one tap away in Settings.
+         */
+        const val DEFAULT_FEED_PROVIDER = "deezer-dashboard"
 
         private val DEFAULTS = PlaybackResolverSettings()
 

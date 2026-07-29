@@ -73,6 +73,41 @@ object ArtistNameMatching {
         .distinct()
 
     /**
+     * The individual artists a credit line *might* be naming: "Omar Courtz & De La Rose" → two names.
+     *
+     * A YouTube-sourced track carries **one** credit holding the whole billing, so this is the only way
+     * a collaboration's second artist can ever be reachable. It is a **guess**, never a conclusion —
+     * plenty of single artists are spelled with these separators ("Earth, Wind & Fire",
+     * "Simon & Garfunkel", "Tyler, The Creator"). The caller must confirm the split against a catalogue
+     * before using it; see `ResolveTrackArtistsUseCase`.
+     *
+     * Returns a single-element list when there is nothing to split.
+     */
+    fun credits(name: String): List<String> =
+        SEPARATORS.split(name.trim())
+            .map { it.trim().trim(*EDGE_PUNCTUATION).trim() }
+            .filter { it.length >= MIN_CREDIT }
+            .distinctBy { blender.nameKey(it) }
+            .ifEmpty { listOfNotNull(name.trim().takeIf { it.isNotEmpty() }) }
+
+    /**
+     * Comma, semicolon, ampersand, " x ", and the featuring markers — the ones that separate billed
+     * artists in practice. Deliberately **not** "+" or " y ": "Florence + the Machine" and "Jesse y
+     * Joy" are one act each, and the catalogue check that follows costs a round-trip per part.
+     */
+    private val SEPARATORS = Regex(
+        // `\bfeat\b\.?` and not `\bfeat\.?\b`: after a literal "." there is no word boundary, so the
+        // second form matches "feat" and leaves the dot behind on the next name.
+        """\s*(?:,|;|&|\bfeat\b\.?|\bft\b\.?|\bfeaturing\b|\bwith\b|\bcon\b|\sx\s)\s*""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    private val EDGE_PUNCTUATION = charArrayOf('(', ')', '[', ']', '-', '.', ',')
+
+    /** Below this a "name" is an initial or a stray particle, not an artist worth looking up. */
+    private const val MIN_CREDIT = 2
+
+    /**
      * What must be left after dropping a suffix for the remainder to still name an artist. Four, so
      * "The Band" keeps its "band" — stripping it would leave a stem short enough to collide with
      * anything.
@@ -87,6 +122,10 @@ object ArtistNameMatching {
     private val CHANNEL_WORDS = listOf(
         "officialvevo", "vevomusic", "officialmusic", "officialchannel",
         "official", "vevo", "topic", "channel", "music", "band", "tv", "hd",
+        // Spanish and Portuguese channels decorate exactly the same way, and this app's catalogue is
+        // largely Latin: "Xavi Oficial" and "Junior H Oficial" are as common here as "DualipaVEVO".
+        // Without these the artist never matches a catalogue row and the track finds no cover.
+        "oficial", "oficialvevo", "musicaoficial", "canaloficial",
     )
 
     /**
@@ -94,5 +133,6 @@ object ArtistNameMatching {
      * list: plenty of real names *start* with a word from the list above — "Band of Horses",
      * "TV on the Radio", "Music Soulchild" — and stripping those would be inventing an artist.
      */
-    private val LEADING_CHANNEL_WORDS = listOf("officialvevo", "official", "vevo", "topic", "channel")
+    private val LEADING_CHANNEL_WORDS =
+        listOf("officialvevo", "official", "oficial", "vevo", "topic", "channel")
 }

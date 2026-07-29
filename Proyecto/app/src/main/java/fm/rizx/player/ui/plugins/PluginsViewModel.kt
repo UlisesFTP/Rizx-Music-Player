@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.error.toSafeMessage
+import fm.rizx.player.domain.plugin.InstalledPlugin
 import fm.rizx.player.domain.plugin.PluginRepository
 import fm.rizx.player.domain.plugin.RegistryPlugin
 import fm.rizx.player.domain.provider.EnabledProviderStore
@@ -42,24 +43,41 @@ data class StoreRow(
     val description: String,
     val author: String,
     val status: StoreStatus,
+    /** Stable reason key when [status] is [StoreStatus.UNSUPPORTED] (localized by the UI). */
+    val unsupportedReason: String? = null,
 )
 
-enum class StoreStatus { AVAILABLE, INSTALLING, INSTALLED, ERROR }
+enum class StoreStatus { AVAILABLE, INSTALLING, INSTALLED, UNSUPPORTED, ERROR }
 
 /** A downloaded plugin in the "Installed plugins" section. */
-data class InstalledPluginRow(val id: String, val name: String, val version: String, val category: String, val enabled: Boolean)
+data class InstalledPluginRow(
+    val id: String,
+    val name: String,
+    val version: String,
+    val category: String,
+    val enabled: Boolean,
+    val quarantined: Boolean = false,
+    /** The failure that caused the quarantine — shown on the row so "why did it turn off" is answerable. */
+    val lastError: String = "",
+    /** True when the plugin came from a registry (so re-installing its latest release is possible). */
+    val canUpdate: Boolean = false,
+)
 
 data class PluginsUiState(
     val rows: List<PluginRow> = emptyList(),
     val store: List<StoreRow> = emptyList(),
     val installedPlugins: List<InstalledPluginRow> = emptyList(),
+    val registries: List<String> = emptyList(),
     val storeError: String? = null,
+    val sideloadBusy: Boolean = false,
 )
 
 /**
- * Backs the Plugins screen (ADR 0014). Installed tab: built-in + plugin-backed providers (active radio /
- * enable toggle). Store tab: the real Nuclear registry with Download/Install actions; installing a plugin
- * downloads + runs it and its providers appear in the Installed tab.
+ * Backs the Plugins screen (ADR 0014/0019). Installed tab: built-in + plugin-backed providers (active
+ * radio / enable toggle) plus the downloaded plugins with health, update and uninstall. Store tab: the
+ * Nuclear registry merged with any user-added registries — every entry visible, the non-runnable ones
+ * labeled with their reason instead of hidden — plus sideload (install from URL) and registry
+ * management.
  */
 @HiltViewModel
 class PluginsViewModel @Inject constructor(
@@ -74,11 +92,13 @@ class PluginsViewModel @Inject constructor(
     val state: StateFlow<PluginsUiState> = _state.asStateFlow()
 
     private var registryCache: List<RegistryPlugin> = emptyList()
+    private var installedCache: List<InstalledPlugin> = emptyList()
     private val installing = mutableSetOf<String>()
 
     init {
         refresh()
         observeInstalled()
+        observeRegistries()
         loadStore()
     }
 
@@ -92,23 +112,24 @@ class PluginsViewModel @Inject constructor(
     private fun observeInstalled() {
         viewModelScope.launch {
             plugins.installed.collect { installed ->
-                _state.update {
-                    it.copy(
-                        installedPlugins = installed.map { p ->
-                            InstalledPluginRow(p.id, p.name, p.version, p.category, p.enabled)
-                        },
-                    )
-                }
+                installedCache = installed
+                rebuildInstalled()
                 snapshot()      // plugin providers may have (un)registered
                 rebuildStore()
             }
         }
     }
 
+    private fun observeRegistries() {
+        viewModelScope.launch {
+            plugins.registries.collect { urls -> _state.update { it.copy(registries = urls) } }
+        }
+    }
+
     fun loadStore() {
         viewModelScope.launch {
             runCatching { plugins.registry() }
-                .onSuccess { registryCache = it; _state.update { s -> s.copy(storeError = null) }; rebuildStore() }
+                .onSuccess { registryCache = it; _state.update { s -> s.copy(storeError = null) }; rebuildInstalled(); rebuildStore() }
                 .onFailure { e -> _state.update { s -> s.copy(storeError = e.toSafeMessage("Couldn't load the plugin store")) } }
         }
     }
@@ -124,6 +145,51 @@ class PluginsViewModel @Inject constructor(
             installing.remove(id)
             snapshot()
             rebuildStore()
+        }
+    }
+
+    /** Re-installs [id]'s latest release (settings preserved). Only offered for registry plugins. */
+    fun update(id: String) {
+        val entry = registryCache.firstOrNull { it.id == id } ?: return
+        if (id in installing) return
+        installing.add(id)
+        rebuildStore()
+        viewModelScope.launch {
+            runCatching { plugins.update(entry) }
+                .onFailure { e -> _state.update { it.copy(storeError = e.toSafeMessage("Update failed. Please try again.")) } }
+            installing.remove(id)
+            snapshot()
+            rebuildStore()
+        }
+    }
+
+    /** Sideload a plugin zip from a pasted URL. */
+    fun installFromUrl(url: String) {
+        val trimmed = url.trim()
+        if (trimmed.isBlank() || _state.value.sideloadBusy) return
+        _state.update { it.copy(sideloadBusy = true) }
+        viewModelScope.launch {
+            runCatching { plugins.installFromUrl(trimmed) }
+                .onSuccess { _state.update { s -> s.copy(storeError = null) } }
+                .onFailure { e -> _state.update { it.copy(storeError = e.toSafeMessage("Couldn't install from that URL")) } }
+            _state.update { it.copy(sideloadBusy = false) }
+            snapshot()
+        }
+    }
+
+    fun addRegistry(url: String) {
+        val trimmed = url.trim()
+        if (!trimmed.startsWith("http")) return
+        viewModelScope.launch {
+            runCatching { plugins.addRegistry(trimmed) }
+            loadStore()
+        }
+    }
+
+    fun removeRegistry(url: String) {
+        viewModelScope.launch {
+            runCatching { plugins.removeRegistry(url) }
+            loadStore()
         }
     }
 
@@ -163,14 +229,30 @@ class PluginsViewModel @Inject constructor(
         viewModelScope.launch { enabled.setEnabled(id, on); snapshot() }
     }
 
-    private fun rebuildStore() {
-        val installedIds = _state.value.installedPlugins.map { it.id }.toSet()
+    private fun rebuildInstalled() {
+        val registryIds = registryCache.map { it.id }.toSet()
         _state.update {
             it.copy(
-                // Desktop-only plugins (yt-dlp subprocess, desktop media keys, a Last.fm login widget
-                // Compose can't render) are hidden entirely rather than shown as a dead "Desktop only"
-                // row — the store lists only what actually runs here. See RegistryPlugin.UNSUPPORTED.
-                store = registryCache.filter { it.isSupported }.map { entry ->
+                installedPlugins = installedCache.map { p ->
+                    InstalledPluginRow(
+                        id = p.id, name = p.name, version = p.version, category = p.category,
+                        enabled = p.enabled,
+                        quarantined = p.isQuarantined,
+                        lastError = p.lastError,
+                        canUpdate = p.id in registryIds,
+                    )
+                },
+            )
+        }
+    }
+
+    private fun rebuildStore() {
+        val installedIds = installedCache.map { it.id }.toSet()
+        _state.update {
+            it.copy(
+                // Every registry entry is listed; the ones that can't run here say WHY instead of
+                // vanishing — transparency beats a mysteriously short catalog (ADR 0019).
+                store = registryCache.map { entry ->
                     StoreRow(
                         id = entry.id,
                         displayName = entry.name.ifBlank { entry.id.removePrefix("nuclear-plugin-").replaceFirstChar { c -> c.uppercase() } },
@@ -178,10 +260,12 @@ class PluginsViewModel @Inject constructor(
                         description = entry.description,
                         author = entry.author,
                         status = when {
+                            !entry.isSupported -> StoreStatus.UNSUPPORTED
                             entry.id in installing -> StoreStatus.INSTALLING
                             entry.id in installedIds -> StoreStatus.INSTALLED
                             else -> StoreStatus.AVAILABLE
                         },
+                        unsupportedReason = entry.unsupportedReason,
                     )
                 },
             )
@@ -218,7 +302,7 @@ class PluginsViewModel @Inject constructor(
     }
 
     private fun ProviderKind.isSingleActive(): Boolean = when (this) {
-        ProviderKind.DASHBOARD, ProviderKind.PLAYLISTS -> false
+        ProviderKind.DASHBOARD, ProviderKind.PLAYLISTS, ProviderKind.DISCOVERY -> false
         else -> true
     }
 }

@@ -33,6 +33,12 @@ data class DeezerArtistShortDto(
     val name: String? = null,
     @SerialName("picture_xl") val pictureXl: String? = null,
     @SerialName("picture_medium") val pictureMedium: String? = null,
+    /**
+     * Followers. Present on `search/artist` rows and it is the only thing that separates an artist
+     * from their **duplicate entries** — Deezer carries a second "The Weeknd" with 27 fans and one
+     * album next to the real one with 14.6M, and ranks it *first*. See [DeezerArtistSearch].
+     */
+    @SerialName("nb_fan") val nbFan: Long? = null,
 )
 
 @Serializable

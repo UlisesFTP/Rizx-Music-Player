@@ -20,6 +20,8 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.last
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -49,6 +51,7 @@ class ForYouRepositoryImplTest {
             coEvery { searchArtists(any(), any()) } returns DeezerArtistsWrapper(emptyList())
             coEvery { artistAlbums(any(), any()) } returns DeezerAlbumsResponse(emptyList())
         },
+        shuffle: (List<Track>) -> List<Track> = { it }, // deterministic seeds by default
     ): ForYouRepositoryImpl {
         val favorites = mockk<FavoritesRepository> { every { favoriteTracks() } returns flowOf(liked) }
         val recents = mockk<RecentlyPlayedRepository> { every { recent(any()) } returns flowOf(recent) }
@@ -61,13 +64,47 @@ class ForYouRepositoryImplTest {
             settings = settings,
             region = RegionResolver(listOf { "mx" }),
             io = Dispatchers.Unconfined,
-            shuffle = { it }, // deterministic seeds
+            shuffle = shuffle,
         )
     }
 
     @Test
-    fun `cold start (no likes, no recents) yields no sections`() = runTest {
-        assertTrue(repo().sections().isEmpty())
+    fun `the rows announce themselves before any network call, so the Home can reserve their height`() = runTest {
+        val tracks = listOf(taste("Song A", "Artist X"), taste("Song C", "Artist Y"))
+        val emissions = repo(recent = tracks, mix = mixOf(youtubeTrack("a"), youtubeTrack("b"), youtubeTrack("c")))
+            .sections()
+            .toList()
+
+        assertEquals("plan, then the finished rows", 2, emissions.size)
+        val plan = emissions.first()
+        // Titled but empty — every title here comes from local taste, so announcing costs no round-trip.
+        assertTrue("a planned row must carry no items", plan.all { it.size == 0 })
+        assertEquals(listOf("Song A", "Song C"), plan.filterIsInstance<ForYouSection.Mix>().map { it.seedTitle })
+        assertEquals("Artist X", plan.filterIsInstance<ForYouSection.BecauseYouLike>().single().artistName)
+        assertEquals(1, plan.filterIsInstance<ForYouSection.ArtistsForYou>().size)
+        assertEquals(1, plan.filterIsInstance<ForYouSection.AlbumsForYou>().size)
+    }
+
+    @Test
+    fun `cold start announces nothing, so no space is held for a row that will never come`() = runTest {
+        assertEquals(listOf(emptyList<ForYouSection>()), repo().sections().toList())
+    }
+
+    @Test
+    fun `a shuffled feed titles the skeletons exactly like the rows that replace them`() = runTest {
+        // Seeds are shuffled per load, so picking them twice — once to announce, once to build — would
+        // title the skeleton after one song and the row that lands in its slot after another.
+        val tracks = List(6) { taste("Song $it", "Artist $it") }
+        val emissions = repo(
+            recent = tracks,
+            mix = mixOf(youtubeTrack("a"), youtubeTrack("b"), youtubeTrack("c")),
+            shuffle = { it.shuffled() },
+        ).sections().toList()
+
+        assertEquals(
+            emissions.first().filterIsInstance<ForYouSection.Mix>().map { it.seedTitle },
+            emissions.last().filterIsInstance<ForYouSection.Mix>().map { it.seedTitle },
+        )
     }
 
     @Test
@@ -78,7 +115,7 @@ class ForYouRepositoryImplTest {
             taste("Song C", "Artist Y"),
         )
         val sections = repo(recent = tracks, mix = mixOf(youtubeTrack("a"), youtubeTrack("b"), youtubeTrack("c")))
-            .sections()
+            .sections().last()
 
         val mixes = sections.filterIsInstance<ForYouSection.Mix>()
         assertEquals(2, mixes.size)
@@ -90,7 +127,7 @@ class ForYouRepositoryImplTest {
     fun `two artists sharing a song title still yield one row, keeping the list keys unique`() = runTest {
         val tracks = listOf(taste("Hello", "Artist X"), taste("Hello", "Artist Y"))
         val sections = repo(recent = tracks, mix = mixOf(youtubeTrack("a"), youtubeTrack("b"), youtubeTrack("c")))
-            .sections()
+            .sections().last()
 
         assertEquals(1, sections.filterIsInstance<ForYouSection.Mix>().size)
     }
@@ -108,7 +145,7 @@ class ForYouRepositoryImplTest {
             coEvery { artistAlbums(any(), any()) } returns DeezerAlbumsResponse(emptyList())
         }
 
-        val sections = repo(liked = tracks, deezer = deezer).sections()
+        val sections = repo(liked = tracks, deezer = deezer).sections().last()
 
         val row = sections.filterIsInstance<ForYouSection.BecauseYouLike>().single()
         assertEquals("Artist X", row.artistName)
@@ -127,7 +164,7 @@ class ForYouRepositoryImplTest {
             recent = listOf(taste("Song A", "Artist X")),
             mix = mixOf(youtubeTrack("a"), youtubeTrack("b"), youtubeTrack("c")),
             deezer = deezer,
-        ).sections()
+        ).sections().last()
 
         assertEquals(1, sections.filterIsInstance<ForYouSection.Mix>().size)
         assertTrue(sections.filterIsInstance<ForYouSection.BecauseYouLike>().isEmpty())
@@ -137,7 +174,7 @@ class ForYouRepositoryImplTest {
 
     @Test
     fun `artists-for-you merges related artists across top seeds`() = runTest {
-        val sections = repo(liked = relatedTaste(), deezer = relatedDeezer()).sections()
+        val sections = repo(liked = relatedTaste(), deezer = relatedDeezer()).sections().last()
 
         val row = sections.filterIsInstance<ForYouSection.ArtistsForYou>().single()
         assertEquals(3, row.items.size)
@@ -145,7 +182,7 @@ class ForYouRepositoryImplTest {
 
     @Test
     fun `albums-for-you takes the related artists' records and carries their artist over`() = runTest {
-        val sections = repo(liked = relatedTaste(), deezer = relatedDeezer()).sections()
+        val sections = repo(liked = relatedTaste(), deezer = relatedDeezer()).sections().last()
 
         val row = sections.filterIsInstance<ForYouSection.AlbumsForYou>().single()
         // Two related artists are seeded, three albums each, deduped by identity.

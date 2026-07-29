@@ -1,6 +1,8 @@
 package fm.rizx.player.core.di
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -8,7 +10,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import fm.rizx.player.data.plugin.InstalledPluginStore
 import fm.rizx.player.data.plugin.JsPluginRuntime
+import fm.rizx.player.data.plugin.PluginKvStore
 import fm.rizx.player.data.plugin.PluginRepositoryImpl
+import fm.rizx.player.data.plugin.YtdlpFacade
+import fm.rizx.player.data.remote.youtube.YoutubeExtractorClient
 import fm.rizx.player.data.plugin.install.PluginInstaller
 import fm.rizx.player.data.plugin.install.PluginRegistryClient
 import fm.rizx.player.data.plugin.install.TsTranspiler
@@ -38,14 +43,33 @@ object PluginModule {
 
     @Provides
     @Singleton
+    fun providePluginKvStore(@ApplicationContext context: Context, json: Json): PluginKvStore =
+        PluginKvStore(File(context.filesDir, "plugins"), json)
+
+    @Provides
+    @Singleton
     fun provideJsPluginRuntime(
         @ApplicationContext context: Context,
         client: OkHttpClient,
         json: Json,
         registry: ProviderRegistry,
         transpiler: TsTranspiler,
+        kv: PluginKvStore,
+        youtube: YoutubeExtractorClient,
     ): JsPluginRuntime =
-        JsPluginRuntime(client, asset(context, "plugin-runtime/bootstrap.js"), json, registry, transpiler)
+        JsPluginRuntime(
+            client, asset(context, "plugin-runtime/bootstrap.js"), json, registry, transpiler,
+            extraJs = listOfNotNull(runCatching { asset(context, "plugin-runtime/domparser.min.js") }.getOrNull()),
+            kv = kv,
+            onOpenExternal = { url ->
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            },
+            ytdlp = YtdlpFacade(youtube, json),
+        )
 
     @Provides
     @Singleton
@@ -71,5 +95,6 @@ object PluginModule {
         runtime: JsPluginRuntime,
         registry: ProviderRegistry,
         settings: SettingsRepository,
-    ): PluginRepository = PluginRepositoryImpl(registryClient, installer, store, runtime, registry, settings)
+        kv: PluginKvStore,
+    ): PluginRepository = PluginRepositoryImpl(registryClient, installer, store, runtime, registry, settings, kv = kv)
 }

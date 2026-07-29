@@ -17,8 +17,13 @@ import fm.rizx.player.data.remote.lrclib.LrcLibApi
 import fm.rizx.player.data.remote.musixmatch.MusixmatchClient
 import fm.rizx.player.data.remote.netease.NeteaseApi
 import fm.rizx.player.data.remote.lyricsovh.LyricsOvhApi
+import fm.rizx.player.data.provider.AppleMusicMetadataProvider
+import fm.rizx.player.data.provider.MetadataRadioMixSource
+import fm.rizx.player.data.provider.SoundcloudMetadataProvider
 import fm.rizx.player.data.remote.soundcloud.NewPipeSoundcloudExtractorClient
 import fm.rizx.player.data.remote.soundcloud.SoundcloudExtractorClient
+import fm.rizx.player.domain.model.RadioMode
+import fm.rizx.player.domain.provider.RadioMixSource
 import fm.rizx.player.data.search.DefaultPlaylistSourcesSearch
 import fm.rizx.player.data.search.NewPipeStreamingSourcesSearch
 import fm.rizx.player.data.search.PlaylistSourcesSearch
@@ -210,8 +215,30 @@ object NetworkModule {
     fun provideRadioMixSource(
         youtube: YoutubeExtractorClient,
         artwork: fm.rizx.player.data.artwork.TrackArtworkEnricher,
-    ): fm.rizx.player.domain.provider.RadioMixSource =
-        fm.rizx.player.data.remote.youtube.YoutubeMixSource(youtube, artwork)
+    ): RadioMixSource = fm.rizx.player.data.remote.youtube.YoutubeMixSource(youtube, artwork)
+
+    /**
+     * Every non-Deezer "up next" engine, keyed by the mode that selects it. A map rather than more
+     * qualified bindings so [fm.rizx.player.playback.service.PlaybackService] picks an engine by
+     * lookup instead of a `when` that must be edited for each new one — and so a mode with no engine
+     * simply falls through to the artist radio.
+     *
+     * [fm.rizx.player.domain.model.RadioMode.ARTIST] is deliberately absent: it is the fallback the
+     * others degrade to, served by the active metadata provider rather than a mix source.
+     */
+    @Provides
+    @Singleton
+    fun provideRadioMixSources(
+        youtubeMix: RadioMixSource,
+        itunes: ItunesApi,
+        soundcloud: SoundcloudExtractorClient,
+    ): Map<RadioMode, @JvmSuppressWildcards RadioMixSource> = mapOf(
+        RadioMode.YOUTUBE to youtubeMix,
+        // Their own instances rather than the registered providers: the up-next engine is the user's
+        // choice independently of which catalogue Search uses, so disabling one must not mute the other.
+        RadioMode.APPLEMUSIC to MetadataRadioMixSource(AppleMusicMetadataProvider(itunes)),
+        RadioMode.SOUNDCLOUD to MetadataRadioMixSource(SoundcloudMetadataProvider(soundcloud)),
+    )
 
     // SoundCloud (indie/emerging): the same NewPipe engine + shared downloader, pointed at ServiceList.SoundCloud.
     @Provides

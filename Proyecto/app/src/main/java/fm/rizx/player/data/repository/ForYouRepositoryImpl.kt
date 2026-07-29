@@ -22,8 +22,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.withContext
 
 /**
  * Builds the personalized "For you" rows from the user's own taste (likes + recents):
@@ -34,6 +35,11 @@ import kotlinx.coroutines.withContext
  * Rows are fetched concurrently and each is `runCatching`-isolated: a broken source drops its row,
  * never the feed. Cold start (no taste data) returns no sections. Also fronts the regional-consent
  * setting and the detected country so the Home ViewModel needs only this one seam.
+ *
+ * **Plan first, then fill.** Every row's title is derivable from local taste alone, so [sections]
+ * emits the titled-but-empty plan before it touches the network and the finished rows after. The
+ * Home turns that first emission into skeletons of the real height — otherwise this, the slowest
+ * half of the screen, landed a screen of content *above* the charts the user was already reading.
  */
 class ForYouRepositoryImpl(
     private val favorites: FavoritesRepository,
@@ -55,39 +61,69 @@ class ForYouRepositoryImpl(
 
     override fun countryName(): String? = region.countryDisplayName()
 
-    override suspend fun sections(): List<ForYouSection> = withContext(io) {
+    override fun sections(): Flow<List<ForYouSection>> = flow {
         val recent = runCatching { recents.recent(TASTE_LIMIT).first() }.getOrDefault(emptyList())
         val liked = runCatching { favorites.favoriteTracks().first() }.getOrDefault(emptyList())
         val taste = (recent + liked).distinctBy { it.source }
-        if (taste.isEmpty()) return@withContext emptyList()
+        if (taste.isEmpty()) {
+            emit(emptyList())
+            return@flow
+        }
+        // Seeds and the top artist are picked **once**, here, and handed to both halves: the plan's
+        // titles and the real rows' titles must be the same strings or the Home would swap a skeleton
+        // for a differently-titled row instead of filling it. (`shuffle` alone would differ per call.)
+        val seeds = mixSeeds(taste)
+        val artist = topArtists(taste).firstOrNull()
+        emit(plan(seeds, artist))
 
-        supervisorScope {
-            // Three independent branches, all in flight at once. The discovery branch keeps its two
-            // rows together because both are built from the same related-artist lookup — and crucially
-            // `albumsForYou` now starts the moment that lookup lands instead of waiting behind the
-            // slow YT mixes, which used to add its two round-trips as pure tail latency.
-            val mixes = async { mixSections(taste) }
-            val because = async { becauseYouLike(taste) }
-            val discovery = async {
-                val similar = relatedArtists(taste)
-                val artistsRow = similar.takeIf { it.size >= MIN_ROW_ITEMS }
-                    ?.let { ForYouSection.ArtistsForYou(it.take(ROW_ITEMS)) }
-                listOfNotNull(artistsRow, albumsForYou(similar))
-            }
-            mixes.await() + listOfNotNull(because.await()) + discovery.await()
+        emit(
+            supervisorScope {
+                // Three independent branches, all in flight at once. The discovery branch keeps its two
+                // rows together because both are built from the same related-artist lookup — and crucially
+                // `albumsForYou` now starts the moment that lookup lands instead of waiting behind the
+                // slow YT mixes, which used to add its two round-trips as pure tail latency.
+                val mixes = async { mixSections(seeds) }
+                val because = async { becauseYouLike(artist) }
+                val discovery = async {
+                    val similar = relatedArtists(taste)
+                    val artistsRow = similar.takeIf { it.size >= MIN_ROW_ITEMS }
+                        ?.let { ForYouSection.ArtistsForYou(it.take(ROW_ITEMS)) }
+                    listOfNotNull(artistsRow, albumsForYou(similar))
+                }
+                mixes.await() + listOfNotNull(because.await()) + discovery.await()
+            },
+        )
+    }.flowOn(io)
+
+    /**
+     * The rows about to be built: real titles, no items yet. This is what lets the Home reserve the
+     * block's height up front — every title here comes from local taste, so it is ready before the
+     * first network call. A planned row whose source then comes back empty collapses, which is one
+     * row of movement instead of the whole block arriving at once.
+     */
+    private fun plan(seeds: List<Track>, artist: ArtistCredit?): List<ForYouSection> = buildList {
+        seeds.forEach { add(ForYouSection.Mix(seedTitle = it.title, items = emptyList())) }
+        // The three Deezer-backed rows all hang off a credited artist; with none, none of them can run.
+        if (artist != null) {
+            add(ForYouSection.BecauseYouLike(artistName = artist.name, items = emptyList()))
+            add(ForYouSection.ArtistsForYou(emptyList()))
+            add(ForYouSection.AlbumsForYou(emptyList()))
         }
     }
 
     /**
-     * Up to [MIX_ROWS] Mix rows. Seeds are distinct by **artist** first — two mixes seeded from the
+     * Seeds for up to [MIX_ROWS] Mix rows. Distinct by **artist** first — two mixes seeded from the
      * same artist return largely the same songs, which is the loudest redundancy the feed can have —
      * and then by title, because the row's title doubles as its LazyColumn key.
      */
-    private suspend fun mixSections(taste: List<Track>): List<ForYouSection> = supervisorScope {
+    private fun mixSeeds(taste: List<Track>): List<Track> =
         shuffle(taste)
             .distinctBy { track -> track.artists.firstOrNull()?.name?.lowercase() ?: track.title.lowercase() }
             .distinctBy { it.title.lowercase() }
             .take(MIX_ROWS)
+
+    private suspend fun mixSections(seeds: List<Track>): List<ForYouSection> = supervisorScope {
+        seeds
             // Concurrently: each row is a blocking NewPipe search + mix + artwork pass, and running the
             // second behind the first doubled the slowest thing on the Home. `awaitAll` keeps the order.
             .map { seed ->
@@ -102,8 +138,8 @@ class ForYouRepositoryImpl(
             .filterNotNull()
     }
 
-    private suspend fun becauseYouLike(taste: List<Track>): ForYouSection? {
-        val artist = topArtists(taste).firstOrNull() ?: return null
+    private suspend fun becauseYouLike(artist: ArtistCredit?): ForYouSection? {
+        if (artist == null) return null
         val artistId = deezerArtistId(artist) ?: return null
         return runCatching { deezer.artistRadio(artistId, ROW_ITEMS).data.mapNotNull { it.toTrackOrNull() } }
             .getOrDefault(emptyList())

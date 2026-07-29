@@ -1,6 +1,7 @@
 package fm.rizx.player.ui.player
 
 import app.cash.turbine.test
+import fm.rizx.player.FakeSettingsRepository
 import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
@@ -27,55 +28,12 @@ class PlayerViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    /** Minimal [SettingsRepository] backing only the theme (the rest return inert defaults). */
-    private class FakeSettings : SettingsRepository {
-        val mode = MutableStateFlow(ThemeMode.SYSTEM)
-        override val themeMode: Flow<ThemeMode> = mode
-        override suspend fun setThemeMode(mode: ThemeMode) { this.mode.value = mode }
-        override val activeMetadataProviderId: Flow<String?> = flowOf(null)
-        override suspend fun setActiveMetadataProviderId(id: String?) {}
-        override val activeStreamingProviderId: Flow<String?> = flowOf(null)
-        override suspend fun setActiveStreamingProviderId(id: String?) {}
-        override val activeLyricsProviderId: Flow<String?> = flowOf(null)
-        override suspend fun setActiveLyricsProviderId(id: String?) {}
-        override val streamExpiryMs: Flow<Long> = flowOf(0L)
-        override suspend fun setStreamExpiryMs(ms: Long) {}
-        override val streamResolutionRetries: Flow<Int> = flowOf(0)
-        override suspend fun setStreamResolutionRetries(retries: Int) {}
-        override val equalizerEnabled: Flow<Boolean> = flowOf(false)
-        override suspend fun setEqualizerEnabled(enabled: Boolean) {}
-        override val equalizerBandLevels: Flow<List<Int>> = flowOf(emptyList())
-        override suspend fun setEqualizerBandLevels(levels: List<Int>) {}
-        override val dataSaver: Flow<Boolean> = flowOf(false)
-        override suspend fun setDataSaver(enabled: Boolean) {}
-        override val crossfade: Flow<Boolean> = flowOf(false)
-        override suspend fun setCrossfade(enabled: Boolean) {}
-        override val gapless: Flow<Boolean> = flowOf(true)
-        override suspend fun setGapless(enabled: Boolean) {}
-        override val normalizeVolume: Flow<Boolean> = flowOf(false)
-        override suspend fun setNormalizeVolume(enabled: Boolean) {}
-        override val hiResOutput: Flow<Boolean> = flowOf(false)
-        override suspend fun setHiResOutput(enabled: Boolean) {}
-        override val canvasEnabled: Flow<Boolean> = flowOf(false)
-        override suspend fun setCanvasEnabled(enabled: Boolean) {}
-        override val syncedLyricsMode: Flow<Boolean> = flowOf(true)
-        override suspend fun setSyncedLyricsMode(enabled: Boolean) {}
-        override val audioCacheBytes: Flow<Long> = flowOf(0L)
-        override suspend fun setAudioCacheBytes(bytes: Long) {}
-        override val recsRegionalConsent: Flow<Boolean?> = flowOf(null)
-        override suspend fun setRecsRegionalConsent(consented: Boolean) {}
-        override val radioAlgorithm: Flow<RadioMode> = flowOf(RadioMode.YOUTUBE)
-        override suspend fun setRadioAlgorithm(mode: RadioMode) {}
-        override val lyricsVisualQuality: Flow<LyricsVisualQuality> = flowOf(LyricsVisualQuality.AUTOMATIC)
-        override suspend fun setLyricsVisualQuality(quality: LyricsVisualQuality) {}
-    }
-
-    private lateinit var settings: FakeSettings
+    private lateinit var settings: FakeSettingsRepository
     private lateinit var vm: PlayerViewModel
 
     @Before
     fun setup() {
-        settings = FakeSettings()
+        settings = FakeSettingsRepository()
         vm = PlayerViewModel(settings)
     }
 
@@ -106,7 +64,7 @@ class PlayerViewModelTest {
             advanceUntilIdle()
 
             assertEquals(ThemeMode.DARK, vm.themeMode.value)
-            assertEquals(ThemeMode.DARK, settings.mode.value) // persisted
+            assertEquals(ThemeMode.DARK, settings.themeModeFlow.value) // persisted
         }
 
     @Test
