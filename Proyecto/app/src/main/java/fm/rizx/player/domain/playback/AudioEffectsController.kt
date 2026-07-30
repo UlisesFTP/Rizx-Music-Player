@@ -20,4 +20,13 @@ interface AudioEffectsController {
      * (an approximation — not per-track ReplayGain). Persisted and re-applied on the next session.
      */
     fun setNormalizeVolume(enabled: Boolean)
+
+    /**
+     * The automatic equalizer: a curve per song, from its genre and its own measured spectrum.
+     *
+     * Only persists the preference. The transition itself — taking the effect over, and handing the
+     * user's manual curve back when it is switched off — belongs to the component that watches what is
+     * playing (`playback/AutoEqualizer`), so that one place owns it.
+     */
+    fun setAutoEqualizer(enabled: Boolean)
 }

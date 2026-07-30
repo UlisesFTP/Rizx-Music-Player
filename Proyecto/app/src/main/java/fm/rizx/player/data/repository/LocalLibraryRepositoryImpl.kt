@@ -45,6 +45,9 @@ class LocalLibraryRepositoryImpl(
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.TRACK,
+            // The file's own genre tag. Free here and the automatic equalizer's only offline source of a
+            // genre — a local file has no catalogue to ask.
+            MediaStore.Audio.Media.GENRE,
         )
         // Music only (skips ringtones/notifications/alarms), sorted by title.
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
@@ -61,6 +64,9 @@ class LocalLibraryRepositoryImpl(
             val albumIdCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val durCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val trackCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+            // getColumnIndex, not ...OrThrow: GENRE is a real column but plenty of files carry no tag, and
+            // a device that doesn't populate it must not fail the whole scan.
+            val genreCol = c.getColumnIndex(MediaStore.Audio.Media.GENRE)
             while (c.moveToNext()) {
                 out += localTrack(
                     id = c.getLong(idCol),
@@ -71,6 +77,7 @@ class LocalLibraryRepositoryImpl(
                     albumId = if (c.isNull(albumIdCol)) null else c.getLong(albumIdCol),
                     durationMs = if (c.isNull(durCol)) null else c.getLong(durCol),
                     trackNumber = if (c.isNull(trackCol)) null else c.getInt(trackCol),
+                    genre = if (genreCol < 0 || c.isNull(genreCol)) null else c.getString(genreCol),
                 )
             }
         }

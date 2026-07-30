@@ -100,6 +100,13 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.EQ_BANDS] = levels.joinToString(",") }
     }
 
+    // Off by default: it owns the equalizer while on, so it is opt-in.
+    override val autoEqualizer: Flow<Boolean> = pref { it[Keys.AUTO_EQ] ?: false }
+
+    override suspend fun setAutoEqualizer(enabled: Boolean) {
+        dataStore.edit { it[Keys.AUTO_EQ] = enabled }
+    }
+
     override val dataSaver: Flow<Boolean> = pref { it[Keys.DATA_SAVER] ?: false }
 
     override suspend fun setDataSaver(enabled: Boolean) {
@@ -207,6 +214,7 @@ class SettingsRepositoryImpl(
         val STREAM_RETRIES = intPreferencesKey("core.playback.streamResolutionRetries")
         val EQ_ENABLED = booleanPreferencesKey("core.audio.eq.enabled")
         val EQ_BANDS = stringPreferencesKey("core.audio.eq.bands")
+        val AUTO_EQ = booleanPreferencesKey("core.audio.autoEq")
         val DATA_SAVER = booleanPreferencesKey("core.data.dataSaver")
         val CROSSFADE = booleanPreferencesKey("core.audio.crossfade")
         val GAPLESS = booleanPreferencesKey("core.audio.gapless")

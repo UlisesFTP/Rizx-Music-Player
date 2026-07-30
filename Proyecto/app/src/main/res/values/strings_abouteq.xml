@@ -6,6 +6,13 @@
     <string name="eq_section_presets">PRESETS</string>
     <string name="eq_section_bands">BANDS</string>
 
+    <!-- Automatic equalizer (a curve per song: its genre, then the song's own spectrum) -->
+    <string name="pref_auto_eq">Automatic equalizer</string>
+    <string name="pref_auto_eq_caption">Tunes every song to its own genre, then refines it by listening to the track itself. Takes over the equalizer while it\'s on; your manual curve comes back when you turn it off.</string>
+    <string name="eq_auto_badge">AUTO</string>
+    <string name="eq_auto_badge_genre">AUTO · %1$s</string>
+    <string name="eq_auto_hint">Set for this song. Turn the automatic equalizer off in Settings to adjust the bands yourself.</string>
+
     <!-- AboutScreen -->
     <string name="about_cd_back">Back</string>
     <string name="about_title">About</string>

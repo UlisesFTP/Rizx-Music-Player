@@ -28,7 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LibraryMusic
@@ -61,10 +61,13 @@ import fm.rizx.player.core.formatDuration
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.CoverArt
+import fm.rizx.player.ui.components.FilterEmpty
 import fm.rizx.player.ui.components.RizxChip
+import fm.rizx.player.ui.components.RizxFilterField
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
+import fm.rizx.player.ui.util.ListFilter
 import fm.rizx.player.ui.local.LocalAlbum
 import fm.rizx.player.ui.local.LocalArtist
 import fm.rizx.player.ui.local.LocalLibraryViewModel
@@ -141,6 +144,15 @@ fun LocalLibraryScreen(
     val albums by vm.albums.collectAsStateWithLifecycle()
     val artists by vm.artists.collectAsStateWithLifecycle()
     var view by rememberSaveable { mutableStateOf(LocalView.Songs) }
+    // One filter, and it belongs to the view you are on: switching views clears it rather than carrying a
+    // song query over to albums, where it would silently hide most of the grid.
+    var filter by rememberSaveable { mutableStateOf("") }
+
+    // A device scan is the one list nobody curated — file names, WhatsApp audio, half-tagged albums — so it
+    // is the list most in need of narrowing, and it is all already in memory (see [ListFilter]).
+    val visibleSongs = remember(songs, filter) { songs.filter { ListFilter.matchesTrack(filter, it) } }
+    val visibleAlbums = remember(albums, filter) { albums.filter { ListFilter.matches(filter, it.title, it.artist) } }
+    val visibleArtists = remember(artists, filter) { artists.filter { ListFilter.matches(filter, it.name) } }
 
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp)) {
         Row(
@@ -157,8 +169,18 @@ fun LocalLibraryScreen(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                LocalView.entries.forEach { v -> RizxChip(stringResource(v.labelRes), active = view == v, onClick = { view = v }) }
+                LocalView.entries.forEach { v ->
+                    RizxChip(stringResource(v.labelRes), active = view == v, onClick = { view = v; filter = "" })
+                }
             }
+            // Only once the view has something to narrow — a bar over an empty scan is a control with no
+            // list under it.
+            val hasContent = when (view) {
+                LocalView.Songs -> songs.isNotEmpty()
+                LocalView.Albums -> albums.isNotEmpty()
+                LocalView.Artists -> artists.isNotEmpty()
+            }
+            if (hasContent) RizxFilterField(filter, { filter = it }, Modifier.padding(top = 10.dp))
         }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -173,9 +195,9 @@ fun LocalLibraryScreen(
                 )
             } else {
                 when (view) {
-                    LocalView.Songs -> SongsList(songs, onPlay = vm::playAll)
-                    LocalView.Albums -> AlbumsGrid(albums, onOpenAlbum)
-                    LocalView.Artists -> ArtistsGrid(artists, onOpenArtist)
+                    LocalView.Songs -> SongsList(visibleSongs, filter) { vm.playAll(it, visibleSongs) }
+                    LocalView.Albums -> AlbumsGrid(visibleAlbums, filter, onOpenAlbum)
+                    LocalView.Artists -> ArtistsGrid(visibleArtists, filter, onOpenArtist)
                 }
             }
         }
@@ -232,15 +254,25 @@ private fun Context.openAppSettings() {
     }
 }
 
+/**
+ * The scanned songs, already narrowed to what the filter allows. An empty list means two different things
+ * and says which: nothing on the device, or nothing matching [query].
+ */
 @Composable
-private fun SongsList(songs: List<Track>, onPlay: (Int) -> Unit) {
+private fun SongsList(songs: List<Track>, query: String, onPlay: (Int) -> Unit) {
     if (songs.isEmpty()) {
-        EmptyLocal(stringResource(R.string.local_no_music_title), stringResource(R.string.local_no_music_body))
+        if (query.isBlank()) {
+            EmptyLocal(stringResource(R.string.local_no_music_title), stringResource(R.string.local_no_music_body))
+        } else {
+            FilterEmpty(query)
+        }
         return
     }
     LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = LocalBottomInset.current + 16.dp)) {
-        items(songs, key = { "loc-${it.source.id}" }) { track ->
-            LocalSongRow(track) { onPlay(songs.indexOf(track)) }
+        // itemsIndexed, not `songs.indexOf(track)`: the index is what plays, and a list scanned off a phone
+        // has repeated file names — indexOf would answer with the first of them, i.e. the wrong song.
+        itemsIndexed(songs, key = { _, track -> "loc-${track.source.id}" }) { index, track ->
+            LocalSongRow(track) { onPlay(index) }
         }
     }
 }
@@ -263,9 +295,13 @@ private fun LocalSongRow(track: Track, onPlay: () -> Unit) {
 }
 
 @Composable
-private fun AlbumsGrid(albums: List<LocalAlbum>, onOpen: (String) -> Unit) {
+private fun AlbumsGrid(albums: List<LocalAlbum>, query: String, onOpen: (String) -> Unit) {
     if (albums.isEmpty()) {
-        EmptyLocal(stringResource(R.string.local_no_albums_title), stringResource(R.string.local_no_albums_body))
+        if (query.isBlank()) {
+            EmptyLocal(stringResource(R.string.local_no_albums_title), stringResource(R.string.local_no_albums_body))
+        } else {
+            FilterEmpty(query)
+        }
         return
     }
     LazyVerticalGrid(
@@ -301,9 +337,13 @@ private fun LocalAlbumCard(album: LocalAlbum, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ArtistsGrid(artists: List<LocalArtist>, onOpen: (String) -> Unit) {
+private fun ArtistsGrid(artists: List<LocalArtist>, query: String, onOpen: (String) -> Unit) {
     if (artists.isEmpty()) {
-        EmptyLocal(stringResource(R.string.local_no_artists_title), stringResource(R.string.local_no_artists_body))
+        if (query.isBlank()) {
+            EmptyLocal(stringResource(R.string.local_no_artists_title), stringResource(R.string.local_no_artists_body))
+        } else {
+            FilterEmpty(query)
+        }
         return
     }
     LazyVerticalGrid(

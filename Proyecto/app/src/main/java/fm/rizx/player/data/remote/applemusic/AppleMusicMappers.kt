@@ -98,6 +98,7 @@ fun List<ItunesResultDto>.toAppleAlbum(source: ProviderRef): Album? {
         artwork = head.artworkSet(),
         tracks = filter { it.trackId != null }.mapNotNull { it.toAppleTrackOrNull() },
         totalTracks = head.trackCount,
+        tags = listOfNotNull(head.primaryGenreName),
         source = source,
     )
 }

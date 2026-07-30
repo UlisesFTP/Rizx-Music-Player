@@ -62,19 +62,29 @@ class PlaylistDetailViewModel @Inject constructor(
         }
     }
 
-    /** Play the playlist from item [index] — the whole playlist becomes the queue for next/prev. */
-    fun play(index: Int) {
+    /**
+     * Play from item [index] — the playlist becomes the queue for next/prev.
+     *
+     * [tracks] is what the screen is showing: identical to the playlist unless its filter is narrowing it,
+     * in which case the queue is the rows the user can actually see.
+     */
+    fun play(index: Int, tracks: List<Track> = playlist.value?.items.orEmpty().map { it.track }) {
         val pl = playlist.value ?: return
-        playback.playContext(pl.items.map { it.track }, index, QueueContext(kind = QueueSourceKind.PLAYLIST, label = pl.name))
+        if (tracks.isEmpty()) return
+        playback.playContext(tracks, index, QueueContext(kind = QueueSourceKind.PLAYLIST, label = pl.name))
     }
 
     fun downloadTrack(track: Track) = downloads.download(track)
 
     fun cancelDownload(key: String) = downloads.cancel(key)
 
-    /** Saves every track in this playlist for offline listening. Already-downloaded ones are skipped. */
-    fun downloadAll() {
-        downloads.downloadAll(playlist.value?.items.orEmpty().map { it.track })
+    /**
+     * Saves the playlist for offline listening. Already-downloaded ones are skipped. [tracks] defaults to
+     * the whole playlist and is the visible subset while the filter narrows it — "all" means all of what
+     * the button is sitting next to, which is also what its own done/total readout counts.
+     */
+    fun downloadAll(tracks: List<Track> = playlist.value?.items.orEmpty().map { it.track }) {
+        downloads.downloadAll(tracks)
     }
 
     /** JSON export of this playlist for the file picker to write, or null if it no longer exists. */

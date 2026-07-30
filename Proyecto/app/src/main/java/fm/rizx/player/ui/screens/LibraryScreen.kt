@@ -69,12 +69,15 @@ import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.CodeLabel
 import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.DownloadButton
+import fm.rizx.player.ui.components.FilterEmpty
 import fm.rizx.player.ui.components.RizxActionButton
 import fm.rizx.player.ui.components.RizxChip
+import fm.rizx.player.ui.components.RizxFilterField
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.SectionHeader
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.components.tintFor
+import fm.rizx.player.ui.util.ListFilter
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.library.ConfirmDialog
 import fm.rizx.player.ui.library.CreatePlaylistDialog
@@ -123,6 +126,9 @@ fun LibraryScreen(
     val downloadStates by vm.downloadStates.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableStateOf(initialTab) }
+    // The filter belongs to the tab it was typed on: switching tabs clears it instead of carrying a query
+    // over to a list where it would silently hide almost everything.
+    var filter by rememberSaveable { mutableStateOf("") }
     var creating by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
@@ -231,6 +237,13 @@ fun LibraryScreen(
         )
     }
 
+    // Narrowed to what the filter allows — identity on the All tab, which has no field (see below). These
+    // lists are already in memory, so this costs nothing and works offline; see [ListFilter].
+    val visiblePlaylists = remember(playlists, filter) { playlists.filter { ListFilter.matches(filter, it.name, it.description) } }
+    val visibleLiked = remember(likedSongs, filter) { likedSongs.filter { ListFilter.matchesTrack(filter, it) } }
+    val visibleDownloads = remember(downloads, filter) { downloads.filter { ListFilter.matchesTrack(filter, it.track) } }
+    val visibleRecents = remember(recents, filter) { recents.filter { ListFilter.matchesTrack(filter, it) } }
+
     val playlistsSectionTitle = stringResource(R.string.library_section_playlists)
     val likedSectionTitle = stringResource(R.string.library_section_liked)
     val downloadsSectionTitle = stringResource(R.string.library_section_downloads)
@@ -271,9 +284,23 @@ fun LibraryScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     LibraryTab.entries.forEach { entry ->
-                        RizxChip(stringResource(entry.labelRes), active = tab == entry, onClick = { tab = entry })
+                        RizxChip(stringResource(entry.labelRes), active = tab == entry, onClick = { tab = entry; filter = "" })
                     }
                 }
+            }
+
+            // One field per tab, filtering that tab's list and nothing else. Not on **All** — that tab is a
+            // four-section overview, so a single query over it would be filtering four lists at once — and
+            // not on **Local**, which is only a doorway to its own screen (which has its own field).
+            val source = when (tab) {
+                LibraryTab.Playlists -> playlists.size
+                LibraryTab.Liked -> likedSongs.size
+                LibraryTab.Downloads -> downloads.size
+                LibraryTab.Recent -> recents.size
+                LibraryTab.All, LibraryTab.Local -> 0
+            }
+            if (source > 0) {
+                item(key = "filter") { RizxFilterField(filter, { filter = it }, Modifier.padding(top = 10.dp)) }
             }
 
             when (tab) {
@@ -293,7 +320,9 @@ fun LibraryScreen(
                         count = likedSongs.size,
                         onSeeAll = { tab = LibraryTab.Liked },
                     ) {
-                        likedRows(likedSongs.take(PREVIEW_ROWS), downloadStates, vm, onUnfavorite)
+                        // A preview row plays the *whole* liked list, not the four shown: `take` keeps the
+                        // indices, and this is a peek at the tab rather than the tab itself.
+                        likedRows(likedSongs.take(PREVIEW_ROWS), downloadStates, vm, onUnfavorite) { vm.playLiked(it, likedSongs) }
                     }
                     if (likedSongs.isEmpty()) item { LikedEmpty() }
 
@@ -303,7 +332,11 @@ fun LibraryScreen(
                             count = downloads.size,
                             onSeeAll = { tab = LibraryTab.Downloads },
                         ) {
-                            downloadRows(downloads.take(PREVIEW_ROWS), vm, onDelete = { confirmDeleteDownload = it }, onExport = exportDownload)
+                            downloadRows(
+                                downloads.take(PREVIEW_ROWS), vm,
+                                onDelete = { confirmDeleteDownload = it }, onExport = exportDownload,
+                                onPlay = { vm.playDownloads(it, downloads.map { entry -> entry.track }) },
+                            )
                         }
                     }
 
@@ -312,7 +345,7 @@ fun LibraryScreen(
                         count = recents.size,
                         onSeeAll = { tab = LibraryTab.Recent },
                     ) {
-                        recentRows(recents.take(PREVIEW_ROWS), vm::playRecent)
+                        recentRows(recents.take(PREVIEW_ROWS)) { vm.playRecent(it, recents) }
                     }
                     if (recents.isEmpty()) item { RecentEmpty() }
                 }
@@ -320,18 +353,24 @@ fun LibraryScreen(
                 LibraryTab.Playlists -> {
                     if (playlists.isEmpty()) {
                         item { PlaylistsEmpty { creating = true } }
+                    } else if (visiblePlaylists.isEmpty()) {
+                        item { FilterEmpty(filter) }
                     } else {
-                        item { TabCount(countLabel(playlists.size, R.string.library_count_playlist_one, R.string.library_count_playlist_other)) }
-                        playlistRows(playlists, onOpenPlaylist)
+                        item { TabCount(countLabel(visiblePlaylists.size, R.string.library_count_playlist_one, R.string.library_count_playlist_other)) }
+                        playlistRows(visiblePlaylists, onOpenPlaylist)
                     }
                 }
 
                 LibraryTab.Liked -> {
                     if (likedSongs.isEmpty()) {
                         item { LikedEmpty() }
+                    } else if (visibleLiked.isEmpty()) {
+                        item { FilterEmpty(filter) }
                     } else {
-                        item { TabCount(countLabel(likedSongs.size, R.string.library_count_song_one, R.string.library_count_song_other)) }
-                        likedRows(likedSongs, downloadStates, vm, onUnfavorite)
+                        item { TabCount(countLabel(visibleLiked.size, R.string.library_count_song_one, R.string.library_count_song_other)) }
+                        // What you see is what plays: a filtered list becomes the queue, so next/prev stay
+                        // inside the songs the filter left on screen.
+                        likedRows(visibleLiked, downloadStates, vm, onUnfavorite) { vm.playLiked(it, visibleLiked) }
                     }
                 }
 
@@ -342,15 +381,19 @@ fun LibraryScreen(
                                 onGoToLiked = if (likedSongs.isNotEmpty()) ({ tab = LibraryTab.Liked }) else null,
                             )
                         }
+                    } else if (visibleDownloads.isEmpty()) {
+                        item { FilterEmpty(filter) }
                     } else {
                         item {
                             Row(
                                 Modifier.fillMaxWidth().padding(top = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                val bytes = formatBytes(downloads.sumOf { it.sizeBytes })
+                                // Both halves of the readout describe the rows on screen — a filtered count
+                                // over the whole library's byte total would be two different lists in one line.
+                                val bytes = formatBytes(visibleDownloads.sumOf { it.sizeBytes })
                                 TabCount(
-                                    "${countLabel(downloads.size, R.string.library_count_song_one, R.string.library_count_song_other)} · $bytes",
+                                    "${countLabel(visibleDownloads.size, R.string.library_count_song_one, R.string.library_count_song_other)} · $bytes",
                                     Modifier.weight(1f),
                                 )
                                 RizxIconButton(
@@ -362,20 +405,26 @@ fun LibraryScreen(
                                 )
                             }
                         }
-                        downloadRows(downloads, vm, onDelete = { confirmDeleteDownload = it }, onExport = exportDownload)
+                        downloadRows(
+                            visibleDownloads, vm,
+                            onDelete = { confirmDeleteDownload = it }, onExport = exportDownload,
+                            onPlay = { vm.playDownloads(it, visibleDownloads.map { entry -> entry.track }) },
+                        )
                     }
                 }
 
                 LibraryTab.Recent -> {
                     if (recents.isEmpty()) {
                         item { RecentEmpty() }
+                    } else if (visibleRecents.isEmpty()) {
+                        item { FilterEmpty(filter) }
                     } else {
                         item {
                             Row(
                                 Modifier.fillMaxWidth().padding(top = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                TabCount(countLabel(recents.size, R.string.library_count_song_one, R.string.library_count_song_other), Modifier.weight(1f))
+                                TabCount(countLabel(visibleRecents.size, R.string.library_count_song_one, R.string.library_count_song_other), Modifier.weight(1f))
                                 RizxIconButton(
                                     Icons.Filled.DeleteOutline,
                                     stringResource(R.string.library_clear_recent_desc),
@@ -385,7 +434,7 @@ fun LibraryScreen(
                                 )
                             }
                         }
-                        recentRows(recents, vm::playRecent)
+                        recentRows(visibleRecents) { vm.playRecent(it, visibleRecents) }
                     }
                 }
 
@@ -451,15 +500,17 @@ private fun LazyListScope.playlistRows(items: List<PlaylistSummary>, onOpen: (St
     }
 }
 
+/** [onPlay] takes the row's index; the caller decides which list that index counts into (full vs filtered). */
 private fun LazyListScope.likedRows(
     items: List<Track>,
     states: Map<String, DownloadState>,
     vm: LibraryViewModel,
     onUnfavorite: (Track) -> Unit,
+    onPlay: (Int) -> Unit,
 ) {
     itemsIndexed(items, key = { _, t -> "lk-${t.source.provider}:${t.source.id}" }) { index, track ->
         Box(Modifier.staggeredReveal(index)) {
-            TrackRow(track, onPlay = { vm.playLiked(index) }) {
+            TrackRow(track, onPlay = { onPlay(index) }) {
                 DownloadButton(
                     state = states[track.source.identityKey],
                     onDownload = { vm.downloadTrack(track) },
@@ -486,10 +537,11 @@ private fun LazyListScope.downloadRows(
     vm: LibraryViewModel,
     onDelete: (DownloadedTrack) -> Unit,
     onExport: (DownloadedTrack) -> Unit,
+    onPlay: (Int) -> Unit,
 ) {
     itemsIndexed(items, key = { _, d -> "dl-${d.key}" }) { index, entry ->
         Box(Modifier.staggeredReveal(index)) {
-            TrackRow(entry.track, onPlay = { vm.playDownloads(index) }) {
+            TrackRow(entry.track, onPlay = { onPlay(index) }) {
                 CodeLabel("${entry.container.uppercase()} · ${formatBytes(entry.sizeBytes)}", size = 10)
                 RizxIconButton(
                     Icons.Filled.DriveFileMove,

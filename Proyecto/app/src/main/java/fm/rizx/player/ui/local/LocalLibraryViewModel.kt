@@ -46,8 +46,11 @@ class LocalLibraryViewModel @Inject constructor(
         viewModelScope.launch { library.refresh() }
     }
 
-    /** Play all local songs from [index]. */
-    fun playAll(index: Int) = play(songs.value, index, "Local music")
+    /**
+     * Play the on-device songs from [index]. [tracks] is what the Songs view is showing — narrowed by its
+     * filter, that is the queue, so next/prev stay inside what the user filtered to.
+     */
+    fun playAll(index: Int, tracks: List<Track> = songs.value) = play(tracks, index, "Local music")
 
     /** Play one album's tracks from [index]. */
     fun playAlbum(albumId: String, index: Int) {

@@ -91,6 +91,9 @@ class PreferencesViewModel @Inject constructor(
     val crossfade: StateFlow<Boolean> = settings.crossfade.asState(false)
     val gapless: StateFlow<Boolean> = settings.gapless.asState(true)
     val normalize: StateFlow<Boolean> = settings.normalizeVolume.asState(false)
+
+    /** The automatic equalizer (a curve per song, from its genre + its own spectrum). Off by default. */
+    val autoEq: StateFlow<Boolean> = settings.autoEqualizer.asState(false)
     val hiRes: StateFlow<Boolean> = settings.hiResOutput.asState(false)
 
     private val _cacheSize = MutableStateFlow(cache.diskSizeLabel())
@@ -116,6 +119,13 @@ class PreferencesViewModel @Inject constructor(
 
     /** Persists **and** applies the live loudness effect (the controller writes the setting through). */
     fun setNormalize(enabled: Boolean) = audioEffects.setNormalizeVolume(enabled)
+
+    /**
+     * Persists the automatic equalizer. Goes through the controller rather than straight to DataStore for
+     * the same reason normalize does: the audio side is what owns the transition, and routing both through
+     * one door keeps "who took the effect over" answerable in one place.
+     */
+    fun setAutoEq(enabled: Boolean) = audioEffects.setAutoEqualizer(enabled)
 
     fun clearCache() {
         viewModelScope.launch {

@@ -51,6 +51,10 @@ class FakeSettingsRepository : SettingsRepository {
     override val equalizerBandLevels: Flow<List<Int>> = equalizerBandsFlow
     override suspend fun setEqualizerBandLevels(levels: List<Int>) { equalizerBandsFlow.value = levels }
 
+    val autoEqualizerFlow = MutableStateFlow(false)
+    override val autoEqualizer: Flow<Boolean> = autoEqualizerFlow
+    override suspend fun setAutoEqualizer(enabled: Boolean) { autoEqualizerFlow.value = enabled }
+
     val dataSaverFlow = MutableStateFlow(false)
     override val dataSaver: Flow<Boolean> = dataSaverFlow
     override suspend fun setDataSaver(enabled: Boolean) { dataSaverFlow.value = enabled }

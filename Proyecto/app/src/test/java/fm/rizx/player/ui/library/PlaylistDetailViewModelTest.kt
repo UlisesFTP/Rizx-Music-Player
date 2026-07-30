@@ -75,8 +75,15 @@ class PlaylistDetailViewModelTest {
         items = listOf(PlaylistItem("i1", Track(title = "A", source = ProviderRef("meta", "a")), addedAtIso = "t")),
     )
 
-    private fun vm(repo: PlaylistRepository) = PlaylistDetailViewModel(
-        SavedStateHandle(mapOf("playlistId" to "p1")), repo, InMemoryQueueRepository(), FakePlayback(), NoDownloads(),
+    private fun threeTrackPlaylist() = Playlist(
+        id = "p1", name = "Mix", createdAtIso = "t", lastModifiedIso = "t",
+        items = listOf("A", "B", "C").mapIndexed { index, title ->
+            PlaylistItem("i$index", Track(title = title, source = ProviderRef("meta", title)), addedAtIso = "t")
+        },
+    )
+
+    private fun vm(repo: PlaylistRepository, playback: PlaybackController = FakePlayback()) = PlaylistDetailViewModel(
+        SavedStateHandle(mapOf("playlistId" to "p1")), repo, InMemoryQueueRepository(), playback, NoDownloads(),
     )
 
     @Test
@@ -97,6 +104,45 @@ class PlaylistDetailViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("p1" to "i1"), repo.removed)
+    }
+
+    @Test
+    fun `play queues the whole playlist by default`() = runTest {
+        val playback = FakePlayback()
+        val repo = FakePlaylists(threeTrackPlaylist())
+        val vm = vm(repo, playback)
+        vm.playlist.first { it != null }
+
+        vm.play(2)
+
+        assertEquals(listOf("A", "B", "C"), playback.lastContextTracks.map { it.title })
+        assertEquals(2, playback.lastContextIndex)
+    }
+
+    @Test
+    fun `play queues only the rows the filter left on screen`() = runTest {
+        val playback = FakePlayback()
+        val stored = threeTrackPlaylist()
+        val vm = vm(FakePlaylists(stored), playback)
+        val playlist = vm.playlist.first { it != null }!!
+
+        // Rows 2 and 3 survived the filter; tapping the first of them plays index 0 of *that* list.
+        val visible = playlist.items.drop(1).map { it.track }
+        vm.play(0, visible)
+
+        assertEquals(listOf("B", "C"), playback.lastContextTracks.map { it.title })
+        assertEquals(0, playback.lastContextIndex)
+    }
+
+    @Test
+    fun `play does nothing when the filter excluded everything`() = runTest {
+        val playback = FakePlayback()
+        val vm = vm(FakePlaylists(threeTrackPlaylist()), playback)
+        vm.playlist.first { it != null }
+
+        vm.play(0, emptyList())
+
+        assertEquals(-1, playback.lastContextIndex)
     }
 
     @Test

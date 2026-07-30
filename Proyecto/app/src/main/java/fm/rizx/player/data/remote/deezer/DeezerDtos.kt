@@ -65,10 +65,21 @@ data class DeezerAlbumDto(
     val duration: Int? = null,
     val artist: DeezerArtistShortDto? = null,
     val tracks: DeezerTracksWrapper? = null,
+    /**
+     * Deezer's genres, and the **only** place in its API they appear — a track row carries none. This is
+     * what lets the automatic equalizer know a song's family without a second catalogue.
+     */
+    val genres: DeezerGenresWrapper? = null,
 )
 
 @Serializable
 data class DeezerTracksWrapper(val data: List<DeezerTrackDto> = emptyList())
+
+@Serializable
+data class DeezerGenresWrapper(val data: List<DeezerGenreDto> = emptyList())
+
+@Serializable
+data class DeezerGenreDto(val id: Long? = null, val name: String? = null)
 
 /** `/artist/{id}` — artist header. */
 @Serializable

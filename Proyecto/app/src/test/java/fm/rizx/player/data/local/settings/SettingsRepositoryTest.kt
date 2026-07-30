@@ -48,6 +48,19 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `the automatic equalizer is off until asked for, and does not touch the manual curve`() = runTest {
+        val repo = SettingsRepositoryImpl(backgroundScope.newStore())
+        repo.setEqualizerBandLevels(listOf(300, -200, 0, 100, 250))
+
+        assertEquals(false, repo.autoEqualizer.first())
+        repo.setAutoEqualizer(true)
+
+        assertEquals(true, repo.autoEqualizer.first())
+        // The whole point of the handover: the user's own curve is still there to be given back.
+        assertEquals(listOf(300, -200, 0, 100, 250), repo.equalizerBandLevels.first())
+    }
+
+    @Test
     fun `active provider ids persist and clear`() = runTest {
         val repo = SettingsRepositoryImpl(backgroundScope.newStore())
 

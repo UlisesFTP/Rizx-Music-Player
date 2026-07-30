@@ -102,6 +102,9 @@ fun DeezerAlbumDto.toAlbum(): Album? {
         tracks = tracks?.data?.mapNotNull { it.toTrackOrNull() }.orEmpty(),
         totalTracks = nbTracks,
         durationMs = duration?.let { it.toLong() * 1000 },
+        // Genre first, blanks dropped: this is the automatic equalizer's cheapest source of a family,
+        // and Deezer reports genres here and nowhere else.
+        tags = genres?.data?.mapNotNull { it.name?.takeIf(String::isNotBlank) }.orEmpty(),
         source = DeezerIds.album(albumId),
     )
 }

@@ -81,6 +81,8 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var recentlyPlayed: RecentlyPlayedRepository
     @Inject lateinit var audioEffects: fm.rizx.player.playback.AudioEffects
     @Inject lateinit var visualizer: fm.rizx.player.playback.AudioVisualizer
+    @Inject lateinit var trackSpectrum: fm.rizx.player.playback.TrackSpectrum
+    @Inject lateinit var autoEqualizer: fm.rizx.player.playback.AutoEqualizer
     @Inject lateinit var sessionStore: PlaybackSessionStore
     @Inject lateinit var radioTracks: fm.rizx.player.domain.usecase.GetRadioTracksUseCase
     @Inject lateinit var youtubeMixTracks: fm.rizx.player.domain.usecase.GetYoutubeMixTracksUseCase
@@ -151,9 +153,14 @@ class PlaybackService : MediaSessionService() {
         // applies to this playback session (a live toggle takes effect on the next service start). It's a
         // tiny startup read, like AudioEffects reads normalizeVolume; a no-op for 16-bit/lossy sources.
         val hiResOutput = runBlocking { settings.hiResOutput.first() }
-        // A pass-through TeeAudioProcessor taps the decoded PCM so the Now Playing waveform can react to
-        // the actual audio spectrum. It runs before the default silence/speed processors and outputs the
-        // buffer unchanged, so it doesn't affect playback. No RECORD_AUDIO permission (it's our own audio).
+        // Two pass-through TeeAudioProcessors tap the decoded PCM: one drives the Now Playing waveform, the
+        // other measures the song's average spectrum for the automatic equalizer. Both run before the
+        // default silence/speed processors and output the buffer unchanged, so neither affects playback,
+        // and neither needs RECORD_AUDIO (it's our own audio).
+        //
+        // The tap being *here* is what makes the automatic equalizer sound right: it is upstream of the
+        // session's Equalizer effect, so the measurement describes the original recording rather than the
+        // app's own output — measuring after the effect would be a feedback loop.
         val renderersFactory = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(
                 context: Context,
@@ -162,7 +169,9 @@ class PlaybackService : MediaSessionService() {
             ): AudioSink = DefaultAudioSink.Builder(context)
                 .setEnableFloatOutput(enableFloatOutput || hiResOutput)
                 .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                .setAudioProcessors(arrayOf(TeeAudioProcessor(visualizer.sink)))
+                .setAudioProcessors(
+                    arrayOf(TeeAudioProcessor(visualizer.sink), TeeAudioProcessor(trackSpectrum.sink)),
+                )
                 .build()
         }
         // Tuned buffering for near-instant response: start audio after a short pre-roll (not the 2.5 s
@@ -206,6 +215,9 @@ class PlaybackService : MediaSessionService() {
 
         // Bind the equalizer to the player's audio session and restore persisted settings (Phase 15).
         audioEffects.attach(player.audioSessionId)
+        // …then let the automatic equalizer take it over, if the user asked for that. It reads the setting
+        // itself, so this is unconditional: attaching only starts the watching.
+        autoEqualizer.attach()
 
         startCacheCompletion()
 
@@ -272,6 +284,7 @@ class PlaybackService : MediaSessionService() {
         stopSaveTicker()
         scope.cancel()
         streamResolver.release()
+        autoEqualizer.release() // hands the user's manual curve back before the effect goes away
         audioEffects.release()
         session.release()
         player.release()

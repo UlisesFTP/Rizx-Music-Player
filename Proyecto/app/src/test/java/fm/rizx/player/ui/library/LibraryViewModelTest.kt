@@ -115,6 +115,38 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `playLiked queues the visible list when the tab is filtered`() = runTest {
+        val playback = FakePlayback()
+        val liked = listOf(track("Velvet"), track("Ruby"), track("Rust"))
+        val vm = LibraryViewModel(
+            FakeFavorites(liked),
+            FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(),
+        )
+        backgroundScope.launch { vm.favoriteTracks.collect {} }
+        advanceUntilIdle()
+
+        // What the screen shows after filtering to "ru" — the index counts into *that* list.
+        val visible = listOf(liked[1], liked[2])
+        vm.playLiked(0, visible)
+
+        assertEquals(listOf("Ruby", "Rust"), playback.lastContextTracks.map { it.title })
+        assertEquals(0, playback.lastContextIndex)
+    }
+
+    @Test
+    fun `playing an empty list does nothing`() = runTest {
+        val playback = FakePlayback()
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads())
+
+        vm.playLiked(0, emptyList())
+        vm.playRecent(0, emptyList())
+        vm.playDownloads(0, emptyList())
+
+        assertEquals(-1, playback.lastContextIndex)
+        assertTrue(playback.lastContextTracks.isEmpty())
+    }
+
+    @Test
     fun `createPlaylist delegates a trimmed name`() = runTest {
         val playlists = FakePlaylists()
         val vm = LibraryViewModel(FakeFavorites(), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads())

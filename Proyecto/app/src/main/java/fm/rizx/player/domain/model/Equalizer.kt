@@ -13,6 +13,14 @@ data class EqualizerState(
     val minLevelMillibel: Int = 0,
     val maxLevelMillibel: Int = 0,
     val bands: List<EqBand> = emptyList(),
+    /**
+     * The automatic equalizer owns the effect: the bands below are what *it* chose for the song playing
+     * now, and the user's manual curve is put aside until this turns false again. The screen shows them
+     * read-only, because a slider that is overwritten on the next track is a control that lies.
+     */
+    val auto: Boolean = false,
+    /** The catalogue's own genre wording for the current song ("Música Mexicana"), when it found one. */
+    val autoLabel: String? = null,
 ) {
     companion object {
         val Unavailable = EqualizerState()

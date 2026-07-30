@@ -6,6 +6,13 @@
     <string name="eq_section_presets">PREAJUSTES</string>
     <string name="eq_section_bands">BANDAS</string>
 
+    <!-- Automatic equalizer (a curve per song: its genre, then the song's own spectrum) -->
+    <string name="pref_auto_eq">Ecualizador automático</string>
+    <string name="pref_auto_eq_caption">Ajusta cada canción a su género y la afina escuchando la propia pista. Toma el control del ecualizador mientras está encendido; tu curva manual vuelve al apagarlo.</string>
+    <string name="eq_auto_badge">AUTO</string>
+    <string name="eq_auto_badge_genre">AUTO · %1$s</string>
+    <string name="eq_auto_hint">Ajustado para esta canción. Apaga el ecualizador automático en Ajustes para mover las bandas tú mismo.</string>
+
     <!-- AboutScreen -->
     <string name="about_cd_back">Atrás</string>
     <string name="about_title">Acerca de</string>

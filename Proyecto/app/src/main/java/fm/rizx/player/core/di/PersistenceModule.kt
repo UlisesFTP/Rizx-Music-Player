@@ -20,6 +20,9 @@ import fm.rizx.player.data.local.db.RizxDatabase
 import fm.rizx.player.data.local.settings.EnabledProviderStoreImpl
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.artwork.ArtworkCache
+import fm.rizx.player.data.genre.TrackGenreResolver
+import fm.rizx.player.data.remote.itunes.ItunesApi
+import fm.rizx.player.data.local.store.AutoEqStore
 import fm.rizx.player.data.local.store.HomeFeedStore
 import fm.rizx.player.data.local.store.LyricsStore
 import fm.rizx.player.data.local.store.SearchHistoryStore
@@ -116,6 +119,21 @@ object PersistenceModule {
     @Singleton
     fun provideSearchHistoryStore(@ApplicationContext context: Context): SearchHistoryStore =
         SearchHistoryStore(File(context.filesDir, "search_history.json"))
+
+    /**
+     * The curve the automatic equalizer worked out per song. Cached because the first play pays for a
+     * genre lookup *and* twelve seconds of listening, and neither answer ever changes for that recording.
+     */
+    @Provides
+    @Singleton
+    fun provideAutoEqStore(@ApplicationContext context: Context): AutoEqStore =
+        AutoEqStore(File(context.filesDir, "auto_eq.json"))
+
+    /** Answers "what genre is this song?" for the automatic equalizer — owner first, verified, guarded. */
+    @Provides
+    @Singleton
+    fun provideTrackGenreResolver(registry: ProviderRegistry, itunes: ItunesApi): TrackGenreResolver =
+        TrackGenreResolver(registry, itunes)
 
     @Provides
     @Singleton

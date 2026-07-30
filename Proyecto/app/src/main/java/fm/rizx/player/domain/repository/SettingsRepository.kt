@@ -42,6 +42,15 @@ interface SettingsRepository {
     suspend fun setEqualizerBandLevels(levels: List<Int>)
 
     /**
+     * Automatic equalizer: a curve per song, derived from its genre and then refined by measuring the
+     * song's own spectrum. **Off by default** — it takes the equalizer over while it is on, and a player
+     * that silently re-tunes every track is something the user has to ask for. The manual band levels
+     * above are left untouched and come back when it is switched off.
+     */
+    val autoEqualizer: Flow<Boolean>
+    suspend fun setAutoEqualizer(enabled: Boolean)
+
+    /**
      * Data saver: when on **and the device is on cellular**, the streaming provider prefers a lower
      * bitrate (Wi-Fi / good signal always stays at max). Off by default.
      */

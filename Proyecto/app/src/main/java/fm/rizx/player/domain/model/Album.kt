@@ -18,5 +18,14 @@ data class Album(
     val tracks: List<Track> = emptyList(),
     val totalTracks: Int? = null,
     val durationMs: Long? = null,
+    /**
+     * Free-form labels from the source, genre first — the same slot [Track.tags] uses.
+     *
+     * It exists because **a track usually has no genre but its album does**: Deezer returns genres only on
+     * `/album/{id}`, and that is the cheapest honest answer for the automatic equalizer to ask
+     * ([fm.rizx.player.domain.usecase.AutoEqCurves]). Reading it through this field rather than a Deezer
+     * call keeps the question provider-agnostic — a plugin's catalogue can answer it too.
+     */
+    val tags: List<String> = emptyList(),
     val source: ProviderRef,
 )

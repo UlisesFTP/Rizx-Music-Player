@@ -106,23 +106,28 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /** Play the Liked-songs list from [index] — the whole list becomes the queue so next/prev traverse it. */
-    fun playLiked(index: Int) {
-        playback.playContext(favoriteTracks.value, index, QueueContext(kind = QueueSourceKind.LIKED, label = "Liked songs"))
+    /**
+     * Play the Liked-songs list from [index] — the list becomes the queue so next/prev traverse it.
+     *
+     * [tracks] is what the screen is *showing*. It only differs from the full list when the tab's filter is
+     * narrowing it, and then the queue is what you filtered to: having next/prev walk rows the user cannot
+     * see would make the filter a lie about what they were about to hear.
+     */
+    fun playLiked(index: Int, tracks: List<Track> = favoriteTracks.value) {
+        if (tracks.isEmpty()) return
+        playback.playContext(tracks, index, QueueContext(kind = QueueSourceKind.LIKED, label = "Liked songs"))
     }
 
-    /** Play the Recently-played list from [index]. */
-    fun playRecent(index: Int) {
-        playback.playContext(recentTracks.value, index, QueueContext(kind = QueueSourceKind.RECENTS, label = "Recently played"))
+    /** Play the Recently-played list from [index]; [tracks] is the visible list (see [playLiked]). */
+    fun playRecent(index: Int, tracks: List<Track> = recentTracks.value) {
+        if (tracks.isEmpty()) return
+        playback.playContext(tracks, index, QueueContext(kind = QueueSourceKind.RECENTS, label = "Recently played"))
     }
 
-    /** Play the Downloads list from [index] — the whole list becomes the queue, so next/prev stay offline. */
-    fun playDownloads(index: Int) {
-        playback.playContext(
-            downloadedTracks.value.map { it.track },
-            index,
-            QueueContext(kind = QueueSourceKind.DOWNLOADS, label = "Downloads"),
-        )
+    /** Play the Downloads list from [index] — the queue stays offline; [tracks] is the visible list. */
+    fun playDownloads(index: Int, tracks: List<Track> = downloadedTracks.value.map { it.track }) {
+        if (tracks.isEmpty()) return
+        playback.playContext(tracks, index, QueueContext(kind = QueueSourceKind.DOWNLOADS, label = "Downloads"))
     }
 
     // ---- Downloads ----

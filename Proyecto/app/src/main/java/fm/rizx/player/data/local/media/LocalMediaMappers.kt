@@ -50,6 +50,7 @@ fun localTrack(
     albumId: Long?,
     durationMs: Long?,
     trackNumber: Int?,
+    genre: String? = null,
 ): Track {
     val artistName = artist?.takeIf { it.isNotBlank() && !it.equals(UNKNOWN, ignoreCase = true) }
     val artwork = albumId?.takeIf { it > 0 }?.let { ArtworkSet(listOf(Artwork(url = LocalIds.albumArtUri(it)))) }
@@ -68,6 +69,9 @@ fun localTrack(
         durationMs = durationMs?.takeIf { it > 0 },
         trackNumber = trackNumber?.takeIf { it > 0 },
         artwork = artwork,
+        // The file's genre tag, in the same slot a catalogue's genre would land in — so the automatic
+        // equalizer reads a local song and a streamed one through exactly one field.
+        tags = listOfNotNull(genre?.takeIf { it.isNotBlank() && !it.equals(UNKNOWN, ignoreCase = true) }),
         source = LocalIds.track(id),
     )
 }

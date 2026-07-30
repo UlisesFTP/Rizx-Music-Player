@@ -67,6 +67,7 @@ fun PreferencesScreen(
     val crossfade by vm.crossfade.collectAsStateWithLifecycle()
     val gapless by vm.gapless.collectAsStateWithLifecycle()
     val normalize by vm.normalize.collectAsStateWithLifecycle()
+    val autoEq by vm.autoEq.collectAsStateWithLifecycle()
     val hiRes by vm.hiRes.collectAsStateWithLifecycle()
     val audioOutputLabel by vm.audioOutputLabel.collectAsStateWithLifecycle()
     val dataSaver by vm.dataSaver.collectAsStateWithLifecycle()
@@ -117,6 +118,13 @@ fun PreferencesScreen(
         SectionLabel(stringResource(R.string.settings_playback))
         SettingRow(stringResource(R.string.pref_plugins), stringResource(R.string.pref_plugins_v), onClick = onOpenSources)
         SettingRow(stringResource(R.string.pref_equalizer), stringResource(R.string.pref_equalizer_v), onClick = onOpenEqualizer)
+        // Sits right under the equalizer row it takes over, and carries a caption because "automatic
+        // equalizer" doesn't say *what* it automates — the genre, and then the song itself.
+        ToggleRowDetail(
+            title = stringResource(R.string.pref_auto_eq),
+            caption = stringResource(R.string.pref_auto_eq_caption),
+            checked = autoEq,
+        ) { vm.setAutoEq(!autoEq) }
         // Audio quality is now automatic (max by default; lower only on data saver + cellular or a weak
         // signal), so it's no longer a manual row. Crossfade/Gapless/Normalize persist and take effect.
         ToggleRow(stringResource(R.string.pref_crossfade), crossfade) { vm.setCrossfade(!crossfade) }

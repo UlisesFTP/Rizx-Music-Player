@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +50,10 @@ import fm.rizx.player.ui.components.CodeLabel
 import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.DownloadAllButton
 import fm.rizx.player.ui.components.DownloadButton
+import fm.rizx.player.ui.components.FilterEmpty
+import fm.rizx.player.ui.components.RizxFilterField
 import fm.rizx.player.ui.components.clickableScale
+import fm.rizx.player.ui.util.ListFilter
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.library.CreatePlaylistDialog
 import fm.rizx.player.ui.library.PlaylistDetailViewModel
@@ -68,6 +72,8 @@ fun PlaylistDetailScreen(
     val downloadStates by vm.downloadStates.collectAsStateWithLifecycle()
     val readOnly = playlist?.isReadOnly == true
     var renaming by remember { mutableStateOf(false) }
+    // Survives rotation; there is nothing to restore after process death, since the list itself is reloaded.
+    var filter by rememberSaveable { mutableStateOf("") }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -118,6 +124,14 @@ fun PlaylistDetailScreen(
         }
 
         val items = playlist?.items.orEmpty()
+        // A 240-track import is not something you scroll: the filter searches this playlist and only this
+        // playlist. Rows keep their **playlist** position while filtered, so a hit still tells you where it
+        // sits in the list; `visible` therefore carries the original index next to each item.
+        val visible = remember(items, filter) {
+            items.withIndex().filter { (_, item) -> ListFilter.matchesTrack(filter, item.track) }
+        }
+        val visibleTracks = remember(visible) { visible.map { it.value.track } }
+
         // "Download all" lives on the count row, not the header: the header already carries four
         // unlabelled icons, and this action reads far better with a word on it.
         Row(
@@ -125,36 +139,42 @@ fun PlaylistDetailScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CodeLabel(
-                if (items.size == 1) {
-                    stringResource(R.string.detail_track_count_caps_one, items.size)
+                if (visible.size == 1) {
+                    stringResource(R.string.detail_track_count_caps_one, visible.size)
                 } else {
-                    stringResource(R.string.detail_track_count_caps_other, items.size)
+                    stringResource(R.string.detail_track_count_caps_other, visible.size)
                 },
                 modifier = Modifier.weight(1f),
                 color = c.muted,
                 size = 11,
             )
             DownloadAllButton(
-                tracks = items.map { it.track },
+                tracks = visibleTracks,
                 states = downloadStates,
-                onDownloadAll = vm::downloadAll,
+                onDownloadAll = { vm.downloadAll(visibleTracks) },
             )
+        }
+
+        if (items.isNotEmpty()) {
+            RizxFilterField(filter, { filter = it }, Modifier.padding(bottom = 10.dp))
         }
 
         if (items.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.detail_playlist_empty), style = mr(14, FontWeight.Medium), color = c.muted)
             }
+        } else if (visible.isEmpty()) {
+            FilterEmpty(filter)
         } else {
             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-                itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
-                    Box(Modifier.staggeredReveal(index)) {
+                itemsIndexed(visible, key = { _, (_, item) -> item.id }) { row, (position, item) ->
+                    Box(Modifier.staggeredReveal(row)) {
                         PlaylistItemRow(
-                            position = index + 1,
+                            position = position + 1,
                             item = item,
                             removable = !readOnly,
                             downloadState = downloadStates[item.track.source.identityKey],
-                            onPlay = { vm.play(index) },
+                            onPlay = { vm.play(row, visibleTracks) },
                             onRemove = { vm.removeItem(item.id) },
                             onDownload = { vm.downloadTrack(item.track) },
                             onCancelDownload = { vm.cancelDownload(item.track.source.identityKey) },

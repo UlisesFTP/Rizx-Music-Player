@@ -61,10 +61,14 @@ fun EqualizerScreen(onBack: () -> Unit, vm: EqualizerViewModel = hiltViewModel()
                 modifier = Modifier.size(26.dp).clickableScale(scale = 0.88f, onClick = onBack),
             )
             Text(stringResource(R.string.eq_title), style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
-            if (state.available) {
+            // With the automatic equalizer on there is nothing here to switch: it holds the effect open by
+            // definition. The badge takes the switch's place so the header says who is in charge.
+            if (state.available && !state.auto) {
                 Switch(checked = state.enabled, onCheckedChange = vm::setEnabled)
             }
         }
+
+        if (state.auto) AutoBanner(state.autoLabel)
 
         if (!state.available) {
             Box(Modifier.fillMaxWidth().padding(top = 60.dp), contentAlignment = Alignment.Center) {
@@ -76,9 +80,53 @@ fun EqualizerScreen(onBack: () -> Unit, vm: EqualizerViewModel = hiltViewModel()
             return@Column
         }
 
-        Presets(enabled = state.enabled, onPreset = vm::applyPreset)
-        Bands(state = state, onBand = vm::setBand)
+        // Read-only while auto owns the bands: the sliders still move — they are the clearest possible
+        // readout of what each song got — but they are not something to drag, because the next track
+        // would overwrite it.
+        Presets(enabled = state.enabled && !state.auto, onPreset = vm::applyPreset)
+        Bands(state = state, editable = !state.auto, onBand = vm::setBand)
         Spacer(Modifier.height(60.dp))
+    }
+}
+
+/**
+ * Says the automatic equalizer is driving, and what it decided this song is.
+ *
+ * The genre is shown in the **catalogue's own wording** ("Música Mexicana", "Hip-Hop/Rap"), already in the
+ * language of the source: it needs no translation table, and it is the user's only way to see *why* a
+ * song is being shaped the way it is — and therefore their cue to switch the feature off if it guessed
+ * wrong.
+ */
+@Composable
+private fun AutoBanner(label: String?) {
+    val c = RizxTheme.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 14.dp)
+            .background(c.inset)
+            .border(1.dp, c.redAccent, RectangleShape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        // Top, not centered: the marker belongs to the title line, and centering it against a three-line
+        // block parks it next to the explanation instead.
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.padding(top = 5.dp).size(8.dp).background(c.redAccent))
+        Column(Modifier.weight(1f)) {
+            Text(
+                label?.uppercase()?.let { stringResource(R.string.eq_auto_badge_genre, it) }
+                    ?: stringResource(R.string.eq_auto_badge),
+                style = code(11, FontWeight.Bold),
+                color = c.text,
+            )
+            Text(
+                stringResource(R.string.eq_auto_hint),
+                style = mr(12, FontWeight.Medium),
+                color = c.muted,
+                modifier = Modifier.padding(top = 3.dp),
+            )
+        }
     }
 }
 
@@ -105,7 +153,7 @@ private fun Presets(enabled: Boolean, onPreset: (EqPreset) -> Unit) {
 }
 
 @Composable
-private fun Bands(state: EqualizerState, onBand: (Int, Int) -> Unit) {
+private fun Bands(state: EqualizerState, editable: Boolean, onBand: (Int, Int) -> Unit) {
     val c = RizxTheme.colors
     Text(stringResource(R.string.eq_section_bands), style = code(11, FontWeight.Bold), color = c.muted, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
     state.bands.forEach { band ->
@@ -118,7 +166,7 @@ private fun Bands(state: EqualizerState, onBand: (Int, Int) -> Unit) {
                 value = band.levelMillibel.toFloat(),
                 onValueChange = { onBand(band.index, it.toInt()) },
                 valueRange = state.minLevelMillibel.toFloat()..state.maxLevelMillibel.toFloat(),
-                enabled = state.enabled,
+                enabled = state.enabled && editable,
             )
         }
     }

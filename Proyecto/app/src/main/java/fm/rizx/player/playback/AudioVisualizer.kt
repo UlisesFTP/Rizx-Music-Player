@@ -16,10 +16,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.max
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -44,7 +42,7 @@ class AudioVisualizer @Inject constructor() {
     @Volatile private var channels = 2
     @Volatile private var encoding = C.ENCODING_PCM_16BIT
 
-    private val hann = FloatArray(FFT_SIZE) { 0.5f * (1f - cos((2.0 * Math.PI * it / (FFT_SIZE - 1)).toFloat())) }
+    private val hann = Fft.hann(FFT_SIZE)
     private val bandLo = IntArray(BAR_COUNT)
     private val bandHi = IntArray(BAR_COUNT)
     private val smoothed = FloatArray(BAR_COUNT)
@@ -145,7 +143,7 @@ class AudioVisualizer @Inject constructor() {
             re[j] = ring[(start + j) % FFT_SIZE] * hann[j]
             im[j] = 0f
         }
-        fft(re, im)
+        Fft.transform(re, im)
 
         // Per-band peak, brought back to roughly unit scale. The FFT is unnormalised, so a full-scale
         // tone lands near FFT_SIZE/2 rather than 1 — feeding that straight into the log curve is what
@@ -174,46 +172,6 @@ class AudioVisualizer @Inject constructor() {
             val prev = smoothed[b]
             // Fast attack, slow release — the classic lively spectrum feel.
             smoothed[b] = if (level >= prev) level else prev * RELEASE + level * (1f - RELEASE)
-        }
-    }
-
-    /** In-place iterative radix-2 Cooley–Tukey FFT ([FFT_SIZE] must be a power of two). */
-    private fun fft(re: FloatArray, im: FloatArray) {
-        val n = re.size
-        var j = 0
-        for (i in 1 until n) {
-            var bit = n shr 1
-            while (j and bit != 0) { j = j xor bit; bit = bit shr 1 }
-            j = j or bit
-            if (i < j) {
-                val tr = re[i]; re[i] = re[j]; re[j] = tr
-                val ti = im[i]; im[i] = im[j]; im[j] = ti
-            }
-        }
-        var len = 2
-        while (len <= n) {
-            val ang = -2.0 * Math.PI / len
-            val wr = cos(ang).toFloat()
-            val wi = sin(ang).toFloat()
-            var i = 0
-            while (i < n) {
-                var cr = 1f
-                var ci = 0f
-                val half = len / 2
-                for (k in 0 until half) {
-                    val a = i + k
-                    val bIdx = a + half
-                    val vr = re[bIdx] * cr - im[bIdx] * ci
-                    val vi = re[bIdx] * ci + im[bIdx] * cr
-                    re[bIdx] = re[a] - vr; im[bIdx] = im[a] - vi
-                    re[a] += vr; im[a] += vi
-                    val ncr = cr * wr - ci * wi
-                    ci = cr * wi + ci * wr
-                    cr = ncr
-                }
-                i += len
-            }
-            len = len shl 1
         }
     }
 

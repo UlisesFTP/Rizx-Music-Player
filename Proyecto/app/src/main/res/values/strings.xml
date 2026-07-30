@@ -59,4 +59,9 @@
     <string name="unknown_artist">Unknown artist</string>
     <string name="unknown_album">Unknown album</string>
     <string name="now_playing_empty">Nothing playing</string>
+
+    <!-- In-list filter (Library tabs, local music, a playlist) — searches only the list it sits above -->
+    <string name="filter_hint">Search in this list</string>
+    <string name="filter_no_matches_title">No matches</string>
+    <string name="filter_no_matches_body">Nothing in this list matches “%1$s”.</string>
 </resources>
