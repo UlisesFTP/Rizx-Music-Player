@@ -1,7 +1,9 @@
 package fm.rizx.player
 
 import android.Manifest
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -29,6 +31,7 @@ import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.ui.RizxApp
 import fm.rizx.player.ui.player.PlayerViewModel
 import fm.rizx.player.ui.screens.RizxSplash
+import fm.rizx.player.ui.theme.LARGE_SCREEN_SW_DP
 import fm.rizx.player.ui.theme.RizxTheme
 import kotlinx.coroutines.delay
 
@@ -37,6 +40,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        applyOrientationPolicy()
         setContent {
             // The activity-scoped PlayerViewModel drives both the live theme and playback.
             val playerViewModel: PlayerViewModel = hiltViewModel()
@@ -73,6 +77,39 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Re-applied on every configuration change, which is what makes a foldable work: the inner screen
+     * unfolds into a large one and landscape becomes available on the spot.
+     *
+     * Only reached when the activity is *not* recreated (it is not, once a manifest `configChanges` is
+     * added later); harmless either way, because [applyOrientationPolicy] is idempotent.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyOrientationPolicy()
+    }
+
+    /**
+     * **Landscape is for tablets and unfolded foldables only.**
+     *
+     * On a phone the player and the feed are designed around a tall window: rotated, the mini-player and
+     * the bottom navigation together eat most of a ~400dp-tall viewport and there is no room left for the
+     * content they float over. Rather than ship a sideways layout nobody would use, the app simply stays
+     * upright on phone-shaped devices and offers every orientation where there is room for one.
+     *
+     * The test is the **smallest** screen edge, not the current width — a phone turned sideways reports a
+     * tablet-sized width, so keying off the current width would defeat the whole thing. `FULL_USER` on the
+     * large screens respects the user's own rotation lock instead of overriding it.
+     */
+    private fun applyOrientationPolicy() {
+        val large = resources.configuration.smallestScreenWidthDp >= LARGE_SCREEN_SW_DP
+        requestedOrientation = if (large) {
+            ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
     }
 }

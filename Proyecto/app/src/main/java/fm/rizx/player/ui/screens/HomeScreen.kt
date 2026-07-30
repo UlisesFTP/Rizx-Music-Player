@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,10 +76,14 @@ import fm.rizx.player.ui.components.PickMosaic
 import fm.rizx.player.ui.components.RizxChip
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.clickableScale
+import fm.rizx.player.ui.components.mosaicRow
+import fm.rizx.player.ui.components.mosaicRows
 import fm.rizx.player.ui.components.mosaicWall
 import fm.rizx.player.ui.components.tintFor
 import fm.rizx.player.ui.home.HomeUiState
 import fm.rizx.player.ui.home.HomeViewModel
+import fm.rizx.player.ui.home.WovenBlock
+import fm.rizx.player.ui.home.weaveHome
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
@@ -86,6 +91,7 @@ import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.paperElevation
 import fm.rizx.player.ui.theme.sg
 import fm.rizx.player.ui.theme.staggeredReveal
+import java.time.LocalDate
 
 /**
  * What the Home feed is showing: [All] is the overview — charts *and* the "For you" recommendations,
@@ -106,8 +112,9 @@ enum class HomeTab(val labelRes: Int) {
 private const val PREVIEW_ITEMS = 10
 
 /**
- * How many tiles the mosaic wall holds. Six lands on the wall's rhythm exactly (wide, pair, wide, pair)
- * and is as much of the Home as the mosaics may take before the charts are pushed out of reach.
+ * How many tiles the mosaic wall holds — as much of the Home as the mosaics may take before the charts
+ * are pushed out of reach. Six also leaves the arrangement room to vary: it partitions into rows several
+ * different ways, which is what the weave draws on.
  */
 private const val MOSAIC_TILES = 6
 
@@ -219,6 +226,14 @@ fun HomeScreen(
     // Built here, in composable scope, because every label and caption on them is localized; the wall
     // itself (`mosaicWall`) is pure layout and knows nothing about mixes or playlists.
     val homeMixes by vm.mixes.collectAsStateWithLifecycle()
+    // What varies the overview's layout. Seeded from what the mixes are *about* plus the date, so the
+    // arrangement is fixed while you read the screen, shifts as your listening does, and rotates daily.
+    // Deliberately **not** the tile keys: those carry the feed's playlists, and re-laying the page out
+    // under the reader every time the charts refresh underneath them is not "organic", it is a jump.
+    val mixSignature = homeMixes.mixes.joinToString("|") { it.id }
+    val layoutSeed = remember(mixSignature) {
+        mixSignature.hashCode() * 31 + LocalDate.now().toEpochDay().toInt()
+    }
     val mosaicPadding = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 12.dp)
     val heroMix = homeMixes.mixes.firstOrNull()
     val hero: (@Composable () -> Unit)? = if (heroMix == null) null else {
@@ -372,6 +387,7 @@ fun HomeScreen(
                         mosaicTiles = mosaicTiles,
                         discover = discover,
                         promotedPlaylists = mosaicPlaylists.size,
+                        layoutSeed = layoutSeed,
                         regionalConsent = s.regionalConsent,
                         countryName = s.countryName,
                         onSetRegionalConsent = vm::setRegionalConsent,
@@ -390,13 +406,13 @@ fun HomeScreen(
                 HomeUiState.Offline -> {
                     trackCarousel(continueTitle, continueListening, vm::playTrack)
                     if (hero != null) item(key = "pick-mosaic") { hero() }
-                    mosaicWall(mosaicTiles)
+                    mosaicWall(mosaicTiles, layoutSeed)
                     item { HomeMessage(stringResource(R.string.home_offline_message), vm::refresh) }
                 }
                 is HomeUiState.Error -> {
                     trackCarousel(continueTitle, continueListening, vm::playTrack)
                     if (hero != null) item(key = "pick-mosaic") { hero() }
-                    mosaicWall(mosaicTiles)
+                    mosaicWall(mosaicTiles, layoutSeed)
                     item { HomeMessage(s.message, vm::refresh) }
                 }
             }
@@ -429,6 +445,8 @@ private fun LazyListScope.tabContent(
     discover: (@Composable () -> Unit)?,
     /** How many playlists the wall took, so the carousel below doesn't show them twice. */
     promotedPlaylists: Int,
+    /** Varies the overview's arrangement; stable for as long as the reader is on the screen. */
+    layoutSeed: Int,
     regionalConsent: Boolean?,
     countryName: String?,
     onSetRegionalConsent: (Boolean) -> Unit,
@@ -460,118 +478,130 @@ private fun LazyListScope.tabContent(
                 }
             }
 
-            // ---- The mosaics: the pick band, then the wall, then the day's poster ----
+            // The pick band leads, always: it is the pick, and the strongest thing on the screen does not
+            // belong in a lottery.
             if (hero != null) item(key = "pick-mosaic") { hero() }
-            if (mosaicTiles.isNotEmpty()) {
-                item(key = "mixes-header") {
-                    SectionHeader(
-                        mixesTitle,
-                        Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 4.dp),
-                    )
-                }
-                mosaicWall(mosaicTiles)
-            }
-            if (discover != null) item(key = "daily-pick") { discover() }
 
-            forYouRows.forEach { (title, section) ->
-                when (section) {
-                    is ForYouSection.Mix -> trackCarousel(title, section.items, onPlay)
-                    is ForYouSection.BecauseYouLike -> trackCarousel(title, section.items, onPlay)
-                    is ForYouSection.ArtistsForYou -> carousel(title, section.items, key = { it.source.identityKey }) { artist ->
-                        CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
-                            HomeCover(
-                                artist.source.id, initial = artist.name.take(1),
-                                Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
-                                initialSize = 38, circle = true, imageUrl = artist.artwork.coverUrl(),
-                            )
-                            CellTitle(artist.name, centered = true)
+            // ---- The woven overview ----------------------------------------------------------------
+            // Mosaic rows and strips alternate, one or two of each at a time, in an order varied by
+            // `layoutSeed`. It used to be the whole tile wall followed by six carousels in a fixed order,
+            // which reads as a template no matter how good the tiles are.
+            val rows = mosaicRows(mosaicTiles, layoutSeed)
+            val strips = buildList {
+                // One entry per personalized row, real or the skeleton standing in for it — keyed by the
+                // title, so the skeleton is woven into exactly the slot its row will land in.
+                forYouRows.forEach { (title, section) ->
+                    add(Strip("fy-$title") { forYouStrip(title, section, onPlay, onOpenAlbum, onOpenArtist) })
+                }
+                forYouSkeletons.forEach { title -> add(Strip("fy-$title") { skeletonCarousel(title) }) }
+                if (discover != null) add(Strip("daily-pick") { item(key = "daily-pick") { discover() } })
+                add(
+                    Strip("playlists") {
+                        carousel(
+                            playlistsForYouTitle,
+                            // The wall already shows the first few as mosaics; showing them again here
+                            // would be the same playlist twice in one screen.
+                            playlists.drop(promotedPlaylists),
+                            HomeTab.Playlists,
+                            onSeeAll,
+                            key = { it.source.identityKey },
+                        ) { playlist ->
+                            CarouselCell(onClick = { onOpenEditorialPlaylist(playlist) }) {
+                                HomeCover(
+                                    playlist.source.id, initial = playlist.name.take(1),
+                                    Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
+                                    imageUrl = playlist.artwork.coverUrl(),
+                                )
+                                CellTitle(playlist.name)
+                                CellSubtitle(playlistSubtitle(playlist))
+                            }
                         }
-                    }
-                    is ForYouSection.AlbumsForYou -> carousel(title, section.items, key = { it.source.identityKey }) { album ->
-                        CarouselCell(onClick = { onOpenAlbum(album.source) }) {
-                            HomeCover(
-                                album.source.id, initial = album.title.take(1),
-                                Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
-                                imageUrl = album.artwork.coverUrl(),
-                            )
-                            CellTitle(album.title)
-                            CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+                    },
+                )
+                // The charts, each with "See all" into its own tab. Added unconditionally even when a
+                // chart came back empty — `carousel` draws nothing then, and keeping the strip list the
+                // same length whatever the network returned is what stops the weave shifting around.
+                add(
+                    Strip("songs") {
+                        carousel(topSongsTitle, tracks, HomeTab.Songs, onSeeAll, key = { it.source.identityKey }) { track ->
+                            CarouselCell(onClick = { onPlay(track) }) {
+                                HomeCover(
+                                    track.source.id, initial = null,
+                                    Modifier.size(CAROUSEL_ART).paperElevation(),
+                                    imageUrl = track.artwork.coverUrl(),
+                                )
+                                CellTitle(track.title)
+                                CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })
+                            }
                         }
+                    },
+                )
+                add(
+                    Strip("albums") {
+                        carousel(topAlbumsTitle, albums, HomeTab.Albums, onSeeAll, key = { it.source.identityKey }) { album ->
+                            CarouselCell(onClick = { onOpenAlbum(album.source) }) {
+                                HomeCover(
+                                    album.source.id, initial = album.title.take(1),
+                                    Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
+                                    imageUrl = album.artwork.coverUrl(),
+                                )
+                                CellTitle(album.title)
+                                CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+                            }
+                        }
+                    },
+                )
+                add(
+                    Strip("artists") {
+                        carousel(popularArtistsTitle, artists, HomeTab.Artists, onSeeAll, key = { it.source.identityKey }) { artist ->
+                            CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
+                                HomeCover(
+                                    artist.source.id, initial = artist.name.take(1),
+                                    Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
+                                    initialSize = 38, circle = true, imageUrl = artist.artwork.coverUrl(),
+                                )
+                                CellTitle(artist.name, centered = true)
+                            }
+                        }
+                    },
+                )
+                // New releases were being fetched, blended and deduped on every load, then never drawn.
+                // They share the Albums tab's grid because that is what they are.
+                add(
+                    Strip("new-releases") {
+                        carousel(newReleasesTitle, newReleases, HomeTab.Albums, onSeeAll, key = { "nr-${it.source.identityKey}" }) { album ->
+                            CarouselCell(onClick = { onOpenAlbum(album.source) }) {
+                                HomeCover(
+                                    album.source.id, initial = album.title.take(1),
+                                    Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
+                                    imageUrl = album.artwork.coverUrl(),
+                                )
+                                CellTitle(album.title)
+                                CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+                            }
+                        }
+                    },
+                )
+            }
+            val byKey = strips.associateBy { it.key }
+            val scope = this
+            weaveHome(rows.size, strips.map { it.key }, layoutSeed).forEach { block ->
+                when (block) {
+                    is WovenBlock.Tiles -> {
+                        // The header belongs to the first row of tiles only. Past that the tiles' own
+                        // MIX / EDITORIAL plates say what they are, and a second heading over a row that
+                        // follows a chart strip would be claiming to label everything under it.
+                        if (block.row == 0) {
+                            item(key = "mixes-header") {
+                                SectionHeader(
+                                    mixesTitle,
+                                    Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 4.dp),
+                                )
+                            }
+                        }
+                        mosaicRow(rows[block.row], block.row)
                     }
-                }
-            }
-            // The personalized rows are the slow half (YouTube-backed mixes) and they no longer hold
-            // the charts hostage — but arriving late they used to push everything below them down a
-            // whole screen. Each one now holds its own place from the moment it is announced.
-            forYouSkeletons.forEach { title -> skeletonCarousel(title) }
-
-            carousel(
-                playlistsForYouTitle,
-                // The wall already shows the first few as mosaics; showing them again here would be the
-                // same playlist twice in one screen.
-                playlists.drop(promotedPlaylists),
-                HomeTab.Playlists,
-                onSeeAll,
-                key = { it.source.identityKey },
-            ) { playlist ->
-                CarouselCell(onClick = { onOpenEditorialPlaylist(playlist) }) {
-                    HomeCover(
-                        playlist.source.id, initial = playlist.name.take(1),
-                        Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
-                        imageUrl = playlist.artwork.coverUrl(),
-                    )
-                    CellTitle(playlist.name)
-                    CellSubtitle(playlistSubtitle(playlist))
-                }
-            }
-
-            // ---- The charts, each with "See all" into its own tab ----
-            carousel(topSongsTitle, tracks, HomeTab.Songs, onSeeAll, key = { it.source.identityKey }) { track ->
-                CarouselCell(onClick = { onPlay(track) }) {
-                    HomeCover(
-                        track.source.id, initial = null,
-                        Modifier.size(CAROUSEL_ART).paperElevation(),
-                        imageUrl = track.artwork.coverUrl(),
-                    )
-                    CellTitle(track.title)
-                    CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })
-                }
-            }
-
-            carousel(topAlbumsTitle, albums, HomeTab.Albums, onSeeAll, key = { it.source.identityKey }) { album ->
-                CarouselCell(onClick = { onOpenAlbum(album.source) }) {
-                    HomeCover(
-                        album.source.id, initial = album.title.take(1),
-                        Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
-                        imageUrl = album.artwork.coverUrl(),
-                    )
-                    CellTitle(album.title)
-                    CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
-                }
-            }
-
-            carousel(popularArtistsTitle, artists, HomeTab.Artists, onSeeAll, key = { it.source.identityKey }) { artist ->
-                CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
-                    HomeCover(
-                        artist.source.id, initial = artist.name.take(1),
-                        Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
-                        initialSize = 38, circle = true, imageUrl = artist.artwork.coverUrl(),
-                    )
-                    CellTitle(artist.name, centered = true)
-                }
-            }
-
-            // New releases were being fetched, blended and deduped on every load, then never drawn.
-            // They share the Albums tab's grid because that is what they are.
-            carousel(newReleasesTitle, newReleases, HomeTab.Albums, onSeeAll, key = { "nr-${it.source.identityKey}" }) { album ->
-                CarouselCell(onClick = { onOpenAlbum(album.source) }) {
-                    HomeCover(
-                        album.source.id, initial = album.title.take(1),
-                        Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
-                        imageUrl = album.artwork.coverUrl(),
-                    )
-                    CellTitle(album.title)
-                    CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+                    is WovenBlock.Strip -> byKey[block.key]?.emit?.invoke(scope)
                 }
             }
 
@@ -656,6 +686,48 @@ private fun LazyListScope.tabContent(
 
 /** Carousel artwork size — big enough to read at a glance, small enough that ~2.5 peek past the edge. */
 private val CAROUSEL_ART = 152.dp
+
+/**
+ * One woven block of the overview that isn't a mosaic row: a carousel, the skeleton standing in for one,
+ * or the daily poster.
+ *
+ * [key] is what fixes where the weave puts it — it must name the *content*, not the position, so a strip
+ * that turns out empty and drops out doesn't reorder everything around it. See [weaveHome].
+ */
+private class Strip(val key: String, val emit: LazyListScope.() -> Unit)
+
+/** One personalized row, whichever of the four shapes it happens to be. */
+private fun LazyListScope.forYouStrip(
+    title: String,
+    section: ForYouSection,
+    onPlay: (Track) -> Unit,
+    onOpenAlbum: (ProviderRef) -> Unit,
+    onOpenArtist: (ProviderRef) -> Unit,
+) = when (section) {
+    is ForYouSection.Mix -> trackCarousel(title, section.items, onPlay)
+    is ForYouSection.BecauseYouLike -> trackCarousel(title, section.items, onPlay)
+    is ForYouSection.ArtistsForYou -> carousel(title, section.items, key = { it.source.identityKey }) { artist ->
+        CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
+            HomeCover(
+                artist.source.id, initial = artist.name.take(1),
+                Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
+                initialSize = 38, circle = true, imageUrl = artist.artwork.coverUrl(),
+            )
+            CellTitle(artist.name, centered = true)
+        }
+    }
+    is ForYouSection.AlbumsForYou -> carousel(title, section.items, key = { it.source.identityKey }) { album ->
+        CarouselCell(onClick = { onOpenAlbum(album.source) }) {
+            HomeCover(
+                album.source.id, initial = album.title.take(1),
+                Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
+                imageUrl = album.artwork.coverUrl(),
+            )
+            CellTitle(album.title)
+            CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+        }
+    }
+}
 
 /**
  * A Home cover: [CoverArt] wearing the **ink frame**.

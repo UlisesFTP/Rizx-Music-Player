@@ -40,6 +40,26 @@ fun rizxWidth(): RizxWidth {
 @ReadOnlyComposable
 fun isTablet(): Boolean = rizxWidth() == RizxWidth.Expanded
 
+/**
+ * The shortest edge at which a device is a tablet or an unfolded foldable. Material's own breakpoint.
+ *
+ * Shared with `MainActivity`, which uses it to decide whether landscape is offered at all — the two must
+ * agree, or the app would allow a rotation it has no layout for.
+ */
+const val LARGE_SCREEN_SW_DP = 600
+
+/**
+ * True on a device whose **shortest** edge is tablet-sized.
+ *
+ * Unlike [isTablet], which reads the current width, this is orientation-independent — and that is the
+ * whole point: a phone turned sideways reports a 900dp width and would pass [isTablet] while still being
+ * a phone. Anything that keys off *form factor* rather than available width belongs here.
+ */
+@Composable
+@ReadOnlyComposable
+fun isLargeScreenDevice(): Boolean =
+    LocalConfiguration.current.smallestScreenWidthDp >= LARGE_SCREEN_SW_DP
+
 /** Side padding for a screen's content. Narrow screens buy back the margin they can't spare. */
 @Composable
 @ReadOnlyComposable

@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +46,7 @@ import fm.rizx.player.ui.theme.paperElevation
 import fm.rizx.player.ui.theme.sg
 import fm.rizx.player.ui.theme.staggeredReveal
 import kotlin.math.roundToInt
+import kotlin.random.Random
 
 /**
  * The Home's **mosaics**: widget-shaped tiles for the mixes Rizx builds itself and for the playlists
@@ -73,6 +73,10 @@ private const val RAIL_TICKS = 9
 
 /** A full-width tile ends up almost exactly as tall as a square one is wide — the wall stays even. */
 private const val WIDE_ASPECT = 1.9f
+
+/** How many pair rows may follow one another before a full-width tile is forced in. */
+private const val MAX_PAIR_RUN = 2
+
 private val DISCOVER_HEIGHT = 256.dp
 
 /**
@@ -343,16 +347,56 @@ private fun Bar(widthFraction: Float, height: Dp, alpha: Float) {
     )
 }
 
+/** One row of the wall: a single full-width tile, or a pair of single-column ones. */
+class MosaicRow(val tiles: List<MosaicTile>, val wide: Boolean)
+
 /**
- * The wall: one full-width tile, then a pair of single-column ones, repeating.
+ * Splits [tiles] into rows of one (full width) or two (single column), **varied by [seed]**.
  *
- * A fixed rhythm rather than a masonry algorithm, because the point is that tiles occupy *different*
- * column counts without the wall losing its grid — a full-width tile is almost exactly as tall as a
- * square one, so consecutive rows still line up.
+ * Not the fixed one-then-two alternation this started as: a wall that reads 1-2-1-2 forever is visibly a
+ * template. The variation is seeded rather than drawn per frame — the same wall always lays out the same
+ * way while you scroll it (a per-frame lottery would have the `LazyColumn` reshuffling under your thumb),
+ * and it lays out differently once what is *on* the wall changes.
+ *
+ * Three constraints keep it a wall rather than a mess: never two full-width rows back to back — they eat
+ * the screen; never more than [MAX_PAIR_RUN] pair rows in a row, which is the template again; and never a
+ * lone half-width tile, which reads as a missing tile.
  */
-fun LazyListScope.mosaicWall(tiles: List<MosaicTile>) {
-    if (tiles.isEmpty()) return
-    itemsIndexed(tiles.rhythm(), key = { _, row -> "mosaic-${row.tiles.first().key}" }) { index, row ->
+fun mosaicRows(tiles: List<MosaicTile>, seed: Int): List<MosaicRow> {
+    if (tiles.isEmpty()) return emptyList()
+    // Two read best side by side; the alternation needs three tiles before it is an alternation at all.
+    if (tiles.size == 2) return listOf(MosaicRow(tiles, wide = false))
+    val rng = Random(seed)
+    val rows = mutableListOf<MosaicRow>()
+    var i = 0
+    var pairRun = 0
+    while (i < tiles.size) {
+        val wide = when {
+            tiles.size - i == 1 -> true                  // a lone half tile is worse than a second banner
+            rows.lastOrNull()?.wide == true -> false
+            pairRun >= MAX_PAIR_RUN -> true
+            tiles.size - i == 2 -> false
+            else -> rng.nextBoolean()
+        }
+        if (wide) {
+            rows += MosaicRow(listOf(tiles[i]), wide = true)
+            i++
+            pairRun = 0
+        } else {
+            rows += MosaicRow(tiles.subList(i, minOf(i + 2, tiles.size)).toList(), wide = false)
+            i += 2
+            pairRun++
+        }
+    }
+    return rows
+}
+
+/**
+ * One row of the wall, wherever the Home's weave decided to put it. [index] only drives the entrance
+ * stagger, so rows woven further down still cascade in order.
+ */
+fun LazyListScope.mosaicRow(row: MosaicRow, index: Int) {
+    item(key = "mosaic-${row.tiles.first().key}") {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -371,21 +415,9 @@ fun LazyListScope.mosaicWall(tiles: List<MosaicTile>) {
     }
 }
 
-private class MosaicRow(val tiles: List<MosaicTile>, val wide: Boolean)
-
-/** Rows of one, then two, then one… — see [mosaicWall]. */
-private fun List<MosaicTile>.rhythm(): List<MosaicRow> {
-    val rows = mutableListOf<MosaicRow>()
-    var i = 0
-    while (i < size) {
-        rows += MosaicRow(listOf(this[i]), wide = true)
-        i++
-        if (i < size) {
-            rows += MosaicRow(subList(i, minOf(i + 2, size)).toList(), wide = false)
-            i += 2
-        }
-    }
-    return rows
+/** The whole wall in one block — for the offline/error Home, which has no strips to weave it into. */
+fun LazyListScope.mosaicWall(tiles: List<MosaicTile>, seed: Int) {
+    mosaicRows(tiles, seed).forEachIndexed { index, row -> mosaicRow(row, index) }
 }
 
 // ---- Parts ------------------------------------------------------------------------------------

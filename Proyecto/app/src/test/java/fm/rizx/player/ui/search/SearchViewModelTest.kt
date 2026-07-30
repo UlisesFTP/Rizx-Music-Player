@@ -2,6 +2,7 @@ package fm.rizx.player.ui.search
 
 import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.core.error.AppError
+import fm.rizx.player.data.local.store.SearchHistoryStore
 import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.PlaylistRef
@@ -11,9 +12,13 @@ import fm.rizx.player.domain.model.SearchParams
 import fm.rizx.player.domain.model.SearchResults
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.repository.FavoritesRepository
+import fm.rizx.player.domain.model.ArtistCredit
 import fm.rizx.player.domain.repository.MetadataRepository
+import fm.rizx.player.domain.repository.RecentlyPlayedRepository
 import fm.rizx.player.domain.usecase.SearchMusicUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -22,6 +27,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModelTest {
@@ -51,17 +58,34 @@ class SearchViewModelTest {
         override suspend fun search(query: String) = SearchResults()
     }
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private class FakeRecents(private val tracks: List<Track> = emptyList()) : RecentlyPlayedRepository {
+        override fun recent(limit: Int): Flow<List<Track>> = flowOf(tracks.take(limit))
+        override suspend fun record(track: Track) {}
+        override suspend fun clear() {}
+    }
+
+    /** A history over a file that does not exist yet: every test starts with nothing searched. */
+    private fun store() =
+        SearchHistoryStore(File(tmp.root, "search_history.json"), io = mainDispatcherRule.dispatcher)
+
     private fun vmWith(
         repo: MetadataRepository,
         streaming: fm.rizx.player.data.search.StreamingSourcesSearch = emptyStreaming,
         playlists: fm.rizx.player.data.search.PlaylistSourcesSearch = emptyPlaylists,
         suggest: List<String> = emptyList(),
+        history: SearchHistoryStore = store(),
+        played: List<Track> = emptyList(),
     ) = SearchViewModel(
         SearchMusicUseCase(repo),
         streaming,
         playlists,
         noopFavorites,
         youtube = suggestingClient(suggest),
+        history = history,
+        recents = FakeRecents(played),
     )
         // On the test scheduler, so `runTest` drains the suggestion lookup instead of leaving it in
         // flight on a real IO thread after `Dispatchers.Main` has been torn down.
@@ -221,4 +245,128 @@ class SearchViewModelTest {
         assertEquals("Exclusive Remix", state.results.tracks.single().title)
         assertEquals(SearchTab.Underground, vm.tab.value)
     }
+
+    // ---- History, pills and the suggestion list -----------------------------------------------------
+
+    @Test
+    fun `only a deliberate search is remembered, not every keystroke`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            // Recording the debounced query would bury "the weeknd" under "t", "th", "the"...
+            val history = store()
+            val vm = vmWith(fakeRepo { SearchResults() }, history = history)
+
+            vm.onQueryChange("the wee")
+            advanceUntilIdle()
+            assertEquals(emptyList<String>(), history.queries().first())
+
+            vm.searchFor("The Weeknd")
+            advanceUntilIdle()
+            assertEquals(listOf("The Weeknd"), history.queries().first())
+        }
+
+    @Test
+    fun `the pills lead with what was searched, then what is played, then the fallback`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            val played = List(3) {
+                Track("Song $it", artists = listOf(ArtistCredit("Feid")), source = ProviderRef("d", "$it"))
+            }
+            val history = store()
+            history.remember("Rosalía")
+            val vm = vmWith(fakeRepo { SearchResults() }, history = history, played = played)
+
+            val pills = vm.pills.first { it.isNotEmpty() }
+
+            assertEquals("Rosalía", pills[0].text)
+            assertTrue("a searched pill is marked as history", pills[0].recent)
+            assertEquals("Feid", pills[1].text)
+            assertTrue("an artist you play is not a past search", !pills[1].recent)
+            // The curated names fill what is left rather than being dropped.
+            assertTrue(pills.any { it.text == "Daft Punk" })
+            assertEquals(8, pills.size)
+        }
+
+    @Test
+    fun `a name searched and played is one pill, whatever its spelling`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            val played = listOf(
+                Track("Levitating", artists = listOf(ArtistCredit("DualipaVEVO")), source = ProviderRef("yt", "1")),
+            )
+            val history = store()
+            history.remember("dua lipa")
+            val vm = vmWith(fakeRepo { SearchResults() }, history = history, played = played)
+
+            val pills = vm.pills.first { it.isNotEmpty() }
+
+            assertEquals(1, pills.count { it.text.lowercase().replace(" ", "").contains("dualipa") })
+        }
+
+    @Test
+    fun `past searches head the suggestion list without making it any taller`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            val history = store()
+            listOf("weeknd blinding lights", "weeknd starboy", "coldplay").forEach { history.remember(it) }
+            val vm = vmWith(
+                fakeRepo { SearchResults() },
+                suggest = listOf("weeknd tour", "weeknd 2026", "weeknd songs", "weeknd album", "weeknd merch"),
+                history = history,
+            )
+
+            vm.onQueryChange("weeknd")
+            advanceUntilIdle()
+            val rows = vm.suggestions.first { it.isNotEmpty() }
+
+            assertEquals("the list is exactly as tall as it was before recents existed", 5, rows.size)
+            assertEquals(listOf(true, true, false, false, false), rows.map { it.recent })
+            // Newest first, and only the two most recent take a slot.
+            assertEquals("weeknd starboy", rows[0].text)
+            assertEquals("weeknd blinding lights", rows[1].text)
+        }
+
+    @Test
+    fun `a past search matches at one character, before the network says anything`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            val history = store()
+            history.remember("Tame Impala")
+            val vm = vmWith(fakeRepo { SearchResults() }, suggest = listOf("never asked"), history = history)
+
+            vm.onQueryChange("t")
+            advanceUntilIdle()
+            val rows = vm.suggestions.first { it.isNotEmpty() }
+
+            assertEquals(listOf("Tame Impala"), rows.map { it.text })
+        }
+
+    @Test
+    fun `a past search identical to the query is not offered back`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            // Offering "coldplay" while "coldplay" is in the field is a row that does nothing.
+            val history = store()
+            history.remember("Coldplay")
+            val vm = vmWith(fakeRepo { SearchResults() }, suggest = listOf("coldplay live"), history = history)
+
+            vm.onQueryChange("coldplay")
+            advanceUntilIdle()
+            val rows = vm.suggestions.first { it.isNotEmpty() }
+
+            assertEquals(listOf("coldplay live"), rows.map { it.text })
+            assertTrue(rows.none { it.recent })
+        }
+
+    @Test
+    fun `picking a suggestion remembers it and closes the list`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            val history = store()
+            val vm = vmWith(fakeRepo { tracks("Yellow") }, suggest = listOf("coldplay yellow"), history = history)
+            vm.onQueryChange("cold")
+            advanceUntilIdle()
+            assertEquals(listOf("coldplay yellow"), vm.suggestions.first { it.isNotEmpty() }.map { it.text })
+
+            vm.applySuggestion("coldplay yellow")
+            advanceUntilIdle()
+
+            // `suggestions` is shared WhileSubscribed, so it has to be collected to be read at all.
+            assertTrue("the user has chosen - stop suggesting", vm.suggestions.first().isEmpty())
+            assertEquals(listOf("coldplay yellow"), history.queries().first())
+            assertEquals("coldplay yellow", vm.query.value)
+        }
 }

@@ -3,6 +3,7 @@
 package fm.rizx.player.ui.screens
 
 import fm.rizx.player.ui.search.SearchTab
+import fm.rizx.player.ui.search.Suggestion
 import fm.rizx.player.ui.components.RizxChip
 import fm.rizx.player.data.remote.deezer.DeezerIds
 import fm.rizx.player.data.remote.youtube.YoutubeIds
@@ -103,6 +104,7 @@ fun SearchScreen(
     val favoriteSources by vm.favoriteSources.collectAsStateWithLifecycle()
     val tab by vm.tab.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
+    val pills by vm.pills.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -129,7 +131,7 @@ fun SearchScreen(
                     query = query,
                     onQueryChange = vm::onQueryChange,
                     onClear = vm::clear,
-                    onSubmit = vm::dismissSuggestions,
+                    onSubmit = vm::submit,
                 )
             }
             // Offset by the measured field rather than aligned to it: the list is taller than the field,
@@ -153,7 +155,7 @@ fun SearchScreen(
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (query.isBlank()) {
-                IdleContent(onSearch = vm::onQueryChange)
+                IdleContent(pills = pills, onSearch = vm::searchFor)
             } else {
                 when (val s = uiState) {
                     SearchUiState.Idle, SearchUiState.Loading -> LoadingState()
@@ -266,7 +268,7 @@ private fun SearchField(
  * every keystroke into a full-page repaint.
  */
 @Composable
-private fun SuggestionList(suggestions: List<String>, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun SuggestionList(suggestions: List<Suggestion>, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
     if (suggestions.isEmpty()) return
     val c = RizxTheme.colors
     Column(
@@ -279,14 +281,21 @@ private fun SuggestionList(suggestions: List<String>, onPick: (String) -> Unit, 
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickableScale(scale = 0.99f, onClick = { onPick(suggestion) })
+                    .clickableScale(scale = 0.99f, onClick = { onPick(suggestion.text) })
                     .padding(horizontal = 14.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(11.dp),
             ) {
-                Icon(RizxIcons.Search, null, tint = c.muted, modifier = Modifier.size(15.dp))
+                // A clock for something you searched before, a magnifier for something the source is
+                // offering: the two mean different things and a single glyph for both hides which is which.
+                Icon(
+                    if (suggestion.recent) Icons.Filled.History else RizxIcons.Search,
+                    null,
+                    tint = c.muted,
+                    modifier = Modifier.size(15.dp),
+                )
                 Text(
-                    suggestion,
+                    suggestion.text,
                     style = mr(13, FontWeight.Medium),
                     color = c.text,
                     maxLines = 1,
@@ -545,8 +554,6 @@ private fun ResultPlaylistRow(playlist: PlaylistRef, onClick: () -> Unit) {
 
 // ---- Idle (no query): suggested searches + genre tiles (all trigger a real search) ----
 
-private val SEARCH_SUGGESTIONS = listOf("Daft Punk", "The Weeknd", "Coldplay", "Bad Bunny", "Lo-fi beats", "Tame Impala")
-
 /** A browse-genre tile: display [labelRes], the [query] it searches, a Deezer genre [image], a fallback [tint] and a HUD [code]. */
 private data class Genre(val labelRes: Int, val query: String, val image: String, val tint: Int, val code: String)
 
@@ -574,8 +581,15 @@ private val BROWSE_GENRES = listOf(
     Genre(R.string.search_genre_dance, "Dance", dzGenre("bd5fdfa1a23e02e2697818e09e008e69"), 7, "G16"),
 )
 
+/**
+ * The idle screen: the pills, then the genre wall.
+ *
+ * [pills] arrive already chosen and ordered by the ViewModel - the searches this user made, then the
+ * artists they play, then the curated fallback - so this only has to draw them. Same count and the same
+ * single row-wrapping block as the static list it replaces, so the layout is unchanged.
+ */
 @Composable
-private fun IdleContent(onSearch: (String) -> Unit) {
+private fun IdleContent(pills: List<Suggestion>, onSearch: (String) -> Unit) {
     val c = RizxTheme.colors
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text(stringResource(R.string.search_try_searching), style = sg(16, FontWeight.Bold), color = c.text, modifier = Modifier.padding(top = 22.dp))
@@ -584,19 +598,24 @@ private fun IdleContent(onSearch: (String) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SEARCH_SUGGESTIONS.forEach { s ->
+            pills.forEach { pill ->
                 Row(
                     Modifier
                         .clip(RectangleShape)
                         .background(c.elev)
                         .border(1.dp, c.line, RectangleShape)
-                        .clickableScale(scale = 0.95f) { onSearch(s) }
+                        .clickableScale(scale = 0.95f) { onSearch(pill.text) }
                         .padding(horizontal = 13.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
-                    Icon(Icons.Filled.History, null, tint = c.muted, modifier = Modifier.size(16.dp))
-                    Text(s, style = mr(13, FontWeight.Medium), color = c.text2)
+                    Icon(
+                        if (pill.recent) Icons.Filled.History else RizxIcons.Search,
+                        null,
+                        tint = c.muted,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(pill.text, style = mr(13, FontWeight.Medium), color = c.text2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

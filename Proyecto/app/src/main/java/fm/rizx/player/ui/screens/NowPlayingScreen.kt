@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.animation.core.animateFloatAsState
+import android.content.res.Configuration
 import android.view.TextureView
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -47,6 +48,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -71,6 +73,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -83,8 +86,10 @@ import fm.rizx.player.R
 import fm.rizx.player.core.formatClock
 import fm.rizx.player.ui.components.CodeLabel
 import fm.rizx.player.ui.components.PlayerDotTrail
-import fm.rizx.player.ui.components.PulsingPlayButton
 import fm.rizx.player.ui.components.RizxIconButton
+import fm.rizx.player.ui.components.TransportButton
+import fm.rizx.player.ui.components.TransportMarker
+import fm.rizx.player.ui.components.TransportPlayButton
 import fm.rizx.player.ui.components.VerticalLabel
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.domain.model.ProviderRef
@@ -96,6 +101,7 @@ import fm.rizx.player.ui.theme.cornerBrackets
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.dot
 import fm.rizx.player.ui.theme.dotGrid
+import fm.rizx.player.ui.theme.isLargeScreenDevice
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.sg
 import fm.rizx.player.ui.util.rememberRizxHaptics
@@ -221,13 +227,27 @@ fun NowPlayingScreen(
           // ~412dp. Measuring removes both guesses. The 420 cap keeps a tall phone's artwork exactly as
           // designed; the reserve scales with the system font because that is what inflates those rows.
           val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.5f)
-          val artHeight = (maxHeight - CONTROLS_RESERVE * fontScale).coerceIn(180.dp, 420.dp)
-          Column(Modifier.fillMaxSize().graphicsLayer { translationY = screenDragY }) {
+          // The cap rose with the footer's removal (420 → 470): on a tall phone the artwork was already
+          // pinned at 420 *before* that row went, so freeing its 69dp would otherwise have left dead paper
+          // above the up-next bar rather than a bigger cover. Short screens are unaffected — they never
+          // reach the cap.
+          val artHeight = (maxHeight - CONTROLS_RESERVE * fontScale).coerceIn(180.dp, 470.dp)
+          // Side by side only where it is genuinely better: a landscape window on a device whose *shortest*
+          // edge is tablet-sized, and only when it is tall enough for the whole control stack. A phone never
+          // gets here — it stays upright — but the height check still matters, because a short landscape
+          // window is better served by the stacked layout, which shrinks the artwork to fit.
+          val twoPane = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+              isLargeScreenDevice() &&
+              maxHeight >= CONTROLS_RESERVE * fontScale
+          // Two ways to lay this screen out, from **one** definition of each half: stacked on a phone,
+          // side by side where there is width for it. Local composable lambdas rather than extracted
+          // functions — these two blocks read forty-odd pieces of state and a dozen callbacks between them,
+          // and threading all of that through a parameter list would be a far larger change than the
+          // layout it buys.
+          val artwork: @Composable (Modifier) -> Unit = { artModifier ->
             // ---- Album art ----
             Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(artHeight)
+                artModifier
                     .clipToBounds()
                     .graphicsLayer { translationX = artDragX }
                     // Swipe the cover: horizontal = prev/next, a downward drag dismisses the player. One
@@ -315,10 +335,17 @@ fun NowPlayingScreen(
                     }
                 }
                 // Bottom scrim — fades the cover into the zone below (paper in light, the wash in dark).
+                //
+                // Trimmed twice on Paper (0.6 → 0.8 → 0.88): its only job is to blend the seam where the
+                // cover meets the paper, and spread over the bottom 40% it read as a pale haze *on the
+                // artwork* — loudest on a dark cover, where it looked like a glow rising out of the bottom
+                // edge. It is now a 12% strip: enough to soften the join, not enough to veil the art. Ivory
+                // keeps 0.6, where the same gradient ends at 30% of a near-black background and barely
+                // registers.
                 Box(
                     Modifier.fillMaxSize().background(
                         Brush.verticalGradient(
-                            0.6f to Color.Transparent,
+                            (if (c.isDark) 0.6f else 0.88f) to Color.Transparent,
                             1.0f to if (c.isDark) c.bg.copy(alpha = 0.3f) else c.bg,
                         ),
                     ),
@@ -356,11 +383,19 @@ fun NowPlayingScreen(
                 // Double-tap-to-like feedback: a red heart stamps over the cover, then fades. One-shot.
                 LikeStamp(trigger = likeStamp)
             }
-
+          }
+          val controlsZone: @Composable (Modifier) -> Unit = { zoneModifier ->
             // ---- Controls zone ----
             // Dark: a smooth wash of the album's colours (purple -> coral -> dark) flowing down
             // from the cover. Light/Paper: nothing — the plain paper background, like the reference.
-            Box(Modifier.fillMaxWidth().weight(1f)) {
+            Box(zoneModifier) {
+            // On a wide pane these rows would stretch to the full 1280dp: the transport would sit at the
+            // screen's extremes and the title would swim in the middle of nothing. Capped and centred.
+            val paneWidth = if (twoPane) {
+                Modifier.widthIn(max = PANE_CONTENT_MAX).fillMaxWidth()
+            } else {
+                Modifier.fillMaxWidth()
+            }
                 // Nothing-OS dot-matrix texture behind the controls — a STATIC grid (drawn only on
                 // recomposition, not a 60fps driver), so it never contends with audio decode/output on
                 // low-end GPUs / emulators. Both themes.
@@ -390,15 +425,21 @@ fun NowPlayingScreen(
                         ),
                     )
                 }
-                Column(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    // Centred in the pane on a wide screen: with the artwork beside the stack rather than
+                    // above it, the controls are a third of the height and pinning them to the top leaves a
+                    // screen of empty paper underneath.
+                    verticalArrangement = if (twoPane) Arrangement.Center else Arrangement.Top,
+                ) {
                     // ---- Waveform scrubber (tap or drag to seek) ----
                     // Local drag override so the playhead follows the finger instantly, before the polled
                     // position round-trips back through the player (same trick as the mini-player). Read
                     // only in the draw phase below, so a drag redraws just the waveform, not the screen.
                     var drag by remember { mutableStateOf<Float?>(null) }
                     BoxWithConstraints(
-                        Modifier
-                            .fillMaxWidth()
+                        paneWidth
                             .padding(horizontal = 20.dp, vertical = 14.dp)
                             .height(WAVEFORM_HEIGHT)
                             .pointerInput(Unit) {
@@ -478,7 +519,7 @@ fun NowPlayingScreen(
 
                     // ---- Time row: elapsed · "N OF M" · remaining (dot-matrix numerals) ----
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+                        paneWidth.padding(horizontal = 22.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
@@ -509,7 +550,7 @@ fun NowPlayingScreen(
                                 (fadeOut(tween(180)) + slideOutVertically(tween(180)) { -it / 3 })
                         },
                         label = "trackText",
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = paneWidth,
                     ) { (animTitle, animArtist) ->
                         Column(
                             Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
@@ -534,48 +575,59 @@ fun NowPlayingScreen(
                     }
 
                     // ---- Controls ----
+                    // All five share one square-framed idiom now, and the three that hold a state — shuffle,
+                    // play/pause, repeat — carry the red corner marker that says which state they are in.
+                    // Skip has none, because it has none to be wrong about. See [TransportButton].
+                    //
+                    // The inset is tighter than the rows around it on purpose: five controls at a uniform
+                    // 48.dp plus the play block still have to fit a 320.dp-wide screen, which the old mix of
+                    // 46, 50 and 92.dp did not.
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp),
+                        paneWidth.padding(horizontal = TRANSPORT_INSET, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         // Shuffle and repeat flank the transport in the order every player uses. They used to
                         // sit in the footer's opposite corners, split by the artist text — playback *modes*
                         // divorced from the playback controls, which made them easy to miss.
-                        ModeButton(
+                        TransportButton(
                             icon = RizxIcons.Shuffle,
                             contentDescription = if (shuffleOn) stringResource(R.string.player_shuffle_on_desc) else stringResource(R.string.player_shuffle_off_desc),
-                            active = shuffleOn,
                             onClick = onToggleShuffle,
-                            accent = c.redAccent,
-                            isDark = c.isDark,
+                            iconSize = 22.dp,
+                            marker = if (shuffleOn) TransportMarker.On else TransportMarker.Off,
                         )
-                        GlassButton(RizxIcons.SkipPrevious, stringResource(R.string.player_previous), onPrevious, c.isDark, size = 50.dp, iconSize = 32.dp)
-                        PulsingPlayButton(
+                        TransportButton(
+                            RizxIcons.SkipPrevious,
+                            stringResource(R.string.player_previous),
+                            onPrevious,
+                            iconSize = 28.dp,
+                            nudge = -1,
+                        )
+                        TransportPlayButton(
                             isPlaying = isPlaying,
                             onClick = onTogglePlay,
-                            size = 74.dp,
-                            iconSize = 40.dp,
                             fillColor = npAccent,
                             onFillColor = npOnFill,
-                            glowColor = npAccent,
-                            // No animated blur halo: a continuously-animated blur is very expensive in
-                            // software rendering (emulator/low-end) and starves audio. Keep the button flat.
-                            glow = false,
                             loading = loading,
                         )
-                        GlassButton(RizxIcons.SkipNext, stringResource(R.string.player_next), onNext, c.isDark, size = 50.dp, iconSize = 32.dp)
-                        ModeButton(
+                        TransportButton(
+                            RizxIcons.SkipNext,
+                            stringResource(R.string.player_next),
+                            onNext,
+                            iconSize = 28.dp,
+                            nudge = 1,
+                        )
+                        TransportButton(
                             icon = if (repeatMode == RepeatMode.ONE) RizxIcons.RepeatOne else RizxIcons.Repeat,
                             contentDescription = when (repeatMode) {
                                 RepeatMode.OFF -> stringResource(R.string.player_repeat_off_desc)
                                 RepeatMode.ALL -> stringResource(R.string.player_repeat_all_desc)
                                 RepeatMode.ONE -> stringResource(R.string.player_repeat_one_desc)
                             },
-                            active = repeatMode != RepeatMode.OFF,
                             onClick = onToggleRepeat,
-                            accent = c.redAccent,
-                            isDark = c.isDark,
+                            iconSize = 22.dp,
+                            marker = if (repeatMode != RepeatMode.OFF) TransportMarker.On else TransportMarker.Off,
                         )
                     }
 
@@ -584,7 +636,7 @@ fun NowPlayingScreen(
                     // land squarely under shuffle (left) and repeat (right) instead of floating loose —
                     // and the bottom bar below repeats the pair, so all four share two vertical axes.
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = ACTION_INSET, vertical = 4.dp),
+                        paneWidth.padding(horizontal = ACTION_INSET, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
@@ -602,7 +654,9 @@ fun NowPlayingScreen(
                         )
                     }
 
-                    Spacer(Modifier.weight(1f))
+                    // Pushes the stack to the top in portrait; in the centred wide pane it would take
+                    // all the slack and there would be nothing left to centre.
+                    if (!twoPane) Spacer(Modifier.weight(1f))
                 }
                 // Rotated technical label running up the left edge (refs #3/#4).
                 VerticalLabel(
@@ -611,6 +665,33 @@ fun NowPlayingScreen(
                     color = c.muted,
                 )
             }
+          }
+
+          if (twoPane) {
+              // Landscape on a tablet or an unfolded foldable — the only devices that reach it, because a
+              // phone stays upright (MainActivity.applyOrientationPolicy). The artwork takes the left half
+              // at its natural square and the whole control stack takes the right, so neither is the
+              // letterboxed strip that a rotated portrait layout gives you.
+              Row(Modifier.fillMaxSize().graphicsLayer { translationY = screenDragY }) {
+                  artwork(Modifier.weight(1f).fillMaxHeight())
+                  Column(Modifier.weight(1f).fillMaxHeight()) {
+                      controlsZone(Modifier.fillMaxWidth().weight(1f))
+                  // ---- Bottom action bar: nearby devices · up-next peek · radio ----
+                  // The two new actions share the drawer's strip so they read as one bar instead of floating over
+                  // the controls. The peek in the middle still pulls up the queue drawer, and only appears when
+                  // there's actually something queued.
+                  NowPlayingBottomBar(
+                      upcomingCount = upcoming.size,
+                      onOpenQueue = { queueOpen = true },
+                      onOpenDevices = onOpenDevices,
+                      onStartRadio = onStartRadio,
+                  )
+                  }
+              }
+          } else {
+          Column(Modifier.fillMaxSize().graphicsLayer { translationY = screenDragY }) {
+            artwork(Modifier.fillMaxWidth().height(artHeight))
+            controlsZone(Modifier.fillMaxWidth().weight(1f))
 
             // ---- Bottom action bar: nearby devices · up-next peek · radio ----
             // The two new actions share the drawer's strip so they read as one bar instead of floating over
@@ -622,33 +703,7 @@ fun NowPlayingScreen(
                 onOpenDevices = onOpenDevices,
                 onStartRadio = onStartRadio,
             )
-
-            // ---- Footer ----
-            // Now purely the "what am I listening to" readout: repeat and shuffle moved up into the
-            // transport row, where playback modes belong.
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(if (c.isDark) Color(0xFF0C0C10).copy(alpha = 0.6f) else c.elev)
-                    .navigationBarsPadding()
-                    .padding(horizontal = 18.dp, vertical = 13.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(artist, style = mr(13, FontWeight.Bold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (album.isNotBlank()) {
-                        Text(
-                            album,
-                            style = mr(11, FontWeight.Medium),
-                            color = c.muted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
-                    }
-                }
-            }
+          }
           }
         }
 
@@ -768,6 +823,9 @@ private fun NowPlayingBottomBar(
         Modifier
             .fillMaxWidth()
             .background(if (c.isDark) Color(0xFF0C0C10).copy(alpha = 0.6f) else c.elev)
+            // The artist/album readout that used to sit below this bar carried the navigation-bar inset;
+            // with it gone, this is the last thing on the screen and inherits the job.
+            .navigationBarsPadding()
             .padding(horizontal = ACTION_INSET, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -847,15 +905,15 @@ private fun UpNextPanel(
                 .fillMaxWidth()
                 .pointerInput(Unit) { detectTapGestures { onCollapse() } }
                 .pointerInput(Unit) { detectVerticalDragGestures { _, dragAmount -> if (dragAmount > 6f) onCollapse() } }
-                .padding(top = 10.dp, bottom = 6.dp),
+                .padding(top = 8.dp, bottom = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(Modifier.width(36.dp).height(4.dp).background(c.muted.copy(alpha = 0.6f)))
             Row(
-                Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 10.dp),
+                Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(R.string.player_up_next), style = sg(20, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.player_up_next), style = sg(17, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.weight(1f))
                 Icon(RizxIcons.ChevronDown, stringResource(R.string.player_hide_queue), tint = c.text2, modifier = Modifier.size(22.dp))
             }
         }
@@ -986,37 +1044,6 @@ private fun GlassButton(
     RizxIconButton(icon, contentDescription, onClick, size = size, iconSize = iconSize, tint = iconTint, background = bg, border = line)
 }
 
-/**
- * Shuffle / repeat: a playback **mode**, so it shows its on/off state by filling with the accent rather than
- * just changing glyph. Sized to sit either side of the transport row without competing with the play button.
- */
-@Composable
-private fun ModeButton(
-    icon: ImageVector,
-    contentDescription: String?,
-    isDark: Boolean,
-    active: Boolean = false,
-    accent: Color = RizxTheme.colors.accent,
-    onClick: () -> Unit = {},
-) {
-    val c = RizxTheme.colors
-    val bg = when {
-        active -> accent
-        isDark -> Color.White.copy(alpha = 0.09f)
-        else -> c.inset
-    }
-    val tint = when {
-        active -> c.onFill
-        isDark -> Color.White.copy(alpha = 0.85f)
-        else -> c.text2
-    }
-    val line = if (isDark) Color.White.copy(alpha = 0.20f) else c.hardLine
-    RizxIconButton(
-        icon, contentDescription, onClick,
-        size = 46.dp, iconSize = 22.dp, tint = tint,
-        background = bg, border = if (active) Color.Transparent else line,
-    )
-}
 
 /**
  * The double-tap-to-like flourish: a red heart pops over the cover and fades. Driven by a change [trigger]
@@ -1084,24 +1111,34 @@ private val WAVEFORM_HEIGHT = 39.dp
  * rows drift apart again, which is exactly the misalignment this replaced.
  */
 private val ACTION_INSET = 24.dp
+
+/** The transport row's own, tighter inset — see the row for why it cannot share [ACTION_INSET]. */
+private val TRANSPORT_INSET = 18.dp
+
+/**
+ * How wide the control stack is allowed to get in the side-by-side layout. Roughly a comfortable phone's
+ * width, which is what these rows were designed against — stretched to a tablet's full half they read as
+ * five buttons pinned to two distant edges.
+ */
+private val PANE_CONTENT_MAX = 460.dp
 private val ACTION_BUTTON = 46.dp
 private val ACTION_ICON = 22.dp
 
 /**
- * How much of the screen the up-next drawer covers when open. Trimmed a quarter (0.62 → 0.465) at the
- * owner's request: still five or so upcoming songs, but noticeably more of the player — artwork and
- * transport — stays visible behind it.
+ * How much of the screen the up-next drawer covers when open. Trimmed twice at the owner's request
+ * (0.62 → 0.465 → 0.38): four upcoming songs at a glance, and most of the player — artwork, waveform,
+ * transport — still visible behind it, which is what makes it read as a peek rather than a screen change.
  */
-private const val QUEUE_DRAWER_FRACTION = 0.465f
+private const val QUEUE_DRAWER_FRACTION = 0.38f
 
 /**
  * Vertical space everything below the artwork needs at a 1.0 font scale, with headroom.
  *
  * Measured from the layout rather than estimated: waveform 67 + times 22 + title block 81 + transport 86
- * + track actions 54 = 310, then the bottom action bar 58 (nearby-devices · up-next peek · radio) and the
- * footer 69. An earlier reserve counted a bare 33dp up-next handle here; the handle now shares a taller,
- * always-present bar with the two new buttons, so the reserve grew ~20dp to keep the track-actions row
- * from being clipped on a short screen (this was already what dropped that row on a 1220x2712 phone).
- * The bar gained a further 4dp when its buttons grew to [ACTION_BUTTON] to line up with the row above.
+ * + track actions 54 = 310, then the bottom action bar 58 (nearby-devices · up-next peek · radio).
+ *
+ * Down 69dp from 454: that was the artist/album readout below the up-next bar, now gone. It repeated the
+ * artist already printed under the title and pushed the artwork 69dp shorter for the privilege — removing
+ * it is the whole of "organize the player better", and the artwork simply gets the space back.
  */
-private val CONTROLS_RESERVE = 454.dp
+private val CONTROLS_RESERVE = 385.dp

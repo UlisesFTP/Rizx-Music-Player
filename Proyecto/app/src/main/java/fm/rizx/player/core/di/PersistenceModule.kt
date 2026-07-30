@@ -22,6 +22,7 @@ import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.artwork.ArtworkCache
 import fm.rizx.player.data.local.store.HomeFeedStore
 import fm.rizx.player.data.local.store.LyricsStore
+import fm.rizx.player.data.local.store.SearchHistoryStore
 import fm.rizx.player.data.repository.FavoritesRepositoryImpl
 import fm.rizx.player.data.repository.PlaylistRepositoryImpl
 import fm.rizx.player.data.repository.RecentlyPlayedRepositoryImpl
@@ -105,6 +106,16 @@ object PersistenceModule {
     @Singleton
     fun provideHomeFeedStore(@ApplicationContext context: Context): HomeFeedStore =
         HomeFeedStore(File(context.filesDir, "home_feed.json"))
+
+    /**
+     * The searches the user actually made, behind Search's pills and its "recent" suggestion rows.
+     * Singleton because the flow is hot — a search recorded on the Search screen must be visible to
+     * whatever else is reading it without a re-read.
+     */
+    @Provides
+    @Singleton
+    fun provideSearchHistoryStore(@ApplicationContext context: Context): SearchHistoryStore =
+        SearchHistoryStore(File(context.filesDir, "search_history.json"))
 
     @Provides
     @Singleton
