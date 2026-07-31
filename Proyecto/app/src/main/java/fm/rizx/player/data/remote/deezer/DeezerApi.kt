@@ -36,8 +36,16 @@ interface DeezerApi {
     @GET("artist/{id}/radio")
     suspend fun artistRadio(@Path("id") id: String, @Query("limit") limit: Int): DeezerSearchResponse
 
+    /**
+     * One page of an artist's discography. [index] is the offset: a prolific artist has far more
+     * releases than one page holds, and the artist screen shows the whole discography.
+     */
     @GET("artist/{id}/albums")
-    suspend fun artistAlbums(@Path("id") id: String, @Query("limit") limit: Int): DeezerAlbumsResponse
+    suspend fun artistAlbums(
+        @Path("id") id: String,
+        @Query("limit") limit: Int,
+        @Query("index") index: Int = 0,
+    ): DeezerAlbumsResponse
 
     /** Artists similar to {id} — feeds the personalized "Artists for you" Home row. */
     @GET("artist/{id}/related")

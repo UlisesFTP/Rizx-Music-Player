@@ -1,5 +1,6 @@
 package fm.rizx.player.data.remote.deezer
 
+import fm.rizx.player.domain.model.AlbumKind
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -54,6 +55,26 @@ class DeezerMapperTest {
         assertEquals(9_600_000L, artist.followers)
         assertEquals("artist:27", artist.source.id)
         assertEquals(listOf("One More Time"), artist.topTracks.map { it.title })
+    }
+
+    @Test
+    fun `a discography row keeps its kind and its year`() {
+        val rows = json.decodeFromString(
+            DeezerAlbumsResponse.serializer(),
+            """{"data":[
+                {"id":1,"title":"Random Access Memories","release_date":"2013-05-17","record_type":"album"},
+                {"id":2,"title":"Instant Crush","release_date":"2013-11-08","record_type":"single"},
+                {"id":3,"title":"Alive 1997","release_date":"2001-10-01","record_type":"ep"},
+                {"id":4,"title":"Musique Vol. 1","release_date":"2006-03-27","record_type":"compilation"},
+                {"id":5,"title":"Unlabelled"}
+            ]}""",
+        ).data.mapNotNull { it.toAlbumRef() }
+
+        assertEquals(
+            listOf(AlbumKind.ALBUM, AlbumKind.SINGLE, AlbumKind.EP, AlbumKind.COMPILATION, AlbumKind.UNKNOWN),
+            rows.map { it.kind },
+        )
+        assertEquals(listOf(2013, 2013, 2001, 2006, null), rows.map { it.year })
     }
 
     @Test

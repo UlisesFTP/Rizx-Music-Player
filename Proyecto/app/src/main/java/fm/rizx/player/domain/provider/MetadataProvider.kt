@@ -2,6 +2,7 @@ package fm.rizx.player.domain.provider
 
 import fm.rizx.player.domain.model.Album
 import fm.rizx.player.domain.model.Artist
+import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.DetailCapability
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.SearchCapability
@@ -54,6 +55,16 @@ interface MetadataProvider : ProviderDescriptor {
 
     /** Full artist (top tracks + albums) for an artist [source] ref, or `null` if unsupported/not found. */
     suspend fun artistDetail(source: ProviderRef): Artist? = null
+
+    /**
+     * Artists this catalogue considers similar to [source] — the "you might also like" row on the
+     * artist page.
+     *
+     * Empty by default, and empty is a real answer: iTunes publishes no such endpoint without a
+     * developer key, so Apple returns nothing and the row is simply not drawn. Guessing similarity
+     * from a genre string would be inventing a recommendation.
+     */
+    suspend fun relatedArtists(source: ProviderRef): List<ArtistRef> = emptyList()
 
     /**
      * ~25 similar/"radio" tracks seeded from a currently-playing [seed] track — powers the feed/search

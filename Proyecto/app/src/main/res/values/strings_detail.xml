@@ -17,8 +17,23 @@
 
     <!-- Artist detail -->
     <string name="detail_followers_count">%1$s followers</string>
-    <string name="detail_top_tracks_heading">TOP TRACKS</string>
-    <string name="detail_albums_heading">ALBUMS</string>
+    <string name="detail_top_tracks_heading">Songs</string>
+    <string name="detail_albums_heading">Albums</string>
+    <string name="detail_singles_heading">Singles &amp; EPs</string>
+    <string name="detail_similar_heading">Similar artists</string>
+    <string name="detail_artist_stats">%1$d albums · %2$d singles</string>
+    <string name="detail_play">Play</string>
+    <string name="detail_shuffle">Shuffle</string>
+    <string name="detail_radio">Radio</string>
+    <string name="detail_see_all">See all</string>
+    <string name="detail_see_less">See less</string>
+    <string name="detail_more_options">More options</string>
+    <string name="detail_open_album">Open album</string>
+    <!-- Artist biography (text from Wikipedia, CC BY-SA — the credit line is the licence condition) -->
+    <string name="detail_about">About</string>
+    <string name="detail_show_more">Show more</string>
+    <string name="detail_show_less">Show less</string>
+    <string name="detail_wikipedia">From Wikipedia (CC BY-SA)</string>
 
     <!-- Track count, all-caps (editorial + user playlist header row) -->
     <string name="detail_track_count_caps_one">%1$d TRACK</string>

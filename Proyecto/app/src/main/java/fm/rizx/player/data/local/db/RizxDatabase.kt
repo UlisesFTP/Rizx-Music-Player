@@ -11,7 +11,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [FavoriteEntity::class, PlaylistEntity::class, PlaylistItemEntity::class, RecentlyPlayedEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class RizxDatabase : RoomDatabase() {
@@ -38,5 +38,31 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE `playlists` ADD COLUMN `artworkUrl` TEXT")
+    }
+}
+
+/**
+ * v3 → v4: `recently_played` becomes a real listening log — play/completion/skip counts, listened time,
+ * the first play, and plays per part of the day.
+ *
+ * Every column is `NOT NULL DEFAULT`, which is what `ALTER TABLE ADD COLUMN` requires and what lets the
+ * existing rows survive untouched. Two deliberate choices about that existing history:
+ *
+ * - `playCount` defaults to **1**, not 0: every row in the table is there *because* it was played.
+ * - `firstPlayedAtIso` is backfilled from `playedAtIso`, so an upgraded install has real dates from the
+ *   first launch instead of a blank field that would make everything look brand new.
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `playCount` INTEGER NOT NULL DEFAULT 1")
+        db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `completedCount` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `skipCount` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `msListened` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `firstPlayedAtIso` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `partNight` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `partMorning` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `partAfternoon` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `partEvening` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE `recently_played` SET `firstPlayedAtIso` = `playedAtIso`")
     }
 }

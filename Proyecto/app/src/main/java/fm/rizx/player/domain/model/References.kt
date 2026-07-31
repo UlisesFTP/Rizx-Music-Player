@@ -39,6 +39,13 @@ data class AlbumRef(
     val artists: List<ArtistRef> = emptyList(),
     val artwork: ArtworkSet? = null,
     val source: ProviderRef,
+    /** Release year, when the catalogue says — what turns a discography into a timeline. */
+    val year: Int? = null,
+    /**
+     * Album, single, EP… Defaulted (like [year]) because this type is inside the Home's disk cache: a
+     * new field with a default is read back from an older cache instead of invalidating it.
+     */
+    val kind: AlbumKind = AlbumKind.UNKNOWN,
 )
 
 @Serializable

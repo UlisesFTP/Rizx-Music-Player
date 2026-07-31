@@ -44,7 +44,8 @@
     <string name="home_play_now">Tocar</string>
     <string name="home_mix_label">Mix</string>
     <string name="home_mix_daily">Seu mix diário</string>
-    <string name="home_mix_daily_caption">%1$d músicas · %2$d artistas</string>
+    <string name="home_mix_daily_of">Mix diário · %1$s</string>
+    <string name="home_mix_daily_caption">%1$d que você conhece · %2$d novas</string>
     <string name="home_mix_artist">Mix de %1$s</string>
     <string name="home_mix_artist_caption">%1$d músicas de %2$s</string>
     <string name="home_mix_on_repeat">Em repetição</string>

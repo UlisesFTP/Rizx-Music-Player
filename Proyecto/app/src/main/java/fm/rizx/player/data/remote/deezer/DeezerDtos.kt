@@ -48,6 +48,12 @@ data class DeezerAlbumShortDto(
     @SerialName("cover_xl") val coverXl: String? = null,
     @SerialName("cover_medium") val coverMedium: String? = null,
     @SerialName("release_date") val releaseDate: String? = null,
+    /**
+     * "album" | "single" | "ep" | "compilation". Deezer publishes it on `/artist/{id}/albums`, which
+     * is what lets the artist page separate a studio album from a two-track single instead of listing
+     * forty entries in one row.
+     */
+    @SerialName("record_type") val recordType: String? = null,
     /** Present on `search/album` rows (the album's main artist); absent on track-nested albums. */
     val artist: DeezerArtistShortDto? = null,
 )

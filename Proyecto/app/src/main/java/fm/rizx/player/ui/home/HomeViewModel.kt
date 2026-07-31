@@ -8,8 +8,10 @@ import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.data.local.store.HomeFeedStore
 import fm.rizx.player.domain.model.AppMix
 import fm.rizx.player.domain.model.DailyPick
+import fm.rizx.player.domain.model.Daypart
 import fm.rizx.player.domain.model.ForYouSection
 import fm.rizx.player.domain.model.HomeFeed
+import fm.rizx.player.domain.model.PlayStat
 import fm.rizx.player.domain.model.QueueContext
 import fm.rizx.player.domain.model.QueueSourceKind
 import fm.rizx.player.domain.model.Track
@@ -21,11 +23,15 @@ import fm.rizx.player.domain.repository.QueueRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import fm.rizx.player.domain.repository.SettingsRepository
+import fm.rizx.player.domain.usecase.ContinueListening
 import fm.rizx.player.domain.usecase.HomeFeedDeduper
 import fm.rizx.player.domain.usecase.MixBuilder
+import fm.rizx.player.domain.usecase.TasteProfile
+import java.time.LocalDate
+import java.time.LocalTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -107,13 +113,15 @@ class HomeViewModel @Inject constructor(
 ) : ViewModel() {
 
     /**
-     * The play history the statistics run on. Deeper than the row below shows, because the weighting
-     * needs a distribution to weigh — the recency decay only says anything across a few dozen plays.
+     * The listening log the statistics run on: every play with its counts, not just a list of titles.
+     * Deeper than any row shows, because the weighting needs a distribution to weigh — recency decay,
+     * "on repeat" and "rediscover" all say nothing across a handful of plays.
      */
-    private val history: Flow<List<Track>> = recents.recent(TASTE_ITEMS)
+    private val history: Flow<List<PlayStat>> = recents.stats(TASTE_ITEMS)
 
     /**
-     * "Continue listening" — the songs you played last, newest first.
+     * "Continue listening" — the way back into your own music: what you were playing, what you keep
+     * coming back to, and something you have not heard in weeks ([ContinueListening]).
      *
      * Room-backed and live, so it needs no network and no load state: it is on screen before any
      * provider has answered, which is what turns the cold-start blank into something usable. Kept
@@ -121,7 +129,12 @@ class HomeViewModel @Inject constructor(
      * failure must not take it away.
      */
     val continueListening: StateFlow<List<Track>> =
-        history.map { it.take(CONTINUE_ITEMS) }
+        combine(history, favorites.favoriteTracks()) { played, liked ->
+            ContinueListening.build(profile(played, liked), today(), CONTINUE_ITEMS)
+        }
+            // Off the main thread: this re-runs on every play, and reading it means decoding a few
+            // hundred stored tracks before the statistics even start.
+            .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _state = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
@@ -144,11 +157,29 @@ class HomeViewModel @Inject constructor(
     val mixes: StateFlow<HomeMixes> =
         combine(history, favorites.favoriteTracks(), state) { played, liked, ui ->
             val content = ui as? HomeUiState.Content
+            val profile = profile(played, liked)
+            val sections = content?.forYouSections.orEmpty()
             HomeMixes(
-                mixes = mixBuilder.build(played, liked, content?.feed ?: HomeFeed()),
-                pick = mixBuilder.pick(played, liked, content?.forYouSections.orEmpty()),
+                mixes = mixBuilder.build(profile, content?.feed ?: HomeFeed(), sections, today()),
+                pick = mixBuilder.pick(profile, sections),
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeMixes())
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeMixes())
+
+    /**
+     * The taste behind both of the above, read at the moment it is needed.
+     *
+     * The clock lives here rather than in the domain: `TasteProfile` is pure, and "now" is exactly the
+     * kind of ambient state that makes a pure thing untestable if it reaches for it itself.
+     */
+    private fun profile(played: List<PlayStat>, liked: List<Track>) = TasteProfile(
+        stats = played,
+        liked = liked,
+        nowMs = System.currentTimeMillis(),
+        daypart = Daypart.ofHour(LocalTime.now().hour),
+    )
+
+    /** The day number — what makes a mix differ from yesterday's while staying put all day. */
+    private fun today(): Long = LocalDate.now().toEpochDay()
 
     // Raw halves, kept apart so either can be replaced without waiting for the other.
     private var rawFeed: HomeFeed? = null
@@ -310,10 +341,13 @@ class HomeViewModel @Inject constructor(
     }
 
     private companion object {
-        /** One carousel's worth of history — the row is a way back in, not the whole log. */
-        const val CONTINUE_ITEMS = 12
+        /** One carousel's worth — the row is a way back in, not the whole log. */
+        const val CONTINUE_ITEMS = ContinueListening.SLOTS
 
-        /** How deep the statistics read. Enough for the recency decay to separate old plays from new. */
-        const val TASTE_ITEMS = 40
+        /**
+         * How deep the statistics read. The log keeps three hundred songs precisely so "you haven't
+         * heard this since March" can be true; reading forty of them would throw that away on the way in.
+         */
+        const val TASTE_ITEMS = 200
     }
 }

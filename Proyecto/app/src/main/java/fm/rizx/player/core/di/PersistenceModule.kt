@@ -14,6 +14,7 @@ import fm.rizx.player.data.local.db.FavoriteDao
 import fm.rizx.player.data.artwork.TrackArtworkEnricher
 import fm.rizx.player.data.local.db.MIGRATION_1_2
 import fm.rizx.player.data.local.db.MIGRATION_2_3
+import fm.rizx.player.data.local.db.MIGRATION_3_4
 import fm.rizx.player.data.local.db.PlaylistDao
 import fm.rizx.player.data.local.db.RecentlyPlayedDao
 import fm.rizx.player.data.local.db.RizxDatabase
@@ -22,7 +23,11 @@ import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.artwork.ArtworkCache
 import fm.rizx.player.data.genre.TrackGenreResolver
 import fm.rizx.player.data.remote.itunes.ItunesApi
+import fm.rizx.player.data.artist.ArtistBioSource
+import fm.rizx.player.data.artist.WikipediaArtistBioSource
+import fm.rizx.player.data.local.store.ArtistBioStore
 import fm.rizx.player.data.local.store.AutoEqStore
+import fm.rizx.player.data.remote.wikipedia.WikipediaApi
 import fm.rizx.player.data.local.store.HomeFeedStore
 import fm.rizx.player.data.local.store.LyricsStore
 import fm.rizx.player.data.local.store.SearchHistoryStore
@@ -50,8 +55,9 @@ object PersistenceModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RizxDatabase =
         Room.databaseBuilder(context, RizxDatabase::class.java, "rizx.db")
-            // v2 adds recently_played; v3 adds playlists.artworkUrl. Both preserve existing data.
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            // v2 adds recently_played; v3 adds playlists.artworkUrl; v4 turns the history into a
+            // listening log (play/skip counts, time of day). All three preserve existing data.
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
 
     @Provides
@@ -128,6 +134,20 @@ object PersistenceModule {
     @Singleton
     fun provideAutoEqStore(@ApplicationContext context: Context): AutoEqStore =
         AutoEqStore(File(context.filesDir, "auto_eq.json"))
+
+    /**
+     * Artist biographies. Cached to disk because an artist's life story does not change between two
+     * visits to their page — and because a *missing* one costs the same two requests to rediscover.
+     */
+    @Provides
+    @Singleton
+    fun provideArtistBioStore(@ApplicationContext context: Context): ArtistBioStore =
+        ArtistBioStore(File(context.filesDir, "artist_bios.json"))
+
+    @Provides
+    @Singleton
+    fun provideArtistBioSource(api: WikipediaApi, store: ArtistBioStore): ArtistBioSource =
+        WikipediaArtistBioSource(api, store)
 
     /** Answers "what genre is this song?" for the automatic equalizer — owner first, verified, guarded. */
     @Provides

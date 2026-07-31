@@ -8,7 +8,10 @@ package fm.rizx.player.domain.model
  * this order and keeps the first few, so the strongest kind leads the Home.
  */
 enum class MixKind {
-    /** A blend of what you play, what you like and what the app has just recommended. */
+    /**
+     * One facet of your taste: mostly songs you know from it, with a measured share you have never
+     * played. There may be several, numbered by [AppMix.index].
+     */
     DAILY,
 
     /** One artist's orbit: their songs in your history plus their songs elsewhere on the feed. */
@@ -38,8 +41,18 @@ enum class MixKind {
  */
 data class AppMix(
     val kind: MixKind,
-    /** What the mix is about (an artist's name), or empty for the kinds that need no subject. */
+    /**
+     * Which one it is among its kind — the daily mixes are numbered 0, 1, 2, one per facet of the taste.
+     *
+     * It is also what keeps [id] steady: a facet is recomputed as the listener plays, so naming a mix
+     * after its artists would change its identity — and therefore its `LazyColumn` key, its tile tint and
+     * the Home's layout seed — several times a day.
+     */
+    val index: Int = 0,
+    /** What the mix is about ("Tyla, Doja Cat, The Weeknd"), or empty for the kinds that need no subject. */
     val subject: String = "",
+    /** The single artist the mix formed around — what a tile too small for [subject] is named after. */
+    val lead: String = "",
     val tracks: List<Track> = emptyList(),
     /**
      * How much evidence backs this mix, `0f..1f` — the *meter* the mosaic draws. Not decoration: it is
@@ -50,9 +63,18 @@ data class AppMix(
     val weight: Float = 0f,
     /** How many distinct artists the mix draws on — the number its caption quotes. */
     val artistCount: Int = 0,
+    /** Songs the listener already knows, and songs they have never played — the mix's promise, in numbers. */
+    val knownCount: Int = 0,
+    val freshCount: Int = 0,
 ) {
-    /** Stable identity for LazyColumn keys: kind plus subject, which is what makes a mix unique. */
-    val id: String get() = "${kind.name}|${subject.lowercase()}"
+    /**
+     * Stable identity for LazyColumn keys.
+     *
+     * The daily mixes are named by **number**, not by subject: their facets are recomputed live, and a
+     * key that moved with them would re-key the tile — and re-seed the Home's layout — mid-afternoon.
+     * Every other kind is unique by what it is about.
+     */
+    val id: String get() = if (kind == MixKind.DAILY) "DAILY|$index" else "${kind.name}|${subject.lowercase()}"
 
     val leadTrack: Track? get() = tracks.firstOrNull()
 }

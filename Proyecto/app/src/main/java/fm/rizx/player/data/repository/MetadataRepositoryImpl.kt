@@ -2,6 +2,7 @@ package fm.rizx.player.data.repository
 
 import fm.rizx.player.domain.model.Album
 import fm.rizx.player.domain.model.Artist
+import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.SearchParams
 import fm.rizx.player.domain.model.SearchResults
@@ -27,6 +28,9 @@ class MetadataRepositoryImpl(
     override suspend fun albumDetail(source: ProviderRef): Album? = provider().albumDetail(source)
 
     override suspend fun artistDetail(source: ProviderRef): Artist? = provider().artistDetail(source)
+
+    override suspend fun relatedArtists(source: ProviderRef): List<ArtistRef> =
+        provider().relatedArtists(source)
 
     override suspend fun radioTracks(seed: Track): List<Track> = provider().radioTracks(seed)
 

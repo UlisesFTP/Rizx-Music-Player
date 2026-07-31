@@ -144,10 +144,21 @@ private fun forYouTitle(section: ForYouSection): String = when (section) {
     is ForYouSection.AlbumsForYou -> stringResource(R.string.home_albums_for_you)
 }
 
-/** A mix's name. The domain holds no resources, so the kind and its subject are formatted here. */
+/**
+ * A mix's name. The domain holds no resources, so the kind and its subject are formatted here.
+ *
+ * The **first** daily mix keeps the plain "Your daily mix": it is the one on the hero card, which shows
+ * the facet's artists on its own subtitle line. The others are tiles with no subtitle, so they carry the
+ * artist they formed around — "Daily mix 2" alone would say nothing about what is inside.
+ */
 @Composable
 private fun mixTitle(mix: AppMix): String = when (mix.kind) {
-    MixKind.DAILY -> stringResource(R.string.home_mix_daily)
+    MixKind.DAILY ->
+        if (mix.index == 0 || mix.lead.isBlank()) {
+            stringResource(R.string.home_mix_daily)
+        } else {
+            stringResource(R.string.home_mix_daily_of, mix.lead)
+        }
     MixKind.ARTIST -> stringResource(R.string.home_mix_artist, mix.subject)
     MixKind.ON_REPEAT -> stringResource(R.string.home_mix_on_repeat)
     MixKind.REDISCOVER -> stringResource(R.string.home_mix_rediscover)
@@ -161,7 +172,8 @@ private fun mixTitle(mix: AppMix): String = when (mix.kind) {
  */
 @Composable
 private fun mixCaption(mix: AppMix): String = when (mix.kind) {
-    MixKind.DAILY -> stringResource(R.string.home_mix_daily_caption, mix.tracks.size, mix.artistCount)
+    // Known vs new is the promise the mix is built on, so it is the number worth printing.
+    MixKind.DAILY -> stringResource(R.string.home_mix_daily_caption, mix.knownCount, mix.freshCount)
     MixKind.ARTIST -> stringResource(R.string.home_mix_artist_caption, mix.tracks.size, mix.subject)
     MixKind.ON_REPEAT -> stringResource(R.string.home_mix_on_repeat_caption, mix.tracks.size)
     MixKind.REDISCOVER -> stringResource(R.string.home_mix_rediscover_caption, mix.tracks.size)
@@ -226,11 +238,12 @@ fun HomeScreen(
     // Built here, in composable scope, because every label and caption on them is localized; the wall
     // itself (`mosaicWall`) is pure layout and knows nothing about mixes or playlists.
     val homeMixes by vm.mixes.collectAsStateWithLifecycle()
-    // What varies the overview's layout. Seeded from what the mixes are *about* plus the date, so the
-    // arrangement is fixed while you read the screen, shifts as your listening does, and rotates daily.
-    // Deliberately **not** the tile keys: those carry the feed's playlists, and re-laying the page out
-    // under the reader every time the charts refresh underneath them is not "organic", it is a jump.
-    val mixSignature = homeMixes.mixes.joinToString("|") { it.id }
+    // What varies the overview's layout. Seeded from the *shape* of the wall — which kinds of mix are on
+    // it — plus the date, so the arrangement is fixed while you read the screen and rotates daily.
+    // Deliberately **not** the tile keys (those carry the feed's playlists, so the page would re-lay-out
+    // on every refresh) and no longer what the mixes are *about* either: the daily mixes are recomputed
+    // as you listen, and re-seeding the page mid-afternoon is exactly the jump this avoids.
+    val mixSignature = homeMixes.mixes.joinToString("|") { it.kind.name }
     val layoutSeed = remember(mixSignature) {
         mixSignature.hashCode() * 31 + LocalDate.now().toEpochDay().toInt()
     }

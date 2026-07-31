@@ -35,6 +35,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import fm.rizx.player.data.local.store.PlaybackSessionSnapshot
 import fm.rizx.player.data.local.store.PlaybackSessionStore
+import fm.rizx.player.domain.model.PlayOutcome
 import fm.rizx.player.domain.model.PlaybackQueue
 import fm.rizx.player.domain.model.QueueItemStatus
 import fm.rizx.player.domain.model.QueueSourceKind
@@ -123,6 +124,15 @@ class PlaybackService : MediaSessionService() {
 
     /** Queue-item ids already retried as HLS, so a genuinely-broken HLS stream can't loop. */
     private val hlsRetried = mutableSetOf<String>()
+
+    /**
+     * The queue item whose play has already been counted.
+     *
+     * Playback starting is the "you listened to this" signal, but it fires again on every resume — and
+     * now that a play is *counted*, pausing to answer the door would read as playing the song twice.
+     * One count per queue item; the same track later in the queue is a genuine second play.
+     */
+    private var countedItemId: String? = null
 
     /** Player buffering state, mirrored for off-main-thread readers (see [startCacheCompletion]). */
     @Volatile
@@ -528,6 +538,42 @@ class PlaybackService : MediaSessionService() {
 
     // ---- Player truth → queue cursor + item status ----
 
+    /**
+     * Records how the play that just ended went — heard out, or dropped early.
+     *
+     * Two details decide whether this signal is worth anything:
+     *
+     * - **The length comes from the queue item, never `player.duration`.** By the time a discontinuity is
+     *   reported the player has already moved on and is reporting the *next* song's duration; judging a
+     *   skip against it would be judging the wrong track.
+     * - **The item is found by `mediaId`** — which is the `QueueItem.id` — falling back to the timeline
+     *   index. A queue edited in the same frame would otherwise attribute the outcome to a neighbour.
+     */
+    private fun recordOutcome(old: Player.PositionInfo, manual: Boolean) {
+        val items = queue.state.value.items
+        val item = old.mediaItem?.mediaId?.let { id -> items.firstOrNull { it.id == id } }
+            ?: items.getOrNull(old.mediaItemIndex)
+            ?: return
+        val outcome = PlayOutcome.of(old.positionMs, item.track.durationMs, manual) ?: return
+        scope.launch {
+            runCatching { recentlyPlayed.recordOutcome(item.track.source, old.positionMs, outcome) }
+        }
+    }
+
+    /**
+     * Counts one play of whatever is current, at most once per queue item.
+     *
+     * Called from both the "playback started" and the "the track changed" paths because neither alone
+     * sees every play: a song that has to buffer flips `isPlaying`, a song that follows seamlessly never
+     * does, and a song on repeat does neither. [countedItemId] is what keeps the two from double-counting.
+     */
+    private fun countPlay() {
+        val current = queue.state.value.current ?: return
+        if (countedItemId == current.id) return
+        countedItemId = current.id
+        scope.launch { runCatching { recentlyPlayed.record(current.track) } }
+    }
+
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
             // Mirrored into a field because the cache completer runs on an IO thread, and ExoPlayer
@@ -546,6 +592,12 @@ class PlaybackService : MediaSessionService() {
             if (idx in current.items.indices && idx != current.currentIndex) {
                 queue.goToIndex(idx)
             }
+            // A song set to repeat comes round as the *same* queue item, and playing it again is the
+            // clearest "on repeat" signal there is — so let it be counted again.
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) countedItemId = null
+            // Only while already playing: a transition also fires when the queue is restored paused, and
+            // a song nobody has started is not a play. The buffering case is covered by onIsPlayingChanged.
+            if (player.isPlaying) countPlay()
         }
 
         override fun onPositionDiscontinuity(
@@ -555,6 +607,12 @@ class PlaybackService : MediaSessionService() {
         ) {
             // A manual scrub shouldn't re-trigger a fade-in if the cursor lands back inside the fade window.
             if (reason == Player.DISCONTINUITY_REASON_SEEK) fadeInArmed = false
+            // A track just ended — moved on, or came round again on repeat. This is the one moment that
+            // knows *how* it ended; a scrub within the same song is not an ending at all.
+            val auto = reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION
+            if (oldPosition.mediaItemIndex != newPosition.mediaItemIndex || auto) {
+                recordOutcome(oldPosition, manual = !auto)
+            }
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -567,8 +625,8 @@ class PlaybackService : MediaSessionService() {
             if (!isPlaying) return
             queue.state.value.current?.let { current ->
                 hlsRetried -= current.id // it's playing now; allow a fresh HLS retry if rebuilt later
-                scope.launch { runCatching { recentlyPlayed.record(current.track) } }
             }
+            countPlay()
         }
 
         override fun onPlayerError(error: PlaybackException) {

@@ -12,7 +12,9 @@ import fm.rizx.player.data.remote.deezer.toArtistRef
 import fm.rizx.player.data.remote.deezer.toSearchResults
 import fm.rizx.player.data.remote.deezer.toTrackOrNull
 import fm.rizx.player.domain.model.Album
+import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.Artist
+import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.DetailCapability
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.SearchCapability
@@ -79,8 +81,35 @@ class DeezerMetadataProvider(
         val artistId = DeezerIds.rawId(source)
         val header = api.artist(artistId)
         val top = api.artistTop(artistId, TOP_LIMIT).data.mapNotNull { it.toTrackOrNull() }
-        val albums = api.artistAlbums(artistId, ALBUM_LIMIT).data.mapNotNull { it.toAlbumRef() }
-        header.toArtist(topTracks = top, albums = albums)
+        header.toArtist(topTracks = top, albums = allAlbums(artistId))
+    }
+
+    /**
+     * The artist's **whole** discography, paged.
+     *
+     * One page used to be the discography, which for anyone prolific meant twenty of their eighty
+     * releases and no way to reach the rest. Paging stops as soon as a page comes back short — that is
+     * the end of the list — and at [MAX_ALBUMS], which is a backstop against a catalogue that keeps
+     * answering rather than a real limit anyone reaches.
+     */
+    private suspend fun allAlbums(artistId: String): List<AlbumRef> {
+        val out = ArrayList<AlbumRef>(ALBUM_PAGE)
+        var index = 0
+        while (index < MAX_ALBUMS) {
+            val page = api.artistAlbums(artistId, ALBUM_PAGE, index).data
+            out += page.mapNotNull { it.toAlbumRef() }
+            if (page.size < ALBUM_PAGE) break
+            index += ALBUM_PAGE
+        }
+        return out.distinctBy { it.source }
+    }
+
+    /**
+     * Artists Deezer considers similar. Already the same endpoint behind the Home's "Artists for you"
+     * row — the artist page just asks it about the artist you are looking at.
+     */
+    override suspend fun relatedArtists(source: ProviderRef): List<ArtistRef> = guarded {
+        api.artistRelated(DeezerIds.rawId(source), RELATED_LIMIT).data.mapNotNull { it.toArtistRef() }
     }
 
     /**
@@ -127,8 +156,12 @@ class DeezerMetadataProvider(
 
     companion object {
         private const val DEFAULT_LIMIT = 25
-        private const val TOP_LIMIT = 15
-        private const val ALBUM_LIMIT = 20
+
+        /** The artist page's song list. Deep enough to be "their songs" rather than a teaser. */
+        private const val TOP_LIMIT = 50
+        private const val ALBUM_PAGE = 50
+        private const val MAX_ALBUMS = 200
         private const val RADIO_LIMIT = 25
+        private const val RELATED_LIMIT = 12
     }
 }

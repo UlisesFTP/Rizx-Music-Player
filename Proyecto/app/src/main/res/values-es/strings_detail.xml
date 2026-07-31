@@ -17,8 +17,22 @@
 
     <!-- Artist detail -->
     <string name="detail_followers_count">%1$s seguidores</string>
-    <string name="detail_top_tracks_heading">CANCIONES DESTACADAS</string>
-    <string name="detail_albums_heading">ÁLBUMES</string>
+    <string name="detail_top_tracks_heading">Canciones</string>
+    <string name="detail_albums_heading">Álbumes</string>
+    <string name="detail_singles_heading">Sencillos y EP</string>
+    <string name="detail_similar_heading">Artistas similares</string>
+    <string name="detail_artist_stats">%1$d álbumes · %2$d sencillos</string>
+    <string name="detail_play">Reproducir</string>
+    <string name="detail_shuffle">Aleatorio</string>
+    <string name="detail_radio">Radio</string>
+    <string name="detail_see_all">Ver todo</string>
+    <string name="detail_see_less">Ver menos</string>
+    <string name="detail_more_options">Más opciones</string>
+    <string name="detail_open_album">Abrir álbum</string>
+    <string name="detail_about">Acerca de</string>
+    <string name="detail_show_more">Mostrar más</string>
+    <string name="detail_show_less">Mostrar menos</string>
+    <string name="detail_wikipedia">De Wikipedia (CC BY-SA)</string>
 
     <!-- Track count, all-caps (editorial + user playlist header row) -->
     <string name="detail_track_count_caps_one">%1$d CANCIÓN</string>

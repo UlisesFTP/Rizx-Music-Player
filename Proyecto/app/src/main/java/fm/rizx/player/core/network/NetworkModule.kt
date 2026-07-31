@@ -16,6 +16,7 @@ import fm.rizx.player.data.remote.kugou.KugouApi
 import fm.rizx.player.data.remote.lrclib.LrcLibApi
 import fm.rizx.player.data.remote.musixmatch.MusixmatchClient
 import fm.rizx.player.data.remote.netease.NeteaseApi
+import fm.rizx.player.data.remote.wikipedia.WikipediaApi
 import fm.rizx.player.data.remote.lyricsovh.LyricsOvhApi
 import fm.rizx.player.data.provider.AppleMusicMetadataProvider
 import fm.rizx.player.data.provider.MetadataRadioMixSource
@@ -59,6 +60,7 @@ object NetworkModule {
     private const val LRCLIB_BASE_URL = "https://lrclib.net/"
     private const val AUDIUS_BASE_URL = "https://api.audius.co/"
     private const val DEEZER_BASE_URL = "https://api.deezer.com/"
+    private const val WIKIPEDIA_BASE_URL = "https://en.wikipedia.org/"
     private const val USER_AGENT = "RizxPlayer/0.1 (+https://github.com/nukeop/nuclear)"
     private const val HTTP_CACHE_DIR = "http"
     private const val HTTP_CACHE_BYTES = 20L * 1024 * 1024
@@ -186,6 +188,20 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideAudiusHostProvider(api: AudiusApi): AudiusHostProvider = AudiusHostProvider(api)
+
+    /**
+     * Artist biographies (keyless, public). Base URL is a placeholder: every call passes an absolute
+     * `@Url` because the host *is* the language (`es.wikipedia.org`, `en.wikipedia.org`…).
+     */
+    @Provides
+    @Singleton
+    fun provideWikipediaApi(client: OkHttpClient, json: Json): WikipediaApi =
+        Retrofit.Builder()
+            .baseUrl(WIKIPEDIA_BASE_URL)
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(WikipediaApi::class.java)
 
     @Provides
     @Singleton

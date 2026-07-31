@@ -44,7 +44,8 @@
     <string name="home_play_now">Écouter</string>
     <string name="home_mix_label">Mix</string>
     <string name="home_mix_daily">Ton mix du jour</string>
-    <string name="home_mix_daily_caption">%1$d titres · %2$d artistes</string>
+    <string name="home_mix_daily_of">Mix du jour · %1$s</string>
+    <string name="home_mix_daily_caption">%1$d déjà connus · %2$d nouveaux</string>
     <string name="home_mix_artist">Mix %1$s</string>
     <string name="home_mix_artist_caption">%1$d titres de %2$s</string>
     <string name="home_mix_on_repeat">En boucle</string>

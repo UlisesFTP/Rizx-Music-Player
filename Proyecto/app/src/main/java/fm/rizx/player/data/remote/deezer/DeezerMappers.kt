@@ -1,6 +1,7 @@
 package fm.rizx.player.data.remote.deezer
 
 import fm.rizx.player.domain.model.Album
+import fm.rizx.player.domain.model.AlbumKind
 import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.Artist
 import fm.rizx.player.domain.model.ArtistCredit
@@ -57,6 +58,8 @@ fun DeezerAlbumShortDto.toAlbumRef(): AlbumRef? {
         artists = listOfNotNull(artist?.toArtistRef()),
         artwork = coverSet(coverXl, coverMedium),
         source = DeezerIds.album(id ?: 0),
+        year = yearOf(releaseDate),
+        kind = AlbumKind.of(recordType),
     )
 }
 

@@ -148,8 +148,8 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
             composable(Routes.HOME) {
                 HomeScreen(
                     onOpenSearch = { nav.navigateTab(Routes.SEARCH) },
-                    // Liked songs live in the Library now — go straight to that tab.
-                    onOpenLikes = { nav.navigate(Routes.library(LibraryTab.Liked.name)) },
+                    // Liked songs live in the Library now — go straight to that tab, as a tab switch.
+                    onOpenLikes = { nav.navigateTabAt(Routes.library(LibraryTab.Liked.name)) },
                     onOpenAlbum = { nav.navigate(Routes.albumDetail(it)) },
                     onOpenArtist = { nav.navigate(Routes.artistDetail(it)) },
                     onOpenEditorialPlaylist = { nav.navigate(Routes.editorialPlaylist(it)) },
@@ -213,6 +213,10 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                 ArtistDetailScreen(
                     onBack = { nav.popBackStack() },
                     onOpenAlbum = { nav.navigate(Routes.albumDetail(it)) },
+                    // A similar artist opens their own page, from where the next one is reachable again.
+                    onOpenArtist = { nav.navigate(Routes.artistDetail(it)) },
+                    onAddToQueue = queueViewModel::addToQueue,
+                    onAddNext = queueViewModel::addNext,
                 )
             }
             composable(
@@ -456,5 +460,23 @@ private fun NavController.navigateTab(route: String) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
+    }
+}
+
+/**
+ * Open a **tab** at a specific place inside it (the Home heart → Library's "Liked").
+ *
+ * It has to pop like a tab switch rather than push like a detail screen. A plain `navigate` leaves a
+ * tab destination sitting on top of Home without the saved state a tab switch records, and from there
+ * every bottom-nav tap is a no-op: the bar looks alive and does nothing. That was a real bug — the
+ * heart on the Home screen stranded the user in the Library.
+ *
+ * `restoreState` is deliberately **not** set: this call carries an argument (which tab), and restoring
+ * a previously-saved Library entry would quietly land on the tab the user was on last instead.
+ */
+private fun NavController.navigateTabAt(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
     }
 }
