@@ -6,7 +6,10 @@ import fm.rizx.player.data.download.DownloadNotifier
 import fm.rizx.player.data.download.MediaStoreExporter
 import fm.rizx.player.data.download.NotDownloadableException
 import fm.rizx.player.data.download.TrackDownloader
+import fm.rizx.player.core.network.DataSaverState
 import fm.rizx.player.data.download.isDownloadable
+import fm.rizx.player.data.lossless.toStream
+import fm.rizx.player.domain.lossless.LosslessResolver
 import fm.rizx.player.data.local.store.DownloadIndexStore
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadStatus
@@ -21,9 +24,11 @@ import fm.rizx.player.domain.provider.MetadataProvider
 import fm.rizx.player.domain.provider.ProviderKind
 import fm.rizx.player.domain.provider.ProviderRegistry
 import fm.rizx.player.domain.repository.DownloadRepository
+import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.domain.usecase.CandidateResult
 import fm.rizx.player.domain.usecase.StreamingResolver
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +71,12 @@ class DownloadRepositoryImpl(
     private val now: () -> Instant = { Instant.now() },
     /** Injectable so tests drive the queue deterministically instead of hopping to a real IO thread. */
     io: CoroutineDispatcher = Dispatchers.IO,
+    /** The optional community-FLAC source. Null in tests that don't exercise it, and whenever it is off. */
+    private val lossless: LosslessResolver? = null,
+    /** Read for the "download FLAC when available" switch alone. Null pairs with a null [lossless]. */
+    private val settings: SettingsRepository? = null,
+    /** Holds a download back while saving data on a metered link. Null in tests that don't exercise it. */
+    private val dataSaver: DataSaverState? = null,
 ) : DownloadRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + io)
@@ -221,12 +232,20 @@ class DownloadRepositoryImpl(
     }
 
     private suspend fun fetch(track: Track, key: String) {
+        // The one thing in the app that pulls a whole song's worth of bytes on purpose — 5 MB for an M4A,
+        // 25 MB for a FLAC — and until now the only one that never asked what the connection costs.
+        //
+        // Metered *and* saving, both: blocking a download on Wi-Fi would be backwards, since downloading
+        // on Wi-Fi is precisely how someone avoids spending mobile data later.
+        if (dataSaver?.blocksBulkTransfer() == true) {
+            throw NotDownloadableException("Waiting for Wi-Fi — data saver is on")
+        }
         setTransient(key, DownloadState(DownloadStatus.DOWNLOADING))
-        val stream = resolveStream(track) ?: throw NotDownloadableException("No playable source found")
-        if (!stream.isDownloadable()) {
+        val resolved = resolveForDownload(track) ?: throw NotDownloadableException("No playable source found")
+        if (!resolved.stream.isDownloadable()) {
             throw NotDownloadableException("No downloadable source for this song")
         }
-        val done = downloader.download(key, stream) { percent ->
+        val done = downloader.download(key, resolved.stream, resolved.sha256) { percent ->
             setTransient(key, DownloadState(DownloadStatus.DOWNLOADING, progressPercent = percent))
         }
         // Embed the metadata *into* the file so the song carries its cover, artist, album and date into any
@@ -251,7 +270,11 @@ class DownloadRepositoryImpl(
         clearTransient(key)
     }
 
-    private suspend fun resolveStream(track: Track): Stream? {
+    /** A stream to save, plus the digest to check it against when the source published one. */
+    private data class ResolvedForDownload(val stream: Stream, val sha256: String? = null)
+
+    private suspend fun resolveForDownload(track: Track): ResolvedForDownload? {
+        losslessDownloadStream(track)?.let { return it }
         val candidates = when (val r = resolver.resolveCandidatesForTrack(track)) {
             is CandidateResult.Success -> r.candidates
             is CandidateResult.Failure -> return null
@@ -259,9 +282,36 @@ class DownloadRepositoryImpl(
         for (candidate in candidates.filterNot { it.failed }) {
             // forDownload: ask for a container the tag writer can actually write into (see
             // StreamingProvider.getDownloadStreamUrl) — an untagged file is worse than a better codec.
-            resolver.resolveStreamForCandidate(candidate, forDownload = true).stream?.let { return it }
+            resolver.resolveStreamForCandidate(candidate, forDownload = true).stream
+                ?.let { return ResolvedForDownload(it) }
         }
         return null
+    }
+
+    /**
+     * A verified FLAC to save instead of the compressed stream, when the user asked for that.
+     *
+     * Two separate switches on purpose: preferring lossless for *listening* costs bandwidth once, while
+     * downloading it costs 25-27 MB of storage per song permanently, and those are different decisions.
+     *
+     * Nothing is converted in either direction — the bytes that arrive are the bytes that are written.
+     * Re-encoding a FLAC to M4A would throw away exactly what was fetched for, and re-encoding an AAC
+     * *to* FLAC would produce a large file that is not lossless in any sense that matters.
+     */
+    private suspend fun losslessDownloadStream(track: Track): ResolvedForDownload? {
+        val resolverForFlac = lossless ?: return null
+        if (settings?.losslessDownload?.first() != true) return null
+        val validated = try {
+            resolverForFlac.resolve(track)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        return ResolvedForDownload(
+            stream = validated.toStream(track.source.identityKey),
+            sha256 = validated.candidate.item.sha256,
+        )
     }
 
     /**

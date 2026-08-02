@@ -25,8 +25,6 @@
     <string name="plugins_uninstall">Desinstalar</string>
     <string name="plugins_plugin_category">Plugin · %1$s</string>
     <string name="plugins_health_down">Fora do ar</string>
-    <string name="plugins_not_compatible">Não compatível</string>
-    <string name="plugins_reason_native_equivalent">O Android já faz isso nativamente (sessão de mídia Media3)</string>
     <string name="plugins_quarantined">Desativado sozinho após falhar várias vezes</string>
     <string name="plugins_update">Atualizar</string>
     <string name="plugins_section_open">Ecossistema aberto</string>
@@ -37,4 +35,6 @@
     <string name="plugins_add_registry_subtitle">Outro catálogo plugins.json para explorar</string>
     <string name="plugins_add_registry_hint">Cole a URL de um plugins.json…</string>
     <string name="plugins_action_add">Adicionar</string>
-    <string name="plugins_remove_registry">Remover repositório</string></resources>
+    <string name="plugins_remove_registry">Remover repositório</string>    <string name="plugins_section_bundled">Neste dispositivo</string>
+    <string name="plugins_section_bundled_caption">Vêm com esta compilação — instalam sem rede.</string>
+</resources>

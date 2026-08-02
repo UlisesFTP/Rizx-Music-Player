@@ -6,7 +6,10 @@ import org.schabi.newpipe.extractor.stream.AudioTrackType
 import fm.rizx.player.data.remote.youtube.YoutubeExtractorClient
 import fm.rizx.player.data.remote.youtube.toBestAudioStreamOrNull
 import fm.rizx.player.data.remote.youtube.youtubeVideoId
+import fm.rizx.player.FakeSettingsRepository
+import fm.rizx.player.dataSaverState
 import fm.rizx.player.domain.model.ArtistCredit
+import fm.rizx.player.domain.model.AudioQualityMode
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.StreamProtocol
@@ -89,11 +92,15 @@ class YoutubeStreamingProviderTest {
         net: NetworkMonitor.Snapshot = NetworkMonitor.Snapshot(isCellular = false, downstreamKbps = 0),
     ): YoutubeStreamingProvider {
         val monitor = mockk<NetworkMonitor> { every { snapshot() } returns net }
-        val settings = mockk<SettingsRepository> {
-            every { dataSaver } returns flowOf(dataSaverOn)
-            every { hiResOutput } returns flowOf(hiResOn)
+        val settings = FakeSettingsRepository().apply {
+            dataSaverFlow.value = dataSaverOn
+            audioQualityModeFlow.value =
+                if (hiResOn) AudioQualityMode.BEST_AVAILABLE else AudioQualityMode.STANDARD
         }
-        return YoutubeStreamingProvider(client, monitor, settings, io = Dispatchers.Unconfined)
+        // A real DataSaverState over the same fake settings: the provider now asks it, not the store,
+        // and folding the two switches is part of what these cases are checking.
+        val saver = dataSaverState(settings, unmetered = net.isUnmetered)
+        return YoutubeStreamingProvider(client, monitor, saver, io = Dispatchers.Unconfined)
     }
 
     /** The two streams YouTube really offers for a song: AAC 128 and the better Opus 160. */

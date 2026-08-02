@@ -57,3 +57,10 @@ keystore.properties
 *.aab
 *.ap_
 *.dex
+
+# ── Bundled plugins ──────────────────────────────────────────────────────────
+# Plugin archives shipped inside the APK. Deliberately NOT published: a plugin's whole content is a
+# pointer to somewhere, and this repository stays a generic plugin host rather than a distributor of
+# anybody's index (see docs/adr/0024-community-lossless-source.md). A clone builds an app with no
+# bundled plugins and no section for them, which is the intended public shape.
+Proyecto/app/src/main/assets/plugins/

@@ -4,6 +4,11 @@ import android.net.Uri
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.ResolvingDataSource
+import fm.rizx.player.core.network.DataSaverState
+import fm.rizx.player.data.lossless.toAudioFormatUi
+import fm.rizx.player.data.lossless.toStream
+import fm.rizx.player.domain.lossless.LosslessResolver
+import fm.rizx.player.domain.model.AudioFormatUi
 import fm.rizx.player.domain.model.PlaybackResolverSettings
 import fm.rizx.player.domain.model.QueueItem
 import fm.rizx.player.domain.model.QueueItemStatus
@@ -13,9 +18,12 @@ import fm.rizx.player.domain.repository.LocalLibraryRepository
 import fm.rizx.player.domain.repository.QueueRepository
 import fm.rizx.player.domain.usecase.CandidateResult
 import fm.rizx.player.domain.usecase.StreamingResolver
+import fm.rizx.player.domain.playback.NowPlayingFormat
 import fm.rizx.player.playback.cache.AudioCache
+import fm.rizx.player.playback.cache.KEY_FORMAT_SEPARATOR
 import fm.rizx.player.playback.cache.audioCacheKey
 import fm.rizx.player.playback.queueItemIdFromPlaceholder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -55,7 +63,20 @@ class QueueStreamResolver @Inject constructor(
     private val library: LocalLibraryRepository,
     /** The streamed-byte cache. Null in unit tests, which exercise the URL-resolution core only. */
     private val audioCache: AudioCache? = null,
+    /**
+     * The optional community-FLAC upgrade. Null in the tests that don't exercise it, which is also the
+     * shape production takes whenever the feature is off — the same code path either way.
+     */
+    private val lossless: LosslessResolver? = null,
+    /** Where the screen reads "what is playing" from. Null in the tests that don't assert on it. */
+    private val nowPlayingFormat: NowPlayingFormat? = null,
+    /** Silences the prefetch while saving data. Null in tests that don't exercise it. */
+    private val dataSaver: DataSaverState? = null,
 ) : ResolvingDataSource.Resolver {
+
+    /** `<identityKey>#<codec>` — see `audioCacheKey`. "raw" is its stand-in for an unknown codec. */
+    private fun codecFromCacheKey(cacheKey: String): String? =
+        cacheKey.substringAfterLast(KEY_FORMAT_SEPARATOR, "").takeIf { it.isNotBlank() && it != "raw" }
 
     private data class CachedStream(val stream: Stream, val resolvedAtMs: Long)
 
@@ -77,6 +98,9 @@ class QueueStreamResolver @Inject constructor(
      */
     private val cacheBypassed = ConcurrentHashMap.newKeySet<String>()
 
+    /** Content keys whose community FLAC failed to play; they stay on the ordinary stream (see [suppressLossless]). */
+    private val losslessSuppressed = ConcurrentHashMap.newKeySet<String>()
+
     /** Background scope for [warm]; off the ExoPlayer loader thread. Cancelled in [release]. */
     private val prefetchScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -94,6 +118,10 @@ class QueueStreamResolver @Inject constructor(
         val cachedKey = if (key in cacheBypassed) null else audioCache?.fullyCachedKeyFor(key)
         if (cachedKey != null) {
             queue.updateItemState(id, QueueItemStatus.SUCCESS)
+            // Nothing was resolved, so the only thing known about the format is what the cache key
+            // records — the codec, which is the part the readout is actually about. Reporting that alone
+            // beats an empty line on every song the user has already heard once.
+            nowPlayingFormat?.publish(id, AudioFormatUi(codec = codecFromCacheKey(cachedKey)), trackKey = key)
             return dataSpec.buildUpon().setUri(cachedUri(cachedKey)).setKey(cachedKey).build()
         }
 
@@ -108,6 +136,7 @@ class QueueStreamResolver @Inject constructor(
             throw IOException("No playable stream for “${item.track.title}”")
         }
         resolvedStreams[id] = stream
+        nowPlayingFormat?.publish(id, stream.toAudioFormatUi(), trackKey = key)
         queue.updateItemState(id, QueueItemStatus.SUCCESS)
         // The key is what makes the byte cache work at all. Media3 keys on the URI by default, and ours
         // are ephemeral — the same song resolves to a different URL tomorrow, so a URI-keyed cache would
@@ -137,9 +166,37 @@ class QueueStreamResolver @Inject constructor(
         // Returning here, before cachePut, is what keeps a local file out of the expiring cache below —
         // otherwise a downloaded track would go back to the network every few hours for no reason.
         localOrCached(item)?.let { return it }
+
+        // The community-lossless step, between "already on this device" and the ordinary chain.
+        //
+        // It has to be *here* rather than inside the provider chain: [StreamingRepositoryImpl] resolves a
+        // track against its **native owner** first, so a track that came from YouTube would never reach a
+        // lossless step placed further down. It also returns null instantly in every mode but
+        // LOSSLESS_PREFERRED, so this line costs nothing for anyone who hasn't asked for it.
+        losslessStream(item)?.let { cachePut(key, it); return it }
+
         val stream = resolveFirstPlayable(item) ?: return null
         cachePut(key, stream)
         return stream
+    }
+
+    /**
+     * A verified FLAC for this track, or null — which is the answer for almost every track, and is not
+     * an error in any of the cases: mode off, no index plugin installed, on mobile data, not in the
+     * index, or in it but pointing at something that failed verification.
+     */
+    private suspend fun losslessStream(item: QueueItem): Stream? {
+        val resolver = lossless ?: return null
+        if (item.track.source.identityKey in losslessSuppressed) return null
+        val validated = try {
+            resolver.resolve(item.track)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // An optional upgrade must never be able to stop a song from playing.
+            null
+        } ?: return null
+        return validated.toStream(item.track.source.identityKey)
     }
 
     /**
@@ -162,6 +219,10 @@ class QueueStreamResolver @Inject constructor(
      * failed prefetch is silently ignored; it just leaves that item to resolve cold on demand.
      */
     fun warm(items: List<QueueItem>) {
+        // Nothing is warmed while saving data. Each prefetch is a 2-4 round-trip NewPipe extraction for a
+        // song that may never be reached, and the payoff is latency the listener only notices on a skip.
+        // The song still resolves cold when it is actually its turn.
+        if (dataSaver?.savingNow() == true) return
         for (item in items) {
             val key = item.track.source.identityKey
             if (localOrCached(item) != null) continue // downloaded or already warm: nothing to prefetch
@@ -194,6 +255,19 @@ class QueueStreamResolver @Inject constructor(
      */
     fun clearUrlCache() {
         streamCache.clear()
+    }
+
+    /**
+     * Stops offering the community FLAC for [key] for the rest of this session.
+     *
+     * Called when one verified and then failed to play. Distinct from [invalidate], which only drops the
+     * *URL*: the lossless verdict itself is still correct (it really is that recording), so re-resolving
+     * would hand back the same dead host and the automatic fallback would become a loop. This is what
+     * makes "FLAC fails → ordinary stream" a one-way step.
+     */
+    fun suppressLossless(key: String) {
+        losslessSuppressed.add(key)
+        streamCache.remove(key)
     }
 
     /** Cancels the background prefetch scope. Call from the service's `onDestroy`. */

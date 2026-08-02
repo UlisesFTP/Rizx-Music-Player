@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pref_audio_quality">Calidad de audio</string>
+    <string name="pref_audio_quality_standard">Estándar</string>
+    <string name="pref_audio_quality_standard_caption">Conservador. Nunca consulta un índice lossless.</string>
+    <string name="pref_audio_quality_best">Máxima calidad disponible</string>
+    <string name="pref_audio_quality_best_caption">El mejor stream comprimido que ofrezca cada fuente.</string>
+    <string name="pref_audio_quality_lossless">Preferir Lossless (experimental)</string>
+    <string name="pref_audio_quality_lossless_caption">Busca antes un FLAC verificado; si no, vuelve solo.</string>
+
+    <string name="pref_lossless_unavailable">Instala un plugin de índice FLAC para usarlo</string>
+    <string name="pref_lossless_wifi_only">Buscar Lossless solo por Wi-Fi</string>
+    <string name="pref_lossless_wifi_only_caption">Los archivos FLAC pueden ocupar decenas de MB por canción.</string>
+    <string name="pref_lossless_download">Descargar FLAC cuando esté disponible</string>
+    <string name="pref_lossless_download_caption">Guarda los bytes originales; sin conversión en ningún sentido.</string>
+    <string name="pref_show_technical_format">Mostrar formato técnico</string>
+    <string name="pref_show_technical_format_caption">Códec, profundidad y frecuencia bajo el reproductor.</string>
+
+    <string name="pref_lossless_source">Fuente</string>
+    <string name="pref_lossless_warning">Fuente experimental de archivos aportados por terceros. Rizx puede validar el contenedor FLAC y su duración, pero no la procedencia ni la licencia del máster. Úsala únicamente cuando tengas derecho a acceder al contenido.</string>
+
+    <string name="lossless_provenance_community">Índice comunitario · procedencia no verificada</string>
+    <string name="lossless_validation_container">Contenedor FLAC verificado</string>
+</resources>

@@ -26,6 +26,12 @@ interface PluginRepository {
     /** Sideload: install a plugin zip from a pasted URL; the id comes from its own manifest. */
     suspend fun installFromUrl(url: String): InstalledPlugin
 
+    /** Plugin archives shipped inside the APK. Empty when the build carries none. */
+    fun bundled(): List<BundledPlugin>
+
+    /** Installs one of [bundled] straight from the APK — no network, no URL to paste. */
+    suspend fun installBundled(assetName: String): InstalledPlugin
+
     /** Enables (loads) or disables (unregisters) an installed plugin, persisting the choice. */
     suspend fun setEnabled(id: String, enabled: Boolean)
 

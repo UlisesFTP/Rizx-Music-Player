@@ -2,6 +2,7 @@ package fm.rizx.player.data.repository
 
 import fm.rizx.player.data.provider.FakeStreamingProvider
 import fm.rizx.player.data.provider.FakeStreamingProviderB
+import fm.rizx.player.domain.lossless.LosslessIndexProvider
 import fm.rizx.player.domain.model.Stream
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.Track
@@ -80,7 +81,14 @@ class StreamingRepositoryImpl(
      * active-first list so playback never dead-ends purely because of enable/disable flags.
      */
     private suspend fun streamingChain(): List<StreamingProvider> {
-        val all = registry.list(ProviderKind.STREAMING).filterIsInstance<StreamingProvider>()
+        val all = registry.list(ProviderKind.STREAMING)
+            .filterIsInstance<StreamingProvider>()
+            // A plugin whose only job is publishing a lossless index registers as a streaming provider —
+            // it has to, that is the contract it implements — but it has no ordinary search to offer.
+            // Leaving it in the chain would mean consulting a community index during *every* resolve,
+            // including in Standard mode, which is exactly the extra request this feature promises never
+            // to make. It is reached only through the resolver in `QueueStreamResolver`.
+            .filterNot { it is LosslessIndexProvider && it.isLosslessOnly }
         if (all.isEmpty()) return emptyList()
         val activeId = registry.getActive(ProviderKind.STREAMING)
         val enabledState = enabled.snapshot(all.map { it.id })

@@ -47,9 +47,35 @@ private fun targetAspect(purpose: ArtworkPurpose): Float = when (purpose) {
  * score = (upscaleFactor > 1.5 ? -1000 : 0) + (-aspectDiff * 50) + (-sizeDiff * 0.1)
  * ```
  */
-/** Best cover URL for a card/hero, or null when unavailable (drives real image loading in the UI). */
-fun ArtworkSet?.coverUrl(): String? =
-    pick(ArtworkPurpose.COVER, ArtworkTargetPx.COVER)?.url?.takeIf { it.isNotBlank() }
+/**
+ * Best cover URL for a card, or null when unavailable (drives real image loading in the UI).
+ *
+ * **Defaults to the largest rung a provider publishes**, by the owner's decision: covers are the app's
+ * face, and a soft one is noticed on every screen. The cost is real and measured — roughly 2.9× the
+ * bytes of the mid rung — which is exactly what Data saver exists to reclaim, via `tileUrl()`.
+ *
+ * [targetPx] is what chooses between a provider's variants, so it stays the app's lever: a caller that
+ * genuinely wants a small file asks for one.
+ */
+fun ArtworkSet?.coverUrl(targetPx: Int = ArtworkTargetPx.BACKGROUND): String? =
+    pick(ArtworkPurpose.COVER, targetPx)?.url?.takeIf { it.isNotBlank() }
+
+/**
+ * The full-size cover, for the one place that fills the screen with it: Now Playing.
+ *
+ * Falls back through the smaller rungs on its own — [pick] scores by distance, so a provider that only
+ * publishes a 500 still answers rather than returning nothing.
+ */
+fun ArtworkSet?.heroUrl(): String? = coverUrl(ArtworkTargetPx.BACKGROUND)
+
+/**
+ * The cheap rung: a ~250px thumbnail, roughly a tenth the bytes of the full cover.
+ *
+ * What data saving uses for lists and grids. Falls back to [coverUrl] when a provider publishes no
+ * thumbnail at all, because a slightly-too-big cover beats an empty tile.
+ */
+fun ArtworkSet?.thumbnailUrl(): String? =
+    pick(ArtworkPurpose.THUMBNAIL, ArtworkTargetPx.AVATAR)?.url?.takeIf { it.isNotBlank() } ?: coverUrl()
 
 fun ArtworkSet?.pick(purpose: ArtworkPurpose, targetPx: Int): Artwork? {
     val all = this?.items ?: return null

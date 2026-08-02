@@ -34,6 +34,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fm.rizx.player.R
+import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.CanvasBlockReason
+import fm.rizx.player.domain.model.CanvasDiagnostics
+import fm.rizx.player.domain.model.CanvasNetworkPolicy
+import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
@@ -68,7 +73,13 @@ fun PreferencesScreen(
     val gapless by vm.gapless.collectAsStateWithLifecycle()
     val normalize by vm.normalize.collectAsStateWithLifecycle()
     val autoEq by vm.autoEq.collectAsStateWithLifecycle()
-    val hiRes by vm.hiRes.collectAsStateWithLifecycle()
+    val audioQuality by vm.audioQuality.collectAsStateWithLifecycle()
+    val losslessAvailable by vm.losslessAvailable.collectAsStateWithLifecycle()
+    // In force right now, from either switch — separate from `dataSaver`, which is only Rizx's own.
+    val savingActive by vm.savingActive.collectAsStateWithLifecycle()
+    val losslessWifiOnly by vm.losslessWifiOnly.collectAsStateWithLifecycle()
+    val losslessDownload by vm.losslessDownload.collectAsStateWithLifecycle()
+    val showTechnicalFormat by vm.showTechnicalFormat.collectAsStateWithLifecycle()
     val audioOutputLabel by vm.audioOutputLabel.collectAsStateWithLifecycle()
     val dataSaver by vm.dataSaver.collectAsStateWithLifecycle()
     val regionalRecs by vm.regionalRecs.collectAsStateWithLifecycle()
@@ -79,10 +90,19 @@ fun PreferencesScreen(
     val currentLang = currentAppLanguage(context)
     val radioAlgorithm by vm.radioAlgorithm.collectAsStateWithLifecycle()
     val lyricsQuality by vm.lyricsQuality.collectAsStateWithLifecycle()
+    val canvasEnabled by vm.canvasEnabled.collectAsStateWithLifecycle()
+    val canvasNetwork by vm.canvasNetwork.collectAsStateWithLifecycle()
+    val canvasOnBatterySaver by vm.canvasOnBatterySaver.collectAsStateWithLifecycle()
+    val canvasQuality by vm.canvasQuality.collectAsStateWithLifecycle()
+    val canvasApple by vm.canvasApple.collectAsStateWithLifecycle()
+    val canvasYoutube by vm.canvasYoutube.collectAsStateWithLifecycle()
+    val canvasDiagnostics by vm.canvasDiagnostics.collectAsStateWithLifecycle()
     var languageDialogOpen by remember { mutableStateOf(false) }
     var themeDialogOpen by remember { mutableStateOf(false) }
     var radioDialogOpen by remember { mutableStateOf(false) }
     var lyricsQualityDialogOpen by remember { mutableStateOf(false) }
+    var canvasDialogOpen by remember { mutableStateOf(false) }
+    var audioQualityDialogOpen by remember { mutableStateOf(false) }
     val feedProvider by vm.feedProvider.collectAsStateWithLifecycle()
     val feedSources by vm.feedSources.collectAsStateWithLifecycle()
     var feedDialogOpen by remember { mutableStateOf(false) }
@@ -103,7 +123,6 @@ fun PreferencesScreen(
     }
 
     // stringResource can't be called inside the non-composable buildString lambda, so resolve first.
-    val hiresBest = stringResource(R.string.pref_hires_best)
     val hiresApplies = stringResource(R.string.pref_hires_applies)
 
     ResponsiveContent(
@@ -130,15 +149,30 @@ fun PreferencesScreen(
         ToggleRow(stringResource(R.string.pref_crossfade), crossfade) { vm.setCrossfade(!crossfade) }
         ToggleRow(stringResource(R.string.pref_gapless), gapless) { vm.setGapless(!gapless) }
         ToggleRow(stringResource(R.string.pref_normalize), normalize) { vm.setNormalize(!normalize) }
-        ToggleRowDetail(
-            title = stringResource(R.string.pref_hires),
-            caption = buildString {
-                append(hiresBest); append("\n")
-                if (audioOutputLabel.isNotEmpty()) { append(audioOutputLabel); append(" · ") }
-                append(hiresApplies)
+        // One row rather than five: the mode, the network rule, the download rule and the readout are all
+        // facets of the same decision, and the last three are meaningless while the mode is Standard.
+        SettingRow(
+            title = stringResource(R.string.pref_audio_quality),
+            // What is *in force*, which while saving is not what is stored. The dialog still ticks the
+            // stored choice — both truths are shown, and neither is overwritten.
+            value = stringResource(
+                if (savingActive) R.string.pref_audio_quality_standard else audioQualityLabel(audioQuality),
+            ),
+            caption = if (savingActive) {
+                stringResource(R.string.pref_forced_by_data_saver)
+            } else {
+                buildString {
+                    if (audioOutputLabel.isNotEmpty()) { append(audioOutputLabel); append(" · ") }
+                    append(hiresApplies)
+                }
             },
-            checked = hiRes,
-        ) { vm.setHiRes(!hiRes) }
+            onClick = {
+                // A plugin can have been installed since this screen was last drawn, which is exactly
+                // what turns the Lossless option from unavailable into available.
+                vm.refreshLosslessAvailability()
+                audioQualityDialogOpen = true
+            },
+        )
 
         SectionLabel(stringResource(R.string.settings_appearance))
         // A three-way picker (System / Light / Dark), like the language row — System (default) follows the
@@ -155,6 +189,23 @@ fun PreferencesScreen(
             value = stringResource(lyricsQualityLabel(lyricsQuality)),
             caption = stringResource(lyricsQualityCaption(lyricsQuality)),
             onClick = { lyricsQualityDialogOpen = true },
+        )
+        // One row rather than seven: the sources, the quality, the network rule, the battery rule and the
+        // diagnostics all belong to the same decision, and every one of them is meaningless while it is
+        // off.
+        SettingRow(
+            title = stringResource(R.string.pref_canvas),
+            value = stringResource(
+                if (canvasEnabled && !savingActive) R.string.pref_canvas_on else R.string.pref_canvas_off,
+            ),
+            caption = when {
+                // Switched on but not running: say which of the two it is, rather than showing "On"
+                // over a cover that never animates.
+                savingActive -> stringResource(R.string.pref_paused_by_data_saver)
+                canvasEnabled -> stringResource(canvasNetworkLabel(canvasNetwork))
+                else -> stringResource(R.string.pref_canvas_enable_caption)
+            },
+            onClick = { canvasDialogOpen = true },
         )
 
         SectionLabel(stringResource(R.string.settings_language_section))
@@ -197,7 +248,18 @@ fun PreferencesScreen(
         ) { vm.setRegionalRecs(regionalRecs != true) }
 
         SectionLabel(stringResource(R.string.settings_data_storage))
-        ToggleRow(stringResource(R.string.pref_data_saver), dataSaver) { vm.setDataSaver(!dataSaver) }
+        // A caption now, because the switch finally does enough to be worth listing. When Android's own
+        // Data saver is what turned this on, say so — otherwise the row reads as off while everything
+        // behaves as though it were on.
+        ToggleRowDetail(
+            title = stringResource(R.string.pref_data_saver),
+            caption = if (savingActive && !dataSaver) {
+                stringResource(R.string.pref_data_saver_system)
+            } else {
+                stringResource(R.string.pref_data_saver_caption)
+            },
+            checked = dataSaver,
+        ) { vm.setDataSaver(!dataSaver) }
         // Tapping cycles the limit rather than opening a dialog: four values, and this row already sits
         // next to "Clear cache", which is where someone worried about space is looking. The explanation
         // is a caption, not the value — as the value it swallowed the whole row.
@@ -242,6 +304,39 @@ fun PreferencesScreen(
             current = lyricsQuality,
             onSelect = { q -> vm.setLyricsQuality(q); lyricsQualityDialogOpen = false },
             onDismiss = { lyricsQualityDialogOpen = false },
+        )
+    }
+    if (audioQualityDialogOpen) {
+        AudioQualityDialog(
+            mode = audioQuality,
+            losslessAvailable = losslessAvailable,
+            wifiOnly = losslessWifiOnly,
+            downloadFlac = losslessDownload,
+            showTechnical = showTechnicalFormat,
+            onSetMode = vm::setAudioQuality,
+            onSetWifiOnly = vm::setLosslessWifiOnly,
+            onSetDownload = vm::setLosslessDownload,
+            onSetShowTechnical = vm::setShowTechnicalFormat,
+            onDismiss = { audioQualityDialogOpen = false },
+        )
+    }
+
+    if (canvasDialogOpen) {
+        CanvasDialog(
+            enabled = canvasEnabled,
+            network = canvasNetwork,
+            quality = canvasQuality,
+            onBatterySaver = canvasOnBatterySaver,
+            appleEnabled = canvasApple,
+            youtubeEnabled = canvasYoutube,
+            diagnostics = canvasDiagnostics,
+            onSetEnabled = vm::setCanvasEnabled,
+            onSetNetwork = vm::setCanvasNetwork,
+            onSetQuality = vm::setCanvasQuality,
+            onSetBatterySaver = vm::setCanvasOnBatterySaver,
+            onSetApple = vm::setCanvasApple,
+            onSetYoutube = vm::setCanvasYoutube,
+            onDismiss = { canvasDialogOpen = false },
         )
     }
     if (feedDialogOpen) {
@@ -323,6 +418,338 @@ private fun LyricsQualityDialog(
     onSelect = onSelect,
     onDismiss = onDismiss,
 )
+
+/** The @StringRes name of a [CanvasNetworkPolicy]. */
+private fun canvasNetworkLabel(policy: CanvasNetworkPolicy): Int = when (policy) {
+    CanvasNetworkPolicy.UNMETERED_ONLY -> R.string.canvas_network_unmetered
+    CanvasNetworkPolicy.ANY -> R.string.canvas_network_any
+}
+
+private fun canvasNetworkCaption(policy: CanvasNetworkPolicy): Int = when (policy) {
+    CanvasNetworkPolicy.UNMETERED_ONLY -> R.string.canvas_network_unmetered_caption
+    CanvasNetworkPolicy.ANY -> R.string.canvas_network_any_caption
+}
+
+private fun canvasQualityLabel(quality: CanvasQuality): Int = when (quality) {
+    CanvasQuality.DATA_SAVER -> R.string.canvas_quality_saver
+    CanvasQuality.AUTO -> R.string.canvas_quality_auto
+    CanvasQuality.HIGH -> R.string.canvas_quality_high
+}
+
+private fun canvasQualityCaption(quality: CanvasQuality): Int = when (quality) {
+    CanvasQuality.DATA_SAVER -> R.string.canvas_quality_saver_caption
+    CanvasQuality.AUTO -> R.string.canvas_quality_auto_caption
+    CanvasQuality.HIGH -> R.string.canvas_quality_high_caption
+}
+
+/** Why there is no canvas, in a sentence. Every one of these is a normal outcome, not an error. */
+private fun canvasReasonLabel(reason: CanvasBlockReason): Int = when (reason) {
+    CanvasBlockReason.DISABLED -> R.string.canvas_reason_disabled
+    CanvasBlockReason.DATA_SAVER -> R.string.canvas_reason_data_saver
+    CanvasBlockReason.METERED -> R.string.canvas_reason_metered
+    CanvasBlockReason.BATTERY_SAVER -> R.string.canvas_reason_battery
+    CanvasBlockReason.WEAK_SIGNAL -> R.string.canvas_reason_signal
+    CanvasBlockReason.NO_CANDIDATE -> R.string.canvas_reason_no_candidate
+    CanvasBlockReason.REJECTED_BY_MATCHER -> R.string.canvas_reason_rejected
+    CanvasBlockReason.PROVIDER_ERROR -> R.string.canvas_reason_error
+}
+
+/**
+ * Everything about animated covers, in one sheet.
+ *
+ * A dialog rather than seven rows in Settings: the sources, the quality, the network rule, the battery
+ * rule and the diagnostics are all meaningless while the feature is off, and a screen full of dead rows
+ * is worse than one live one. Everything below the master toggle is hidden until it is on, for the same
+ * reason.
+ */
+@Composable
+private fun AudioQualityDialog(
+    mode: AudioQualityMode,
+    losslessAvailable: Boolean,
+    wifiOnly: Boolean,
+    downloadFlac: Boolean,
+    showTechnical: Boolean,
+    onSetMode: (AudioQualityMode) -> Unit,
+    onSetWifiOnly: (Boolean) -> Unit,
+    onSetDownload: (Boolean) -> Unit,
+    onSetShowTechnical: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = RizxTheme.colors
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(c.elev)
+                .border(1.5.dp, c.hardLine)
+                .padding(bottom = 12.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Text(
+                stringResource(R.string.pref_audio_quality),
+                style = sg(20, FontWeight.Bold, -0.01f),
+                color = c.text,
+                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+            )
+
+            AudioQualityMode.entries.forEach { option ->
+                // Lossless is shown but not selectable with no index plugin installed. Greyed with the
+                // reason rather than hidden, because unlike the desktop-only plugins this is one step
+                // away from working — and an option that silently isn't there can't be looked for.
+                val selectable = option != AudioQualityMode.LOSSLESS_PREFERRED || losslessAvailable
+                DialogOptionRow(
+                    label = stringResource(audioQualityLabel(option)),
+                    caption = stringResource(
+                        if (selectable) audioQualityCaption(option) else R.string.pref_lossless_unavailable,
+                    ),
+                    selected = option == mode,
+                    enabled = selectable,
+                    onClick = { if (selectable) onSetMode(option) },
+                )
+            }
+
+            if (mode == AudioQualityMode.LOSSLESS_PREFERRED) {
+                DialogSectionLabel(stringResource(R.string.pref_lossless_source))
+                // Verbatim, and it is the honest boundary of the whole feature: the container and the
+                // duration are measured, the origin and the licence cannot be.
+                Text(
+                    stringResource(R.string.pref_lossless_warning),
+                    style = mr(12, FontWeight.Normal),
+                    color = c.muted,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+                DialogToggleRow(
+                    title = stringResource(R.string.pref_lossless_wifi_only),
+                    caption = stringResource(R.string.pref_lossless_wifi_only_caption),
+                    checked = wifiOnly,
+                    onToggle = { onSetWifiOnly(!wifiOnly) },
+                )
+                DialogToggleRow(
+                    title = stringResource(R.string.pref_lossless_download),
+                    caption = stringResource(R.string.pref_lossless_download_caption),
+                    checked = downloadFlac,
+                    onToggle = { onSetDownload(!downloadFlac) },
+                )
+            }
+
+            DialogToggleRow(
+                title = stringResource(R.string.pref_show_technical_format),
+                caption = stringResource(R.string.pref_show_technical_format_caption),
+                checked = showTechnical,
+                onToggle = { onSetShowTechnical(!showTechnical) },
+            )
+        }
+    }
+}
+
+private fun audioQualityLabel(mode: AudioQualityMode): Int = when (mode) {
+    AudioQualityMode.STANDARD -> R.string.pref_audio_quality_standard
+    AudioQualityMode.BEST_AVAILABLE -> R.string.pref_audio_quality_best
+    AudioQualityMode.LOSSLESS_PREFERRED -> R.string.pref_audio_quality_lossless
+}
+
+private fun audioQualityCaption(mode: AudioQualityMode): Int = when (mode) {
+    AudioQualityMode.STANDARD -> R.string.pref_audio_quality_standard_caption
+    AudioQualityMode.BEST_AVAILABLE -> R.string.pref_audio_quality_best_caption
+    AudioQualityMode.LOSSLESS_PREFERRED -> R.string.pref_audio_quality_lossless_caption
+}
+
+@Composable
+private fun CanvasDialog(
+    enabled: Boolean,
+    network: CanvasNetworkPolicy,
+    quality: CanvasQuality,
+    onBatterySaver: Boolean,
+    appleEnabled: Boolean,
+    youtubeEnabled: Boolean,
+    diagnostics: CanvasDiagnostics,
+    onSetEnabled: (Boolean) -> Unit,
+    onSetNetwork: (CanvasNetworkPolicy) -> Unit,
+    onSetQuality: (CanvasQuality) -> Unit,
+    onSetBatterySaver: (Boolean) -> Unit,
+    onSetApple: (Boolean) -> Unit,
+    onSetYoutube: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = RizxTheme.colors
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(c.elev)
+                .border(1.5.dp, c.hardLine)
+                .padding(bottom = 12.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Text(
+                stringResource(R.string.pref_canvas),
+                style = sg(20, FontWeight.Bold, -0.01f),
+                color = c.text,
+                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+            )
+            DialogToggleRow(
+                title = stringResource(R.string.pref_canvas_enable),
+                caption = stringResource(R.string.pref_canvas_enable_caption),
+                checked = enabled,
+                onToggle = { onSetEnabled(!enabled) },
+            )
+            if (enabled) {
+                DialogSectionLabel(stringResource(R.string.pref_canvas_sources))
+                // Two switches, because the two sources fail differently. Apple either has this album's
+                // loop or it hasn't; YouTube is a search, and a search is the thing that can be wrong.
+                DialogToggleRow(
+                    title = stringResource(R.string.pref_canvas_apple),
+                    caption = stringResource(R.string.pref_canvas_apple_caption),
+                    checked = appleEnabled,
+                    onToggle = { onSetApple(!appleEnabled) },
+                )
+                DialogToggleRow(
+                    title = stringResource(R.string.pref_canvas_youtube),
+                    caption = stringResource(R.string.pref_canvas_youtube_caption),
+                    checked = youtubeEnabled,
+                    onToggle = { onSetYoutube(!youtubeEnabled) },
+                )
+
+                DialogSectionLabel(stringResource(R.string.pref_canvas_quality))
+                CanvasQuality.entries.forEach { option ->
+                    DialogOptionRow(
+                        label = stringResource(canvasQualityLabel(option)),
+                        caption = stringResource(canvasQualityCaption(option)),
+                        selected = option == quality,
+                        onClick = { onSetQuality(option) },
+                    )
+                }
+
+                DialogSectionLabel(stringResource(R.string.pref_canvas_network))
+                CanvasNetworkPolicy.entries.forEach { option ->
+                    DialogOptionRow(
+                        label = stringResource(canvasNetworkLabel(option)),
+                        caption = stringResource(canvasNetworkCaption(option)),
+                        selected = option == network,
+                        onClick = { onSetNetwork(option) },
+                    )
+                }
+                DialogToggleRow(
+                    title = stringResource(R.string.pref_canvas_battery),
+                    caption = stringResource(R.string.pref_canvas_battery_caption),
+                    checked = onBatterySaver,
+                    onToggle = { onSetBatterySaver(!onBatterySaver) },
+                )
+            }
+
+            DialogSectionLabel(stringResource(R.string.canvas_diagnostics))
+            Text(
+                canvasDiagnosticsText(diagnostics),
+                style = code(12),
+                color = c.muted,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The last lookup, as one line of monospace.
+ *
+ * Deliberately **never** the URL: a resolved googlevideo link carries a signed token, and a diagnostics
+ * panel is exactly the kind of thing people screenshot into a bug report.
+ *
+ * The size and frame rate come from the *player*, not the lookup, and are absent until a frame has been
+ * decoded — which is the only moment either is actually known.
+ */
+@Composable
+private fun canvasDiagnosticsText(d: CanvasDiagnostics): String {
+    val blocked = d.blockedBy?.let { stringResource(canvasReasonLabel(it)) }
+    val cacheWord = stringResource(if (d.cacheHit) R.string.canvas_diag_cached else R.string.canvas_diag_fresh)
+    val none = stringResource(R.string.canvas_diag_none)
+    val parts = buildList {
+        d.providerId?.let { add(it) }
+        d.score?.let { add("$it/100") }
+        d.aspect?.let { add(it.name.lowercase()) }
+        if (d.providerId != null) add(cacheWord)
+        if (d.resolveMs > 0L) add("${d.resolveMs} ms")
+        if (d.width != null && d.height != null) add("${d.width}×${d.height}")
+        d.frameRate?.let { add("${it.toInt()} fps") }
+        d.firstFrameMs?.let { add("1st frame ${it} ms") }
+        blocked?.let { add(it) }
+        d.error?.let { add(it) }
+    }
+    return if (parts.isEmpty()) none else parts.joinToString(" · ")
+}
+
+/** A small heading inside a dialog — the same role [SectionLabel] plays in the list. */
+@Composable
+private fun DialogSectionLabel(text: String) {
+    Text(
+        text,
+        style = mr(12, FontWeight.SemiBold),
+        color = RizxTheme.colors.muted,
+        modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 2.dp),
+    )
+}
+
+/**
+ * A pick-one row inside a dialog, ticked when it is the current choice.
+ *
+ * [enabled] false dims it and drops the press feedback rather than removing the row: an option that is
+ * one installed plugin away from working should be visible, with its caption saying what is missing.
+ */
+@Composable
+private fun DialogOptionRow(
+    label: String,
+    caption: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    val c = RizxTheme.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .then(
+                if (enabled) Modifier.clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onClick)
+                else Modifier,
+            )
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                label,
+                style = mr(15, FontWeight.SemiBold),
+                color = if (enabled) c.text else c.muted,
+            )
+            Text(caption, style = mr(12, FontWeight.Normal), color = c.muted, modifier = Modifier.padding(top = 2.dp))
+        }
+        if (selected) {
+            Icon(RizxIcons.Check, null, tint = c.redAccent, modifier = Modifier.padding(start = 12.dp).size(20.dp))
+        }
+    }
+}
+
+/** A toggle row sized for a dialog rather than the Settings list. */
+@Composable
+private fun DialogToggleRow(
+    title: String,
+    caption: String,
+    checked: Boolean,
+    onToggle: () -> Unit,
+) {
+    val c = RizxTheme.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onToggle)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = mr(15, FontWeight.SemiBold), color = c.text)
+            Text(caption, style = mr(12, FontWeight.Normal), color = c.muted, modifier = Modifier.padding(top = 2.dp))
+        }
+        RizxToggle(checked = checked, onToggle = onToggle, modifier = Modifier.padding(start = 12.dp))
+    }
+}
 
 /**
  * The brutalist picker used by settings whose options need explaining — same shell as [ThemeDialog], but

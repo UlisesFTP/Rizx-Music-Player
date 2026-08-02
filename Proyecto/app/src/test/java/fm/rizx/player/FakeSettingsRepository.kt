@@ -1,6 +1,9 @@
 package fm.rizx.player
 
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
+import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.CanvasNetworkPolicy
+import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
@@ -71,13 +74,45 @@ class FakeSettingsRepository : SettingsRepository {
     override val normalizeVolume: Flow<Boolean> = normalizeFlow
     override suspend fun setNormalizeVolume(enabled: Boolean) { normalizeFlow.value = enabled }
 
-    val hiResFlow = MutableStateFlow(false)
-    override val hiResOutput: Flow<Boolean> = hiResFlow
-    override suspend fun setHiResOutput(enabled: Boolean) { hiResFlow.value = enabled }
+    val audioQualityModeFlow = MutableStateFlow(AudioQualityMode.STANDARD)
+    override val audioQualityMode: Flow<AudioQualityMode> = audioQualityModeFlow
+    override suspend fun setAudioQualityMode(mode: AudioQualityMode) { audioQualityModeFlow.value = mode }
+
+    val losslessWifiOnlyFlow = MutableStateFlow(true)
+    override val losslessWifiOnly: Flow<Boolean> = losslessWifiOnlyFlow
+    override suspend fun setLosslessWifiOnly(enabled: Boolean) { losslessWifiOnlyFlow.value = enabled }
+
+    val losslessDownloadFlow = MutableStateFlow(false)
+    override val losslessDownload: Flow<Boolean> = losslessDownloadFlow
+    override suspend fun setLosslessDownload(enabled: Boolean) { losslessDownloadFlow.value = enabled }
+
+    val showTechnicalFormatFlow = MutableStateFlow(true)
+    override val showTechnicalFormat: Flow<Boolean> = showTechnicalFormatFlow
+    override suspend fun setShowTechnicalFormat(enabled: Boolean) { showTechnicalFormatFlow.value = enabled }
 
     val canvasFlow = MutableStateFlow(false)
     override val canvasEnabled: Flow<Boolean> = canvasFlow
     override suspend fun setCanvasEnabled(enabled: Boolean) { canvasFlow.value = enabled }
+
+    val canvasNetworkFlow = MutableStateFlow(CanvasNetworkPolicy.UNMETERED_ONLY)
+    override val canvasNetworkPolicy: Flow<CanvasNetworkPolicy> = canvasNetworkFlow
+    override suspend fun setCanvasNetworkPolicy(policy: CanvasNetworkPolicy) { canvasNetworkFlow.value = policy }
+
+    val canvasBatterySaverFlow = MutableStateFlow(false)
+    override val canvasOnBatterySaver: Flow<Boolean> = canvasBatterySaverFlow
+    override suspend fun setCanvasOnBatterySaver(allowed: Boolean) { canvasBatterySaverFlow.value = allowed }
+
+    val canvasQualityFlow = MutableStateFlow(CanvasQuality.AUTO)
+    override val canvasQuality: Flow<CanvasQuality> = canvasQualityFlow
+    override suspend fun setCanvasQuality(quality: CanvasQuality) { canvasQualityFlow.value = quality }
+
+    val canvasAppleFlow = MutableStateFlow(true)
+    override val canvasAppleEnabled: Flow<Boolean> = canvasAppleFlow
+    override suspend fun setCanvasAppleEnabled(enabled: Boolean) { canvasAppleFlow.value = enabled }
+
+    val canvasYoutubeFlow = MutableStateFlow(true)
+    override val canvasYoutubeEnabled: Flow<Boolean> = canvasYoutubeFlow
+    override suspend fun setCanvasYoutubeEnabled(enabled: Boolean) { canvasYoutubeFlow.value = enabled }
 
     val syncedLyricsFlow = MutableStateFlow(true)
     override val syncedLyricsMode: Flow<Boolean> = syncedLyricsFlow

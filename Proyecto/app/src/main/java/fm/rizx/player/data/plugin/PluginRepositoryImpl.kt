@@ -3,6 +3,7 @@ package fm.rizx.player.data.plugin
 import android.util.Log
 import fm.rizx.player.data.plugin.install.PluginInstaller
 import fm.rizx.player.data.plugin.install.PluginRegistryClient
+import fm.rizx.player.domain.plugin.BundledPlugin
 import fm.rizx.player.domain.plugin.InstalledPlugin
 import fm.rizx.player.domain.plugin.PluginRepository
 import fm.rizx.player.domain.plugin.RegistryPlugin
@@ -34,6 +35,8 @@ class PluginRepositoryImpl(
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
     private val nowIso: () -> String = { Instant.now().toString() },
     private val kv: PluginKvStore? = null,
+    /** Archives shipped in the APK. Null in tests and in a build that carries none. */
+    private val bundledPlugins: fm.rizx.player.data.plugin.install.BundledPlugins? = null,
 ) : PluginRepository {
 
     init {
@@ -68,6 +71,20 @@ class PluginRepositoryImpl(
         // and the runtime replaces the loaded module graph wholesale.
         runtime.unregisterPlugin(entry.id)
         return install(entry)
+    }
+
+    override fun bundled(): List<BundledPlugin> = bundledPlugins?.list().orEmpty()
+
+    /**
+     * Reuses the installer's existing zip path, which was written and then never called from anywhere —
+     * the only sideload the UI offered was by URL, which needs somewhere public to host the archive.
+     */
+    override suspend fun installBundled(assetName: String): InstalledPlugin {
+        val plugins = requireNotNull(bundledPlugins) { "no bundled plugins in this build" }
+        val extracted = plugins.open(assetName).use { installer.installFromZip(it, origin = "bundled:$assetName") }
+        val pluginId = extracted.dir.name
+        runtime.unregisterPlugin(pluginId)
+        return loadAndPersist(pluginId, extracted)
     }
 
     override suspend fun installFromUrl(url: String): InstalledPlugin {

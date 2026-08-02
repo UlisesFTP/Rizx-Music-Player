@@ -2,7 +2,10 @@ package fm.rizx.player.data.remote.youtube
 
 import fm.rizx.player.domain.model.ArtistCredit
 import fm.rizx.player.domain.model.Artwork
+import fm.rizx.player.domain.model.ArtworkPurpose
 import fm.rizx.player.domain.model.ArtworkSet
+import fm.rizx.player.domain.model.CanvasAspect
+import fm.rizx.player.domain.model.CanvasCandidate
 import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Stream
@@ -63,6 +66,39 @@ private val VIDEO_ID_ONLY = Regex("""^[A-Za-z0-9_-]{11}$""")
 internal fun List<Image>.bestThumbnailUrl(): String? =
     filter { it.height > 0 }.maxByOrNull { it.height }?.url ?: lastOrNull()?.url
 
+/**
+ * The extractor's whole thumbnail ladder as an [ArtworkSet], sizes included.
+ *
+ * It used to collapse to a single `Artwork(url = best)` with **no width or height**, which cost twice
+ * over: `pick()` scores an unsized variant as an infinite upscale and buries it under a -1000 penalty,
+ * and with one rung there was nothing for Data saver to step down to. Carrying the real sizes means the
+ * default ask (the largest) genuinely gets `maxresdefault` when the video has one, and the thrifty ask
+ * gets a small one.
+ *
+ * Only URLs the extractor actually reported. Rewriting `hqdefault` into `maxresdefault` by hand would
+ * be guessing at a file that exists for most music videos and 404s for the rest — a blank cover is a
+ * worse outcome than a soft one.
+ */
+internal fun List<Image>.toArtworkSet(): ArtworkSet? {
+    val sized = filter { it.url.isNotBlank() }
+    if (sized.isEmpty()) return null
+    val tallest = sized.filter { it.height > 0 }.maxOfOrNull { it.height } ?: 0
+    return ArtworkSet(
+        sized.map { image ->
+            val px = image.height.takeIf { it > 0 }
+            Artwork(
+                url = image.url,
+                width = image.width.takeIf { it > 0 } ?: px,
+                height = px,
+                // The biggest is the cover; the rest are the cheap rungs. A ladder whose every rung
+                // claimed to be a COVER would let a 120px placeholder win a small target and show up
+                // blurry on a card that had a better option available.
+                purpose = if (px != null && px == tallest) ArtworkPurpose.COVER else ArtworkPurpose.THUMBNAIL,
+            )
+        },
+    )
+}
+
 /** Extracts the 11-char YouTube video id from a watch/short/embed URL, or null. */
 fun youtubeVideoId(url: String): String? = VIDEO_ID.find(url)?.groupValues?.get(1)
 
@@ -121,7 +157,7 @@ fun StreamInfoItem.toTrackOrNull(): Track? {
         durationMs = durationSec * 1000L,
         // A video still, not cover art — callers that can reach a metadata provider should upgrade it
         // (see TrackArtworkEnricher's `upgradeFrom`); this is the offline-safe fallback.
-        artwork = thumbnails.bestThumbnailUrl()?.let { ArtworkSet(listOf(Artwork(url = it))) },
+        artwork = thumbnails.toArtworkSet(),
         source = ProviderRef(YoutubeIds.STREAMING, videoId, itemUrl),
     )
 }
@@ -138,7 +174,7 @@ fun PlaylistInfoItem.toPlaylistRefOrNull(): PlaylistRef? {
     return PlaylistRef(
         id = listId,
         name = n,
-        artwork = thumbnails.bestThumbnailUrl()?.let { ArtworkSet(listOf(Artwork(url = it))) },
+        artwork = thumbnails.toArtworkSet(),
         source = YoutubeIds.playlist(listId),
         trackCount = streamCount.takeIf { it >= 0 }?.toInt(),
     )
@@ -187,25 +223,84 @@ fun StreamInfo.toBestAudioStreamOrNull(
 }
 
 /**
- * The lowest-resolution **muxed** video stream's URL, for the Now Playing canvas — or null if the video
- * exposes none. In practice YouTube serves exactly one of these, itag 18 at 360p.
+ * A canvas candidate built from the **muxed** progressive video streams — or null if the video exposes
+ * none. In practice YouTube serves exactly one of these, itag 18 at 360p.
  *
- * Lowest, not best: this plays behind the artwork under a scrim, on top of the audio stream the same
+ * Small, not best: this plays behind the artwork under a scrim, on top of the audio stream the same
  * song is already pulling. A 1080p background would multiply the data cost of listening for something
- * nobody looks at closely.
+ * nobody looks at closely. [maxHeight] is the cap the network policy asked for; when every stream is
+ * bigger than that, the smallest one is used anyway — a too-large canvas beats none.
+ *
+ * The runner-up becomes [CanvasCandidate.fallbackUrl], so a stream that turns out not to play costs one
+ * retry instead of the whole feature.
  *
  * **Not [videoOnlyStreams], despite appearances.** That ladder goes down to 144p and NewPipe labels it
  * `PROGRESSIVE_HTTP`, which looks like a free win — less data, no audio track to throw away. It isn't:
  * googlevideo throttles those URLs to a trickle unless the client asks for byte ranges the way yt-dlp
  * does, and ExoPlayer's plain GET simply times out (`SocketTimeoutException` in `DefaultHttpDataSource`).
  * Verified on device. The muxed stream is a real progressive file and plays; its wasted audio track is
- * the price. The canvas player mutes it.
+ * the price — the canvas player mutes it and switches its renderer off.
  */
-fun StreamInfo.toCanvasVideoUrlOrNull(): String? =
-    videoStreams.orEmpty()
+fun StreamInfo.toCanvasCandidateOrNull(
+    providerId: String,
+    maxHeight: Int,
+    score: Int,
+): CanvasCandidate? {
+    val usable = videoStreams.orEmpty()
         .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.content != null }
-        .minByOrNull { it.resolutionHeight() }
-        ?.content
+        .sortedBy { it.resolutionHeight() }
+    if (usable.isEmpty()) return null
+    // Largest that still fits the cap, so an unmetered connection can have the 480p when there is one;
+    // if nothing fits, the smallest available — the cap is a budget, not a requirement.
+    val chosen = usable.lastOrNull { it.resolutionHeight() <= maxHeight } ?: usable.first()
+    val fallback = usable.firstOrNull { it !== chosen }
+    val url = chosen.content ?: return null
+    return CanvasCandidate(
+        providerId = providerId,
+        mediaUrl = url,
+        fallbackUrl = fallback?.content,
+        mimeType = chosen.format?.mimeType,
+        aspect = chosen.canvasAspect(),
+        title = name,
+        artist = uploaderName,
+        durationMs = duration.takeIf { it > 0 }?.times(1_000L),
+        score = score,
+        expiresAtMs = googlevideoExpiryMs(url),
+        width = chosen.width.takeIf { it > 0 },
+        height = chosen.height.takeIf { it > 0 },
+    )
+}
+
+/**
+ * When the signed URL stops working, from googlevideo's own `expire=<unix seconds>` parameter.
+ *
+ * Worth parsing rather than guessing: it is the difference between a cache that quietly starts handing
+ * out dead links after a few hours and one that knows to go back for a fresh token. Null when the URL
+ * carries no expiry or an unparseable one — the caller then falls back to its own TTL.
+ */
+internal fun googlevideoExpiryMs(url: String): Long? =
+    EXPIRE_PARAM.find(url)?.groupValues?.get(1)?.toLongOrNull()
+        ?.takeIf { it > 0 }
+        ?.times(1_000L)
+
+private val EXPIRE_PARAM = Regex("""[?&]expire=(\d+)""")
+
+/**
+ * A YouTube video is 16:9 unless it's a Short, in which case NewPipe reports a taller frame. Derived
+ * from the stream's own dimensions rather than assumed, so a vertical upload is labelled honestly —
+ * and so `CanvasStaticFilter` can veto the square frame of an auto-generated cover-art upload.
+ */
+internal fun VideoStream.canvasAspect(): CanvasAspect {
+    val w = width
+    val h = height
+    if (w <= 0 || h <= 0) return CanvasAspect.LANDSCAPE
+    val ratio = w.toFloat() / h
+    return when {
+        ratio < 0.95f -> CanvasAspect.PORTRAIT
+        ratio <= 1.05f -> CanvasAspect.SQUARE
+        else -> CanvasAspect.LANDSCAPE
+    }
+}
 
 /** `"360p"`/`"1080p60"` → 360/1080. Unknown parses sort last so a real resolution always wins. */
 private fun VideoStream.resolutionHeight(): Int =

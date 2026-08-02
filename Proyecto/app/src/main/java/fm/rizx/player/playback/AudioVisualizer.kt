@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.ln
@@ -100,36 +99,9 @@ class AudioVisualizer @Inject constructor() {
     }
 
     private fun appendBuffer(buffer: ByteBuffer) {
-        val ch = channels
-        val dup = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
-        when (encoding) {
-            C.ENCODING_PCM_16BIT -> {
-                val sb = dup.asShortBuffer()
-                val frames = sb.remaining() / ch
-                var f = 0
-                while (f < frames) {
-                    var sum = 0
-                    val base = f * ch
-                    for (c in 0 until ch) sum += sb.get(base + c).toInt()
-                    push((sum.toFloat() / ch) / 32768f)
-                    f += DOWNSAMPLE
-                }
-            }
-            C.ENCODING_PCM_FLOAT -> {
-                val fb = dup.asFloatBuffer()
-                val frames = fb.remaining() / ch
-                var f = 0
-                while (f < frames) {
-                    var sum = 0f
-                    val base = f * ch
-                    for (c in 0 until ch) sum += fb.get(base + c)
-                    push(sum / ch)
-                    f += DOWNSAMPLE
-                }
-            }
-            else -> return
-        }
-        bufferCounter++
+        // Counted only when the buffer was actually read: the counter is what the analysis loop watches to
+        // tell "audio is flowing" from "nothing is playing", and an encoding we can't read is neither.
+        if (buffer.forEachMonoSample(channels, encoding, DOWNSAMPLE) { push(it) }) bufferCounter++
     }
 
     private fun push(sample: Float) {

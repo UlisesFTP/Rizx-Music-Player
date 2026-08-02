@@ -1,6 +1,7 @@
 package fm.rizx.player.ui.screens
 
 import fm.rizx.player.ui.components.SectionHeader
+import fm.rizx.player.ui.components.tileUrl
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.layout.width
@@ -258,7 +259,7 @@ fun HomeScreen(
                 subtitle = heroMix.subject,
                 caption = mixCaption(heroMix),
                 playLabel = stringResource(R.string.home_play_now),
-                coverUrl = heroMix.leadTrack?.artwork.coverUrl(),
+                coverUrl = heroMix.leadTrack?.artwork.tileUrl(),
                 tintKey = heroMix.id,
                 weight = heroMix.weight,
                 modifier = mosaicPadding,
@@ -280,7 +281,7 @@ fun HomeScreen(
             label = mixLabel,
             title = title,
             caption = mixCaption(mix),
-            covers = mix.tracks.mapNotNull { it.artwork.coverUrl() }.distinct().take(COLLAGE_COVERS),
+            covers = mix.tracks.mapNotNull { it.artwork.tileUrl() }.distinct().take(COLLAGE_COVERS),
             tintKey = mix.id,
             weight = mix.weight,
             onClick = { vm.playMix(mix, title) },
@@ -291,7 +292,7 @@ fun HomeScreen(
             label = playlistLabel,
             title = playlist.name,
             caption = playlistSubtitle(playlist),
-            covers = listOf(playlist.artwork.coverUrl()),
+            covers = listOf(playlist.artwork.tileUrl()),
             tintKey = playlist.source.id,
             // No meter: a playlist someone else curated has no statistics of ours behind it.
             weight = null,
@@ -309,7 +310,7 @@ fun HomeScreen(
                 title = pick.track.title,
                 artist = pick.track.artists.joinToString { it.name }.ifEmpty { "—" },
                 reason = stringResource(R.string.home_similar_to, pick.becauseOf),
-                coverUrl = pick.track.artwork.coverUrl(),
+                coverUrl = pick.track.artwork.tileUrl(),
                 tintKey = pick.track.source.id,
                 modifier = mosaicPadding,
                 onClick = { vm.playTrack(pick.track) },
@@ -523,7 +524,7 @@ private fun LazyListScope.tabContent(
                                 HomeCover(
                                     playlist.source.id, initial = playlist.name.take(1),
                                     Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
-                                    imageUrl = playlist.artwork.coverUrl(),
+                                    imageUrl = playlist.artwork.tileUrl(),
                                 )
                                 CellTitle(playlist.name)
                                 CellSubtitle(playlistSubtitle(playlist))
@@ -541,7 +542,7 @@ private fun LazyListScope.tabContent(
                                 HomeCover(
                                     track.source.id, initial = null,
                                     Modifier.size(CAROUSEL_ART).paperElevation(),
-                                    imageUrl = track.artwork.coverUrl(),
+                                    imageUrl = track.artwork.tileUrl(),
                                 )
                                 CellTitle(track.title)
                                 CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })
@@ -556,7 +557,7 @@ private fun LazyListScope.tabContent(
                                 HomeCover(
                                     album.source.id, initial = album.title.take(1),
                                     Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
-                                    imageUrl = album.artwork.coverUrl(),
+                                    imageUrl = album.artwork.tileUrl(),
                                 )
                                 CellTitle(album.title)
                                 CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
@@ -571,7 +572,7 @@ private fun LazyListScope.tabContent(
                                 HomeCover(
                                     artist.source.id, initial = artist.name.take(1),
                                     Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
-                                    initialSize = 38, circle = true, imageUrl = artist.artwork.coverUrl(),
+                                    initialSize = 38, circle = true, imageUrl = artist.artwork.tileUrl(),
                                 )
                                 CellTitle(artist.name, centered = true)
                             }
@@ -587,7 +588,7 @@ private fun LazyListScope.tabContent(
                                 HomeCover(
                                     album.source.id, initial = album.title.take(1),
                                     Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
-                                    imageUrl = album.artwork.coverUrl(),
+                                    imageUrl = album.artwork.tileUrl(),
                                 )
                                 CellTitle(album.title)
                                 CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
@@ -640,7 +641,7 @@ private fun LazyListScope.tabContent(
                     HomeCover(
                         playlist.source.id, initial = playlist.name.take(1),
                         Modifier.fillMaxWidth().aspectRatio(1f).paperElevation(), initialSize = 40,
-                        imageUrl = playlist.artwork.coverUrl(),
+                        imageUrl = playlist.artwork.tileUrl(),
                     )
                     CellTitle(playlist.name)
                     CellSubtitle(playlistSubtitle(playlist))
@@ -656,7 +657,7 @@ private fun LazyListScope.tabContent(
                     HomeCover(
                         track.source.id, initial = null,
                         Modifier.fillMaxWidth().aspectRatio(1f).paperElevation(),
-                        imageUrl = track.artwork.coverUrl(),
+                        imageUrl = track.artwork.tileUrl(),
                     )
                     CellTitle(track.title)
                     CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })
@@ -672,7 +673,7 @@ private fun LazyListScope.tabContent(
                     HomeCover(
                         album.source.id, initial = album.title.take(1),
                         Modifier.fillMaxWidth().aspectRatio(1f).paperElevation(), initialSize = 46,
-                        imageUrl = album.artwork.coverUrl(),
+                        imageUrl = album.artwork.tileUrl(),
                     )
                     CellTitle(album.title)
                     CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
@@ -688,7 +689,7 @@ private fun LazyListScope.tabContent(
                     HomeCover(
                         artist.source.id, initial = artist.name.take(1),
                         Modifier.fillMaxWidth().aspectRatio(1f).paperElevation(CircleShape),
-                        initialSize = 42, circle = true, imageUrl = artist.artwork.coverUrl(),
+                        initialSize = 42, circle = true, imageUrl = artist.artwork.tileUrl(),
                     )
                     CellTitle(artist.name, centered = true)
                 }
@@ -724,7 +725,7 @@ private fun LazyListScope.forYouStrip(
             HomeCover(
                 artist.source.id, initial = artist.name.take(1),
                 Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
-                initialSize = 38, circle = true, imageUrl = artist.artwork.coverUrl(),
+                initialSize = 38, circle = true, imageUrl = artist.artwork.tileUrl(),
             )
             CellTitle(artist.name, centered = true)
         }
@@ -734,7 +735,7 @@ private fun LazyListScope.forYouStrip(
             HomeCover(
                 album.source.id, initial = album.title.take(1),
                 Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
-                imageUrl = album.artwork.coverUrl(),
+                imageUrl = album.artwork.tileUrl(),
             )
             CellTitle(album.title)
             CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
@@ -910,7 +911,7 @@ private fun LazyListScope.trackCarousel(title: String, tracks: List<Track>, onPl
             HomeCover(
                 track.source.id, initial = null,
                 Modifier.size(CAROUSEL_ART).paperElevation(),
-                imageUrl = track.artwork.coverUrl(),
+                imageUrl = track.artwork.tileUrl(),
             )
             CellTitle(track.title)
             CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })

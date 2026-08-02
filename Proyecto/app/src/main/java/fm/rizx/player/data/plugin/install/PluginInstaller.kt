@@ -76,7 +76,7 @@ class PluginInstaller(
             extract(zipBytes, tmp)
             unwrapZipball(tmp)
             val manifest = readManifest(tmp)
-            val pluginId = manifest.name.lowercase().replace(ID_UNSAFE, "-").trim('-')
+            val pluginId = pluginIdFor(manifest.name)
             if (pluginId.isBlank()) throw AppError.ProviderFailure("PluginInstaller", "plugin has no usable name")
             return installFromZipBytes(pluginId, zipBytes, origin)
         } finally {
@@ -256,6 +256,16 @@ class PluginInstaller(
         private val ALLOWED_BARE = setOf("@nuclearplayer/plugin-sdk", "@nuclearplayer/ui", "react", "react-dom")
 
         private val ID_UNSAFE = Regex("[^a-z0-9._-]+")
+
+        /**
+         * The plugin id an archive named [name] installs under.
+         *
+         * Public because the id has to be predictable *before* the install: the store decides whether to
+         * draw "Install" or "Installed" by comparing a manifest's name against the installed list, and
+         * comparing the raw name would leave a plugin called `Rizx Lossless` looking uninstalled forever
+         * — its own files sitting under `rizx-lossless`.
+         */
+        fun pluginIdFor(name: String): String = name.lowercase().replace(ID_UNSAFE, "-").trim('-')
 
         const val CACHE_DIR = ".cache"
         const val SETTINGS_FILE = "settings.json"

@@ -11,15 +11,15 @@ import fm.rizx.player.data.download.AudioTagWriter
 import fm.rizx.player.data.download.DownloadNotifier
 import fm.rizx.player.data.download.MediaStoreExporter
 import fm.rizx.player.data.download.MediaStoreExporterImpl
-import fm.rizx.player.data.canvas.CanvasSource
-import fm.rizx.player.data.canvas.YoutubeCanvasSource
 import fm.rizx.player.data.download.ServiceDownloadNotifier
 import fm.rizx.player.data.download.TrackDownloader
 import fm.rizx.player.data.local.store.DownloadIndexStore
-import fm.rizx.player.data.remote.youtube.YoutubeExtractorClient
 import fm.rizx.player.data.repository.DownloadRepositoryImpl
+import fm.rizx.player.core.network.DataSaverState
+import fm.rizx.player.domain.lossless.LosslessResolver
 import fm.rizx.player.domain.provider.ProviderRegistry
 import fm.rizx.player.domain.repository.DownloadRepository
+import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.domain.usecase.StreamingResolver
 import okhttp3.OkHttpClient
 import java.io.File
@@ -70,15 +70,6 @@ object DownloadsModule {
     fun provideDownloadNotifier(@ApplicationContext context: Context): DownloadNotifier =
         ServiceDownloadNotifier(context)
 
-    /**
-     * The Now Playing canvas. Reuses the YouTube extractor the streaming provider already depends on —
-     * no new dependency, and no other provider has a video to offer (Deezer's public API returns images
-     * only; Spotify's Canvas endpoint is neither public nor keyless).
-     */
-    @Provides
-    @Singleton
-    fun provideCanvasSource(youtube: YoutubeExtractorClient): CanvasSource = YoutubeCanvasSource(youtube)
-
     /** Embeds cover/artist/album/date into finished downloads so they carry metadata to any other player. */
     @Provides
     @Singleton
@@ -94,8 +85,21 @@ object DownloadsModule {
         notifier: DownloadNotifier,
         tagWriter: AudioTagWriter,
         registry: ProviderRegistry,
-    ): DownloadRepository =
-        DownloadRepositoryImpl(store, downloader, resolver, exporter, notifier, tagWriter, registry)
+        lossless: LosslessResolver,
+        settings: SettingsRepository,
+        dataSaver: DataSaverState,
+    ): DownloadRepository = DownloadRepositoryImpl(
+        store = store,
+        downloader = downloader,
+        resolver = resolver,
+        exporter = exporter,
+        notifier = notifier,
+        tagWriter = tagWriter,
+        registry = registry,
+        lossless = lossless,
+        settings = settings,
+        dataSaver = dataSaver,
+    )
 }
 
 /** The app-private folder holding downloaded audio. */

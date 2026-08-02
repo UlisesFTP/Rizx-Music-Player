@@ -4,14 +4,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.cache.CacheManager
+import fm.rizx.player.core.network.DataSaverState
 import fm.rizx.player.core.region.RegionResolver
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl.Companion.DEFAULT_AUDIO_CACHE_BYTES
+import fm.rizx.player.domain.lossless.LosslessIndexSource
+import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.CanvasDiagnostics
+import fm.rizx.player.domain.model.CanvasNetworkPolicy
+import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.playback.AudioEffectsController
 import fm.rizx.player.domain.provider.ProviderKind
 import fm.rizx.player.domain.provider.ProviderRegistry
+import fm.rizx.player.domain.repository.CanvasRepository
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.playback.AudioOutputCapabilities
 import kotlinx.coroutines.flow.Flow
@@ -38,10 +45,49 @@ class PreferencesViewModel @Inject constructor(
     private val audioOutput: AudioOutputCapabilities,
     private val region: RegionResolver,
     private val registry: ProviderRegistry,
+    private val canvas: CanvasRepository,
+    private val losslessIndex: LosslessIndexSource,
+    private val dataSaverState: DataSaverState,
 ) : ViewModel() {
 
     /** A selectable Home-feed source: a registered dashboard provider. */
     data class FeedSource(val id: String, val name: String)
+
+    /** The animated-cover switches. Off / unmetered-only / not in power-save are the defaults. */
+    val canvasEnabled: StateFlow<Boolean> = settings.canvasEnabled.asState(false)
+    val canvasNetwork: StateFlow<CanvasNetworkPolicy> =
+        settings.canvasNetworkPolicy.asState(CanvasNetworkPolicy.UNMETERED_ONLY)
+    val canvasOnBatterySaver: StateFlow<Boolean> = settings.canvasOnBatterySaver.asState(false)
+    val canvasQuality: StateFlow<CanvasQuality> = settings.canvasQuality.asState(CanvasQuality.AUTO)
+    val canvasApple: StateFlow<Boolean> = settings.canvasAppleEnabled.asState(true)
+    val canvasYoutube: StateFlow<Boolean> = settings.canvasYoutubeEnabled.asState(true)
+
+    /** What the last lookup did. Read from the repository, which outlives the Now Playing screen. */
+    val canvasDiagnostics: StateFlow<CanvasDiagnostics> = canvas.lastDiagnostics
+
+    fun setCanvasEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setCanvasEnabled(enabled) }
+    }
+
+    fun setCanvasNetwork(policy: CanvasNetworkPolicy) {
+        viewModelScope.launch { settings.setCanvasNetworkPolicy(policy) }
+    }
+
+    fun setCanvasOnBatterySaver(allowed: Boolean) {
+        viewModelScope.launch { settings.setCanvasOnBatterySaver(allowed) }
+    }
+
+    fun setCanvasQuality(quality: CanvasQuality) {
+        viewModelScope.launch { settings.setCanvasQuality(quality) }
+    }
+
+    fun setCanvasApple(enabled: Boolean) {
+        viewModelScope.launch { settings.setCanvasAppleEnabled(enabled) }
+    }
+
+    fun setCanvasYoutube(enabled: Boolean) {
+        viewModelScope.launch { settings.setCanvasYoutubeEnabled(enabled) }
+    }
 
     /** Regional-recommendations consent: null = never asked, true = on, false = declined. */
     val regionalRecs: StateFlow<Boolean?> = settings.recsRegionalConsent.asState(null)
@@ -94,7 +140,42 @@ class PreferencesViewModel @Inject constructor(
 
     /** The automatic equalizer (a curve per song, from its genre + its own spectrum). Off by default. */
     val autoEq: StateFlow<Boolean> = settings.autoEqualizer.asState(false)
-    val hiRes: StateFlow<Boolean> = settings.hiResOutput.asState(false)
+
+    /**
+     * Standard / best compressed / prefer lossless — **as stored**, not as in force.
+     *
+     * The dialog ticks this one, because it is the user's choice and data saving must not appear to have
+     * changed it. What is actually happening right now is [savingActive], which the row's caption says.
+     */
+    val audioQuality: StateFlow<AudioQualityMode> =
+        settings.audioQualityMode.asState(AudioQualityMode.STANDARD)
+
+    /**
+     * Whether data saving is in force, from Rizx's switch or Android's.
+     *
+     * Drives the "forced by Data saver" captions. Kept separate from the stored settings so the screen
+     * can show both truths at once: what you chose, and what is happening instead.
+     */
+    val savingActive: StateFlow<Boolean> = dataSaverState.saving.asState(false)
+
+    /**
+     * Whether any installed plugin publishes a FLAC index — the thing that makes "Prefer Lossless" a
+     * real option rather than a switch that silently never does anything.
+     *
+     * Polled rather than observed because the provider registry has no change stream; the Settings row
+     * refreshes it as the dialog opens, which is the moment after the user could have installed one.
+     */
+    private val _losslessAvailable = MutableStateFlow(runCatching { losslessIndex.isAvailable() }.getOrDefault(false))
+    val losslessAvailable: StateFlow<Boolean> = _losslessAvailable.asStateFlow()
+
+    fun refreshLosslessAvailability() {
+        _losslessAvailable.value = runCatching { losslessIndex.isAvailable() }.getOrDefault(false)
+    }
+
+    /** Only look for a FLAC on an unmetered link. On by default — these files run 25-27 MB. */
+    val losslessWifiOnly: StateFlow<Boolean> = settings.losslessWifiOnly.asState(true)
+    val losslessDownload: StateFlow<Boolean> = settings.losslessDownload.asState(false)
+    val showTechnicalFormat: StateFlow<Boolean> = settings.showTechnicalFormat.asState(true)
 
     private val _cacheSize = MutableStateFlow(cache.diskSizeLabel())
     val cacheSize: StateFlow<String> = _cacheSize.asStateFlow()
@@ -115,7 +196,21 @@ class PreferencesViewModel @Inject constructor(
     fun setGapless(enabled: Boolean) { viewModelScope.launch { settings.setGapless(enabled) } }
 
     /** Persisted output preference; the audio sink reads it at the next playback-service start. */
-    fun setHiRes(enabled: Boolean) { viewModelScope.launch { settings.setHiResOutput(enabled) } }
+    fun setAudioQuality(mode: AudioQualityMode) {
+        viewModelScope.launch { settings.setAudioQualityMode(mode) }
+    }
+
+    fun setLosslessWifiOnly(enabled: Boolean) {
+        viewModelScope.launch { settings.setLosslessWifiOnly(enabled) }
+    }
+
+    fun setLosslessDownload(enabled: Boolean) {
+        viewModelScope.launch { settings.setLosslessDownload(enabled) }
+    }
+
+    fun setShowTechnicalFormat(enabled: Boolean) {
+        viewModelScope.launch { settings.setShowTechnicalFormat(enabled) }
+    }
 
     /** Persists **and** applies the live loudness effect (the controller writes the setting through). */
     fun setNormalize(enabled: Boolean) = audioEffects.setNormalizeVolume(enabled)

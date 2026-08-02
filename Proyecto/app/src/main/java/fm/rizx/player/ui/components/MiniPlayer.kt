@@ -55,6 +55,8 @@ fun MiniPlayer(
     positionMs: Long = 0L,
     durationMs: Long = 0L,
     onSeek: (Float) -> Unit = {},
+    /** Codec name when this song is playing losslessly (`FLAC`), null otherwise — see [LosslessTag]. */
+    losslessLabel: String? = null,
 ) {
     val c = RizxTheme.colors
     Box(
@@ -97,7 +99,14 @@ fun MiniPlayer(
                 maxLines = 1,
                 modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
             )
-            Text(artist, style = mr(11, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // The tag rides on the artist line rather than the title's: the title marquees, and a mark
+            // that slides away with it would be unreadable half the time.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (losslessLabel != null) {
+                    LosslessTag(losslessLabel, Modifier.padding(end = 6.dp))
+                }
+                Text(artist, style = mr(11, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
         // Live "elapsed over duration" readout (mono numerals), on every width.
         //

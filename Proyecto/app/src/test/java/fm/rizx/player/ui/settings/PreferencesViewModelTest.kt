@@ -1,12 +1,16 @@
 package fm.rizx.player.ui.settings
 
 import app.cash.turbine.test
+import fm.rizx.player.FakeCanvasRepository
+import fm.rizx.player.FakeLosslessIndexSource
+import fm.rizx.player.dataSaverState
 import fm.rizx.player.FakeSettingsRepository
 import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.core.cache.CacheManager
 import fm.rizx.player.core.region.RegionResolver
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.provider.DefaultProviderRegistry
+import fm.rizx.player.domain.model.AudioQualityMode
 import fm.rizx.player.domain.model.DashboardCapability
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.playback.AudioEffectsController
@@ -45,6 +49,7 @@ class PreferencesViewModelTest {
 
     private fun vm() = PreferencesViewModel(
         settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }), DefaultProviderRegistry(),
+        FakeCanvasRepository(), FakeLosslessIndexSource(), dataSaverState(settings),
     )
 
     @Test
@@ -62,6 +67,7 @@ class PreferencesViewModelTest {
         val registry = DefaultProviderRegistry().apply { register(FakeDash()) }
         val vm = PreferencesViewModel(
             settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }), registry,
+            FakeCanvasRepository(), FakeLosslessIndexSource(), dataSaverState(settings),
         )
         assertEquals(listOf("dash" to "Dash"), vm.feedSources.value.map { it.id to it.name })
     }
@@ -72,6 +78,7 @@ class PreferencesViewModelTest {
         val registry = DefaultProviderRegistry()
         val vm = PreferencesViewModel(
             settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }), registry,
+            FakeCanvasRepository(), FakeLosslessIndexSource(), dataSaverState(settings),
         )
         assertEquals(emptyList<String>(), vm.feedSources.value.map { it.id })
 
@@ -117,13 +124,28 @@ class PreferencesViewModelTest {
     }
 
     @Test
-    fun `hi-res persists, re-emits, and exposes the DAC capability label`() =
+    fun `the audio quality mode persists, re-emits, and exposes the DAC capability label`() =
         runTest(mainDispatcherRule.dispatcher.scheduler) {
             val vm = vm()
             assertEquals("48 kHz output", vm.audioOutputLabel.value)
-            vm.hiRes.test {
-                assertEquals(false, awaitItem()) // opt-in, off by default
-                vm.setHiRes(true)
+            vm.audioQuality.test {
+                assertEquals(AudioQualityMode.STANDARD, awaitItem()) // opt-in, conservative by default
+                vm.setAudioQuality(AudioQualityMode.BEST_AVAILABLE)
+                assertEquals(AudioQualityMode.BEST_AVAILABLE, awaitItem())
+            }
+        }
+
+    @Test
+    fun `the lossless sub-settings default to wifi-only, no download, readout on`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            val vm = vm()
+            assertEquals(true, vm.losslessWifiOnly.value)
+            assertEquals(false, vm.losslessDownload.value)
+            assertEquals(true, vm.showTechnicalFormat.value)
+
+            vm.losslessDownload.test {
+                assertEquals(false, awaitItem())
+                vm.setLosslessDownload(true)
                 assertEquals(true, awaitItem())
             }
         }

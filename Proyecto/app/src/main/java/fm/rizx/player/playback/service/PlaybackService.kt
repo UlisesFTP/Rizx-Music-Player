@@ -20,7 +20,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
-import androidx.media3.exoplayer.audio.TeeAudioProcessor
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import android.os.Bundle
 import androidx.media3.datasource.DataSourceBitmapLoader
@@ -34,6 +33,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import fm.rizx.player.data.local.store.PlaybackSessionSnapshot
+import fm.rizx.player.data.lossless.FLAC_CODEC
 import fm.rizx.player.data.local.store.PlaybackSessionStore
 import fm.rizx.player.domain.model.PlayOutcome
 import fm.rizx.player.domain.model.PlaybackQueue
@@ -91,6 +91,7 @@ class PlaybackService : MediaSessionService() {
     /** Song-seeded "up next" engines by mode; a mode with no entry uses the artist radio. */
     @Inject lateinit var mixSources: Map<RadioMode, @JvmSuppressWildcards fm.rizx.player.domain.provider.RadioMixSource>
     @Inject lateinit var settings: SettingsRepository
+    @Inject lateinit var dataSaver: fm.rizx.player.core.network.DataSaverState
     @Inject lateinit var audioCache: fm.rizx.player.playback.cache.AudioCache
     @Inject lateinit var cacheCompleter: fm.rizx.player.playback.cache.CacheCompleter
     @Inject lateinit var favorites: FavoritesRepository
@@ -124,6 +125,16 @@ class PlaybackService : MediaSessionService() {
 
     /** Queue-item ids already retried as HLS, so a genuinely-broken HLS stream can't loop. */
     private val hlsRetried = mutableSetOf<String>()
+
+    /**
+     * Queue-item ids already dropped from a community FLAC back to the ordinary stream.
+     *
+     * A verified header is not a promise that the whole 27 MB is still there — the host can go away
+     * mid-song. When that happens the item gets **one** automatic fallback and is then left alone:
+     * deliberately not cleared when it starts playing (unlike [hlsRetried]), because re-arming it is
+     * how "FLAC fails → normal → FLAC again" becomes a loop the listener hears as stuttering.
+     */
+    private val losslessFellBack = mutableSetOf<String>()
 
     /**
      * The queue item whose play has already been counted.
@@ -162,34 +173,42 @@ class PlaybackService : MediaSessionService() {
         // aren't truncated to 16-bit. Read once here because the sink is built once — the setting therefore
         // applies to this playback session (a live toggle takes effect on the next service start). It's a
         // tiny startup read, like AudioEffects reads normalizeVolume; a no-op for 16-bit/lossy sources.
-        val hiResOutput = runBlocking { settings.hiResOutput.first() }
-        // Two pass-through TeeAudioProcessors tap the decoded PCM: one drives the Now Playing waveform, the
-        // other measures the song's average spectrum for the automatic equalizer. Both run before the
-        // default silence/speed processors and output the buffer unchanged, so neither affects playback,
-        // and neither needs RECORD_AUDIO (it's our own audio).
+        val hiResOutput = runBlocking { dataSaver.effectiveQualityMode().prefersBestCompressed }
+        val savingData = dataSaver.savingNow()
+        // Two listeners read the decoded PCM: one drives the Now Playing waveform, the other measures the
+        // song's average spectrum for the automatic equalizer. Neither modifies the audio, and neither
+        // needs RECORD_AUDIO (it's our own).
         //
-        // The tap being *here* is what makes the automatic equalizer sound right: it is upstream of the
-        // session's Equalizer effect, so the measurement describes the original recording rather than the
-        // app's own output — measuring after the effect would be a feedback loop.
+        // They wrap the sink rather than sitting in its processor chain, because a chain processor is
+        // dropped on the float output path — which is the path "prefer lossless" turns on. See
+        // [PcmTappingAudioSink]. Wrapping keeps the property the automatic equalizer depends on: the tap
+        // is upstream of the session's Equalizer effect, so the measurement describes the original
+        // recording rather than the app's own output, which would be a feedback loop.
         val renderersFactory = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
-            ): AudioSink = DefaultAudioSink.Builder(context)
-                .setEnableFloatOutput(enableFloatOutput || hiResOutput)
-                .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                .setAudioProcessors(
-                    arrayOf(TeeAudioProcessor(visualizer.sink), TeeAudioProcessor(trackSpectrum.sink)),
-                )
-                .build()
+            ): AudioSink = fm.rizx.player.playback.PcmTappingAudioSink(
+                DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput || hiResOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build(),
+                listOf(visualizer.sink, trackSpectrum.sink),
+            )
         }
         // Tuned buffering for near-instant response: start audio after a short pre-roll (not the 2.5 s
         // default), and keep a back-buffer so seeking backward within it is instant (no re-download).
+        // Data saving shortens the read-ahead. ExoPlayer's default is ~50 s, and every second of that is
+        // bytes already paid for that a skip throws away — on a queue someone is skipping through, most
+        // of it. Read once here because the LoadControl is built once, so it takes effect on the next
+        // playback session, exactly like the float-output path above.
+        val maxBufferMs =
+            if (savingData) THRIFTY_MAX_BUFFER_MS else DefaultLoadControl.DEFAULT_MAX_BUFFER_MS
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
+                minOf(DefaultLoadControl.DEFAULT_MIN_BUFFER_MS, maxBufferMs),
+                maxBufferMs,
                 /* bufferForPlaybackMs = */ 1_000,
                 /* bufferForPlaybackAfterRebufferMs = */ 2_000,
             )
@@ -257,10 +276,13 @@ class PlaybackService : MediaSessionService() {
         scope.launch { settings.crossfade.collect { crossfadeOn = it; recomputeFade() } }
         scope.launch { settings.gapless.collect { gaplessOn = it; recomputeFade() } }
 
-        // Hi-Res also decides which *codec* gets requested, and resolved URLs are reused for hours — so
-        // without this, flipping the toggle would appear to do nothing until the cache aged out.
+        // The quality mode decides which *codec* — and now which *source* — gets requested, and resolved
+        // URLs are reused for hours, so without this a mode change would appear to do nothing until the
+        // cache aged out. Collected on the mode itself rather than the derived hi-res flag: leaving
+        // LOSSLESS_PREFERRED for BEST_AVAILABLE leaves that flag `true` on both sides, and the cached
+        // FLAC URL would go on playing as if nothing had been switched off.
         scope.launch {
-            settings.hiResOutput.distinctUntilChanged().drop(1).collect { streamResolver.clearUrlCache() }
+            settings.audioQualityMode.distinctUntilChanged().drop(1).collect { streamResolver.clearUrlCache() }
         }
 
         // Keep the notification's heart + repeat buttons in sync with the current track's favorite state
@@ -631,13 +653,32 @@ class PlaybackService : MediaSessionService() {
 
         override fun onPlayerError(error: PlaybackException) {
             val id = player.currentMediaItem?.mediaId ?: queue.state.value.current?.id ?: return
+            val item = queue.state.value.items.firstOrNull { it.id == id }
             // Drop any cached (possibly expired) URL for this content so the next attempt re-resolves fresh.
-            queue.state.value.items.firstOrNull { it.id == id }
-                ?.let { streamResolver.invalidate(it.track.source.identityKey) }
+            item?.let { streamResolver.invalidate(it.track.source.identityKey) }
+
+            // A community FLAC that verified and then died mid-song. Step down to the ordinary stream,
+            // silently and roughly where the listener was: an optional upgrade failing is not something
+            // to interrupt them about, and stopping the music would be a worse outcome than the
+            // compressed stream they would have got anyway.
+            val failing = streamResolver.resolvedStreamFor(id)
+            if (item != null && failing?.codec == FLAC_CODEC && id !in losslessFellBack) {
+                losslessFellBack += id
+                val resumeAt = player.currentPosition.coerceAtLeast(0L)
+                // Suppression rather than only invalidation: the resolver's own verdict is still valid
+                // (it *is* that recording), so without this the next resolve would hand back the same
+                // dead URL and the fallback would be the loop it exists to prevent.
+                streamResolver.suppressLossless(item.track.source.identityKey)
+                player.prepare()
+                player.seekTo(resumeAt)
+                player.play()
+                return
+            }
+
             // An HLS stream (e.g. SoundCloud) resolved through the placeholder plays as a *progressive*
             // source (the ResolvingDataSource only rewrites the URL, not the source type) and fails.
             // Swap in an HLS-typed MediaItem so ExoPlayer builds an HlsMediaSource, then retry once.
-            val stream = streamResolver.resolvedStreamFor(id)
+            val stream = failing
             if (stream != null && stream.protocol == fm.rizx.player.domain.model.StreamProtocol.HLS && id !in hlsRetried) {
                 hlsRetried += id
                 val idx = player.currentMediaItemIndex
@@ -752,6 +793,14 @@ class PlaybackService : MediaSessionService() {
         const val FADE_TICK_MS = 75L
 
         /** Custom notification-button actions (favorite + repeat) invoked through the session. */
+        /**
+         * Read-ahead while saving data, against ExoPlayer's ~50 s default.
+         *
+         * Still comfortably more than the 1 s pre-roll needs, so playback does not start stuttering —
+         * it just stops paying for forty seconds of a song the listener is about to skip.
+         */
+        const val THRIFTY_MAX_BUFFER_MS = 15_000
+
         const val ACTION_TOGGLE_FAVORITE = "fm.rizx.player.action.TOGGLE_FAVORITE"
         const val ACTION_CYCLE_REPEAT = "fm.rizx.player.action.CYCLE_REPEAT"
     }

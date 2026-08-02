@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pref_canvas">Pochettes animées</string>
+    <string name="pref_canvas_off">Désactivé</string>
+    <string name="pref_canvas_on">Activé</string>
+    <string name="pref_canvas_enable">Afficher une pochette animée en fond</string>
+    <string name="pref_canvas_enable_caption">Sans son et en boucle. Ajoute un second flux à celui de l\'audio.</string>
+
+    <string name="pref_canvas_sources">Sources</string>
+    <string name="pref_canvas_apple">Pochette animée d\'Apple</string>
+    <string name="pref_canvas_apple_caption">Une boucle faite pour la pochette. C\'est celle qui bouge vraiment.</string>
+    <string name="pref_canvas_youtube">Clip YouTube</string>
+    <string name="pref_canvas_youtube_caption">Utilisé quand Apple n\'a rien. Trouvé par recherche, donc faillible.</string>
+
+    <string name="pref_canvas_quality">Qualité</string>
+    <string name="canvas_quality_auto">Automatique</string>
+    <string name="canvas_quality_auto_caption">Jusqu\'à 720. Une taille raisonnable sous un dégradé.</string>
+    <string name="canvas_quality_high">Élevée</string>
+    <string name="canvas_quality_high_caption">Jusqu\'à 1080. Seule la pochette d\'Apple monte si haut.</string>
+    <string name="canvas_quality_saver">Économiseur de données</string>
+    <string name="canvas_quality_saver_caption">La plus petite taille utilisable. Forcée en données mobiles.</string>
+
+    <string name="pref_canvas_network">Réseau</string>
+    <string name="canvas_network_unmetered">Wi-Fi uniquement</string>
+    <string name="canvas_network_unmetered_caption">Jamais en données mobiles, ni via un partage de connexion.</string>
+    <string name="canvas_network_any">Wi-Fi et données mobiles</string>
+    <string name="canvas_network_any_caption">Consomme votre forfait. L\'économiseur de données le bloque quand même.</string>
+    <string name="pref_canvas_battery">Autoriser en économie d\'énergie</string>
+    <string name="pref_canvas_battery_caption">Désactivé : le mode économie arrête la vidéo.</string>
+
+    <string name="canvas_diagnostics">Dernière recherche</string>
+    <string name="canvas_diag_none">Rien n\'a encore été recherché.</string>
+    <string name="canvas_diag_cached">en cache</string>
+    <string name="canvas_diag_fresh">téléchargé</string>
+    <string name="canvas_reason_disabled">Désactivé</string>
+    <string name="canvas_reason_metered">Ignoré : données mobiles</string>
+    <string name="canvas_reason_battery">Ignoré : économie d\'énergie</string>
+    <string name="canvas_reason_signal">Ignoré : connexion faible</string>
+    <string name="canvas_reason_no_candidate">Aucune vidéo pour ce morceau</string>
+    <string name="canvas_reason_rejected">Vidéo trouvée, mais ce n\'est pas cet enregistrement</string>
+    <string name="canvas_reason_error">Impossible de joindre la source</string>
+</resources>

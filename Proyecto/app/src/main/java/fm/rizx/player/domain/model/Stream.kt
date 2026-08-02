@@ -21,6 +21,16 @@ data class Stream(
     val qualityLabel: String? = null,
     val durationMs: Long? = null,
     val contentLengthBytes: Long? = null,
+    /**
+     * PCM parameters, when a source actually reports them. Filled in only where they were **read**, not
+     * inferred: a FLAC's own STREAMINFO block gives all three, whereas a compressed stream from a search
+     * provider gives none and leaving them null is the honest answer.
+     */
+    val sampleRateHz: Int? = null,
+    val bitsPerSample: Int? = null,
+    val channels: Int? = null,
+    /** Who vouches for this file. Defaults to the provider that served it. */
+    val provenance: AudioProvenance = AudioProvenance.OFFICIAL_PROVIDER,
     val source: ProviderRef,
 )
 

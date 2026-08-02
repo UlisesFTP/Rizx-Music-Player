@@ -1,6 +1,8 @@
 package fm.rizx.player.data.remote.soundcloud
 
 import fm.rizx.player.domain.model.ArtistCredit
+import fm.rizx.player.data.remote.youtube.bestThumbnailUrl
+import fm.rizx.player.data.remote.youtube.toArtworkSet
 import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.Artwork
 import fm.rizx.player.domain.model.ArtworkSet
@@ -38,7 +40,7 @@ fun StreamInfoItem.toSoundcloudTrackOrNull(): Track? {
         title = name,
         artists = listOfNotNull(uploaderName?.takeIf { it.isNotBlank() }?.let { ArtistCredit(name = it) }),
         durationMs = duration.takeIf { it > 0 }?.let { it * 1000L },
-        artwork = thumbnails.lastOrNull()?.url?.let { ArtworkSet(listOf(Artwork(url = it))) },
+        artwork = thumbnails.toArtworkSet(),
         source = soundcloudRef(trackUrl),
     )
 }
@@ -54,7 +56,7 @@ fun ChannelInfoItem.toSoundcloudArtistOrNull(): ArtistRef? {
     val artistName = name?.takeIf { it.isNotBlank() } ?: return null
     return ArtistRef(
         name = artistName,
-        artwork = thumbnails.lastOrNull()?.url?.let { ArtworkSet(listOf(Artwork(url = it))) },
+        artwork = thumbnails.toArtworkSet(),
         source = ProviderRef(SoundcloudIds.METADATA, profileUrl, profileUrl),
     )
 }
@@ -67,7 +69,7 @@ fun StreamInfoItem.toSoundcloudCandidateOrNull(): StreamCandidate? {
         id = trackUrl,
         title = name,
         durationMs = duration.takeIf { it > 0 }?.let { it * 1000L },
-        thumbnail = thumbnails.lastOrNull()?.url,
+        thumbnail = thumbnails.bestThumbnailUrl(),
         source = soundcloudRef(trackUrl),
     )
 }

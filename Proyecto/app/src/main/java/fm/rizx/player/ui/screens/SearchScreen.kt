@@ -5,6 +5,7 @@ package fm.rizx.player.ui.screens
 import fm.rizx.player.ui.search.SearchTab
 import fm.rizx.player.ui.search.Suggestion
 import fm.rizx.player.ui.components.RizxChip
+import fm.rizx.player.ui.components.tileUrl
 import fm.rizx.player.data.remote.deezer.DeezerIds
 import fm.rizx.player.data.remote.youtube.YoutubeIds
 import fm.rizx.player.data.remote.soundcloud.SoundcloudIds
@@ -72,6 +73,8 @@ import fm.rizx.player.domain.model.SearchResults
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.DotMatrixSpinner
+import fm.rizx.player.ui.components.LocalLosslessCodecs
+import fm.rizx.player.ui.components.LosslessTag
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
@@ -457,10 +460,17 @@ private fun ResultTrackRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CoverArt(tintFor(track.source.id), initial = null, Modifier.size(46.dp), imageUrl = track.artwork.coverUrl())
+        CoverArt(tintFor(track.source.id), initial = null, Modifier.size(46.dp), imageUrl = track.artwork.tileUrl())
         Column(Modifier.weight(1f)) {
             Text(track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(track.artists.joinToString { it.name }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // The tag appears once the song has actually played losslessly — it is a record of what
+            // happened, not a claim about what a lossless index might hold. See LocalLosslessCodecs.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LocalLosslessCodecs.current[track.source.identityKey]?.let {
+                    LosslessTag(it, Modifier.padding(end = 6.dp))
+                }
+                Text(track.artists.joinToString { it.name }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
         Icon(
             if (liked) RizxIcons.Favorite else RizxIcons.FavoriteBorder,
@@ -503,7 +513,7 @@ private fun ResultArtistRow(artist: ArtistRef, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        CoverArt(tintFor(artist.source.id), initial = artist.name.take(1), Modifier.size(46.dp), initialSize = 18, circle = true, imageUrl = artist.artwork.coverUrl())
+        CoverArt(tintFor(artist.source.id), initial = artist.name.take(1), Modifier.size(46.dp), initialSize = 18, circle = true, imageUrl = artist.artwork.tileUrl())
         Text(artist.name, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Text(stringResource(R.string.search_result_artist_label), style = mr(11, FontWeight.Medium), color = c.muted)
     }
@@ -520,7 +530,7 @@ private fun ResultAlbumRow(album: AlbumRef, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        CoverArt(tintFor(album.source.id), initial = album.title.take(1), Modifier.size(46.dp), initialSize = 18, imageUrl = album.artwork.coverUrl())
+        CoverArt(tintFor(album.source.id), initial = album.title.take(1), Modifier.size(46.dp), initialSize = 18, imageUrl = album.artwork.tileUrl())
         Column(Modifier.weight(1f)) {
             Text(album.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(album.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.search_album_fallback) }, style = mr(12, FontWeight.Medium), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -539,7 +549,7 @@ private fun ResultPlaylistRow(playlist: PlaylistRef, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        CoverArt(tintFor(playlist.source.id), initial = playlist.name.take(1), Modifier.size(46.dp), initialSize = 18, imageUrl = playlist.artwork.coverUrl())
+        CoverArt(tintFor(playlist.source.id), initial = playlist.name.take(1), Modifier.size(46.dp), initialSize = 18, imageUrl = playlist.artwork.tileUrl())
         Column(Modifier.weight(1f)) {
             Text(playlist.name, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val trackCountLabel = playlist.trackCount?.let { stringResource(R.string.search_track_count, it) }

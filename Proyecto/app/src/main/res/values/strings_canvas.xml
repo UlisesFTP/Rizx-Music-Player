@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Animated cover art ("canvas") settings. See docs/adr/0017. -->
+    <string name="pref_canvas">Animated covers</string>
+    <string name="pref_canvas_off">Off</string>
+    <string name="pref_canvas_on">On</string>
+    <string name="pref_canvas_enable">Play animated art behind the cover</string>
+    <string name="pref_canvas_enable_caption">Muted and looping. Pulls a second stream on top of the audio.</string>
+
+    <string name="pref_canvas_sources">Sources</string>
+    <string name="pref_canvas_apple">Apple motion artwork</string>
+    <string name="pref_canvas_apple_caption">A loop made for the album cover. The one that actually animates.</string>
+    <string name="pref_canvas_youtube">YouTube music video</string>
+    <string name="pref_canvas_youtube_caption">Used when Apple has none. Found by search, so it can be wrong.</string>
+
+    <string name="pref_canvas_quality">Quality</string>
+    <string name="canvas_quality_auto">Automatic</string>
+    <string name="canvas_quality_auto_caption">Up to 720. A sensible size for art under a scrim.</string>
+    <string name="canvas_quality_high">High</string>
+    <string name="canvas_quality_high_caption">Up to 1080. Only Apple\'s artwork goes this high.</string>
+    <string name="canvas_quality_saver">Data saver</string>
+    <string name="canvas_quality_saver_caption">The smallest usable size. Also forced on mobile data.</string>
+
+    <string name="pref_canvas_network">Network</string>
+    <string name="canvas_network_unmetered">Wi-Fi only</string>
+    <string name="canvas_network_unmetered_caption">Never on mobile data, including a phone hotspot.</string>
+    <string name="canvas_network_any">Wi-Fi and mobile data</string>
+    <string name="canvas_network_any_caption">Uses your data allowance. Data saver still blocks it.</string>
+    <string name="pref_canvas_battery">Allow in battery saver</string>
+    <string name="pref_canvas_battery_caption">Off: power-save mode stops the video.</string>
+
+    <!-- Diagnostics. Never shows a URL — a resolved link carries a signed token. -->
+    <string name="canvas_diagnostics">Last lookup</string>
+    <string name="canvas_diag_none">Nothing looked up yet.</string>
+    <string name="canvas_diag_cached">cached</string>
+    <string name="canvas_diag_fresh">fetched</string>
+    <string name="canvas_reason_disabled">Turned off</string>
+    <string name="canvas_reason_metered">Skipped: mobile data</string>
+    <string name="canvas_reason_battery">Skipped: battery saver</string>
+    <string name="canvas_reason_signal">Skipped: weak connection</string>
+    <string name="canvas_reason_no_candidate">No video for this song</string>
+    <string name="canvas_reason_rejected">Found a video, but not this recording</string>
+    <string name="canvas_reason_error">Couldn\'t reach the source</string>
+</resources>

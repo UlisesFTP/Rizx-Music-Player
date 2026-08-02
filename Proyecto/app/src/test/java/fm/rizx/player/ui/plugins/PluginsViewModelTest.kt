@@ -56,6 +56,8 @@ class PluginsViewModelTest {
         override suspend fun install(entry: RegistryPlugin): InstalledPlugin = error("not installable in test")
         override suspend fun update(entry: RegistryPlugin): InstalledPlugin = error("not installable in test")
         override suspend fun installFromUrl(url: String): InstalledPlugin = error("not installable in test")
+        override fun bundled(): List<fm.rizx.player.domain.plugin.BundledPlugin> = emptyList()
+        override suspend fun installBundled(assetName: String): InstalledPlugin = error("not installable in test")
         override suspend fun setEnabled(id: String, enabled: Boolean) {}
         override suspend fun uninstall(id: String) {}
         override suspend fun reloadInstalled() {}

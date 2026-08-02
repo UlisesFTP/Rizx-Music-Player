@@ -29,9 +29,9 @@ object ItunesIds {
 /** Upsizes the 100×100 thumbnail to a 600×600 cover by rewriting iTunes' fixed size token. */
 private fun ItunesResultDto.artworkSet(): ArtworkSet? {
     val small = artworkUrl100 ?: artworkUrl60 ?: return null
-    val large = small.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb")
+    val large = small.replace("100x100bb", "1000x1000bb").replace("60x60bb", "1000x1000bb")
     val variants = buildList {
-        if (large != small) add(Artwork(url = large, width = 600, height = 600, purpose = ArtworkPurpose.COVER))
+        if (large != small) add(Artwork(url = large, width = 1000, height = 1000, purpose = ArtworkPurpose.COVER))
         add(Artwork(url = small, width = 100, height = 100, purpose = ArtworkPurpose.THUMBNAIL))
     }
     return ArtworkSet(variants)

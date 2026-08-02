@@ -96,5 +96,7 @@ object PluginModule {
         registry: ProviderRegistry,
         settings: SettingsRepository,
         kv: PluginKvStore,
-    ): PluginRepository = PluginRepositoryImpl(registryClient, installer, store, runtime, registry, settings, kv = kv)
+        bundled: fm.rizx.player.data.plugin.install.BundledPlugins,
+    ): PluginRepository =
+        PluginRepositoryImpl(registryClient, installer, store, runtime, registry, settings, kv = kv, bundledPlugins = bundled)
 }

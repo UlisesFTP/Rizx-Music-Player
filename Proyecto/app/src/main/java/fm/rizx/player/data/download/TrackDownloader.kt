@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
 
 /** What landed on disk. [container] is the real format, which may differ from what the stream claimed. */
@@ -43,6 +44,7 @@ class TrackDownloader(
     suspend fun download(
         identityKey: String,
         stream: Stream,
+        expectedSha256: String? = null,
         onProgress: (Int) -> Unit = {},
     ): DownloadedFile = withContext(io) {
         dir.mkdirs()
@@ -79,6 +81,24 @@ class TrackDownloader(
             if (written <= 0L) {
                 part.delete()
                 throw AppError.Network("empty download")
+            }
+
+            // A file claiming to be lossless has to still *be* one after the whole body has landed. The
+            // header was checked before playback from 64 KiB; this re-checks it on what was actually
+            // written, so a truncated-then-padded or swapped body can't be indexed as a FLAC and then
+            // preferred offline forever. Only for FLAC: nothing else here makes a claim worth verifying.
+            if (extension == "flac" && !startsWithFlacMagic(part)) {
+                part.delete()
+                throw AppError.Network("downloaded file is not a FLAC")
+            }
+            // Optional, and absent from every index measured so far — but when a row publishes a digest
+            // it is the one check that covers the whole file rather than its first four bytes.
+            expectedSha256?.let { expected ->
+                val actual = sha256Of(part)
+                if (!actual.equals(expected, ignoreCase = true)) {
+                    part.delete()
+                    throw AppError.Network("checksum mismatch")
+                }
             }
 
             target.delete() // a re-download whose container changed must not leave the old file orphaned
@@ -127,6 +147,28 @@ class TrackDownloader(
         return written
     }
 
+    /** Whether the finished file still begins with `fLaC`. */
+    private fun startsWithFlacMagic(file: File): Boolean = runCatching {
+        file.inputStream().use { input ->
+            val head = ByteArray(4)
+            input.read(head) == 4 && head.contentEquals(FLAC_MAGIC)
+        }
+    }.getOrDefault(false)
+
+    /** Streamed rather than read whole: these files run tens of megabytes. */
+    private fun sha256Of(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
     /** Deletes any `.part` left by a process death mid-download. */
     fun sweepPartials() {
         runCatching { dir.listFiles { f -> f.name.endsWith(".part") }?.forEach { it.delete() } }
@@ -144,6 +186,10 @@ class TrackDownloader(
 
     fun delete(fileName: String) {
         runCatching { File(dir, fileName).delete() }
+    }
+
+    private companion object {
+        val FLAC_MAGIC = byteArrayOf(0x66, 0x4C, 0x61, 0x43) // "fLaC"
     }
 }
 

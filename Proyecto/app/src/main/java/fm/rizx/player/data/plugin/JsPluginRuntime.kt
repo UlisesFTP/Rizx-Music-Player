@@ -123,10 +123,21 @@ class JsPluginRuntime(
             }
         }
         version?.let { pluginVersions[pluginId] = it }
-        engine.eval(buildModuleGraph(pluginId, compiled, entry))
-        engine.evalCaptured("globalThis.__rizx.runHook(${enc(pluginId)}, 'onLoad')")
-        engine.evalCaptured("globalThis.__rizx.runHook(${enc(pluginId)}, 'onEnable')")
-        flushRegistrations()
+        // All or nothing. Providers register from inside `onLoad`, and the registration hook flushes them
+        // into the app the moment they arrive — so a plugin that threw on a later line used to leave a
+        // live, working provider behind while the caller reported a failed install and persisted nothing.
+        // The result was a plugin that worked until the next restart and a screen insisting it hadn't
+        // installed. A failed load now leaves the app exactly as it found it.
+        try {
+            engine.eval(buildModuleGraph(pluginId, compiled, entry))
+            engine.evalCaptured("globalThis.__rizx.runHook(${enc(pluginId)}, 'onLoad')")
+            engine.evalCaptured("globalThis.__rizx.runHook(${enc(pluginId)}, 'onEnable')")
+            flushRegistrations()
+        } catch (e: Throwable) {
+            synchronized(pending) { pending.removeAll { (id, _) -> id == pluginId } }
+            runCatching { unregisterPlugin(pluginId) }
+            throw e
+        }
     }
 
     // ---- JsProviderInvoker ------------------------------------------------

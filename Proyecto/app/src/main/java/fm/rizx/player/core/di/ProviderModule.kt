@@ -41,6 +41,7 @@ import fm.rizx.player.data.remote.deezer.DeezerIds
 import fm.rizx.player.data.remote.itunes.ItunesApi
 import fm.rizx.player.data.remote.lrclib.LrcLibApi
 import fm.rizx.player.data.remote.lyricsovh.LyricsOvhApi
+import fm.rizx.player.core.network.DataSaverState
 import fm.rizx.player.core.network.NetworkMonitor
 import fm.rizx.player.data.local.store.LyricsStore
 import fm.rizx.player.data.remote.youtube.YoutubeExtractorClient
@@ -77,6 +78,7 @@ object ProviderModule {
     fun provideProviderRegistry(
         settings: SettingsRepository,
         networkMonitor: NetworkMonitor,
+        dataSaver: DataSaverState,
         itunes: ItunesApi,
         lrcLib: LrcLibApi,
         lyricsOvh: LyricsOvhApi,
@@ -132,12 +134,12 @@ object ProviderModule {
             register(SoundcloudChartsDashboardProvider(soundcloud))
             // Streaming providers in fallback priority (StreamingRepositoryImpl chains active-first,
             // then registration order): YouTube full tracks → Audius full tracks → iTunes 30s preview.
-            // ADR 0014: native full-length YouTube audio. Gets NetworkMonitor + settings so quality can
-            // adapt (max by default; lower on data saver + cellular or a weak signal).
-            register(YoutubeStreamingProvider(youtube, networkMonitor, settings))
+            // ADR 0014: native full-length YouTube audio. Gets NetworkMonitor + DataSaverState so quality
+            // can adapt (max by default; lower whenever the user asked to save data, or on a weak link).
+            register(YoutubeStreamingProvider(youtube, networkMonitor, dataSaver))
             // Native SoundCloud (indie/emerging), also NewPipe. Below YouTube in the fallback chain, but a
             // SoundCloud-owned track resolves against it directly (StreamingRepositoryImpl native-owner path).
-            register(SoundcloudStreamingProvider(soundcloud, networkMonitor, settings))
+            register(SoundcloudStreamingProvider(soundcloud, networkMonitor, dataSaver))
             register(AudiusStreamingProvider(audius, audiusHosts))
             register(ItunesStreamingProvider(itunes))
             // Lyrics providers, in fallback order — and order is priority, because activation is

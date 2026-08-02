@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pref_canvas">Capas animadas</string>
+    <string name="pref_canvas_off">Desativado</string>
+    <string name="pref_canvas_on">Ativado</string>
+    <string name="pref_canvas_enable">Mostrar arte animada atrás da capa</string>
+    <string name="pref_canvas_enable_caption">Sem som e em repetição. Usa um segundo fluxo além do áudio.</string>
+
+    <string name="pref_canvas_sources">Fontes</string>
+    <string name="pref_canvas_apple">Arte animada da Apple</string>
+    <string name="pref_canvas_apple_caption">Um laço feito para a capa. É o que realmente se anima.</string>
+    <string name="pref_canvas_youtube">Videoclipe do YouTube</string>
+    <string name="pref_canvas_youtube_caption">Usado quando a Apple não tem. É buscado, então pode errar.</string>
+
+    <string name="pref_canvas_quality">Qualidade</string>
+    <string name="canvas_quality_auto">Automática</string>
+    <string name="canvas_quality_auto_caption">Até 720. Um tamanho sensato para arte sob um degradê.</string>
+    <string name="canvas_quality_high">Alta</string>
+    <string name="canvas_quality_high_caption">Até 1080. Só a arte da Apple chega tão alto.</string>
+    <string name="canvas_quality_saver">Economia de dados</string>
+    <string name="canvas_quality_saver_caption">O menor tamanho utilizável. Também forçado em dados móveis.</string>
+
+    <string name="pref_canvas_network">Rede</string>
+    <string name="canvas_network_unmetered">Somente Wi-Fi</string>
+    <string name="canvas_network_unmetered_caption">Nunca com dados móveis, nem por roteamento do celular.</string>
+    <string name="canvas_network_any">Wi-Fi e dados móveis</string>
+    <string name="canvas_network_any_caption">Consome sua franquia de dados. A economia de dados ainda bloqueia.</string>
+    <string name="pref_canvas_battery">Permitir na economia de bateria</string>
+    <string name="pref_canvas_battery_caption">Desativado: o modo de economia interrompe o vídeo.</string>
+
+    <string name="canvas_diagnostics">Última busca</string>
+    <string name="canvas_diag_none">Nada foi buscado ainda.</string>
+    <string name="canvas_diag_cached">em cache</string>
+    <string name="canvas_diag_fresh">baixado</string>
+    <string name="canvas_reason_disabled">Desativado</string>
+    <string name="canvas_reason_metered">Ignorado: dados móveis</string>
+    <string name="canvas_reason_battery">Ignorado: economia de bateria</string>
+    <string name="canvas_reason_signal">Ignorado: conexão fraca</string>
+    <string name="canvas_reason_no_candidate">Sem vídeo para esta música</string>
+    <string name="canvas_reason_rejected">Um vídeo foi encontrado, mas não é esta gravação</string>
+    <string name="canvas_reason_error">Não foi possível acessar a fonte</string>
+</resources>

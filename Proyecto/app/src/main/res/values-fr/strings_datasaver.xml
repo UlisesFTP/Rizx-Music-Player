@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pref_data_saver_caption">Audio à débit réduit, pochettes plus petites, pas de pochettes animées, et les téléchargements attendent le Wi-Fi.</string>
+
+    <string name="pref_forced_by_data_saver">Imposé par l\'économiseur de données</string>
+    <string name="pref_paused_by_data_saver">En pause par l\'économiseur de données</string>
+    <string name="pref_data_saver_system">L\'économiseur de données d\'Android est actif</string>
+
+    <string name="canvas_reason_data_saver">Ignoré : économiseur de données</string>
+    <string name="download_blocked_data_saver">En attente du Wi-Fi — économiseur de données actif</string>
+</resources>

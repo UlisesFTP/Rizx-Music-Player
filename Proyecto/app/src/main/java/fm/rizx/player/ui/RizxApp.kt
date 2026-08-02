@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -49,6 +50,8 @@ import androidx.navigation.navArgument
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.MiniPlayer
+import fm.rizx.player.ui.components.LocalLosslessCodecs
+import fm.rizx.player.ui.components.LocalThriftyArtwork
 import fm.rizx.player.ui.components.RizxBottomNav
 import fm.rizx.player.ui.library.AddToPlaylistDialog
 import fm.rizx.player.ui.library.LibraryViewModel
@@ -96,10 +99,13 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     val isFavorite by playbackViewModel.currentIsFavorite.collectAsStateWithLifecycle()
     // The player's cover and its artist link both need a resolution step for tracks that came from
     // YouTube, so they're state rather than a straight read off the current track.
+    // Data saving pulls every grid tile down to the thumbnail rung — roughly a tenth of the bytes.
+    val thriftyArtwork by playbackViewModel.thriftyArtwork.collectAsStateWithLifecycle()
     val npArtworkUrl by playbackViewModel.currentArtworkUrl.collectAsStateWithLifecycle()
     val npArtists by playbackViewModel.currentArtists.collectAsStateWithLifecycle()
     // Held as a State (not read here) so the ~25fps spectrum only invalidates the waveform's draw.
     val levelsState = playbackViewModel.levels.collectAsStateWithLifecycle()
+    val losslessCodecs by playbackViewModel.losslessCodecs.collectAsStateWithLifecycle()
     // Library (favorites + playlists) shared for the app-wide "add to playlist" picker.
     val libraryViewModel: LibraryViewModel = hiltViewModel()
     val playlists by libraryViewModel.playlistSummaries.collectAsStateWithLifecycle()
@@ -134,7 +140,13 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
             .blueprintGrid(gridColor, cell = 28.dp)
             .blueprintCircles(circleColor),
     ) {
-      CompositionLocalProvider(LocalBottomInset provides chromeHeight.coerceAtLeast(24.dp)) {
+      CompositionLocalProvider(
+          LocalBottomInset provides chromeHeight.coerceAtLeast(24.dp),
+          // One policy, read by every grid tile in the app — see `tileUrl()`.
+          LocalThriftyArtwork provides thriftyArtwork,
+          // Which songs have played losslessly, for the rows that mark them — see `LosslessTag`.
+          LocalLosslessCodecs provides losslessCodecs,
+      ) {
         NavHost(
             navController = nav,
             startDestination = Routes.HOME,
@@ -262,9 +274,18 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                 val downloadStates by libraryViewModel.downloadStates.collectAsStateWithLifecycle()
                 val context = LocalContext.current
                 LaunchedEffect(np?.track?.source, canvasOn) { canvasViewModel.show(np?.track) }
+                // The canvas only decodes while Now Playing is genuinely in front. This covers pressing
+                // Home, the screen switching off, and navigating anywhere else — all of which used to
+                // leave a second ExoPlayer buffering video behind the user's back, because the ViewModel's
+                // pause()/resume() pair was written and then never called from anywhere.
+                LifecycleResumeEffect(canvasViewModel) {
+                    canvasViewModel.setVisible(true)
+                    onPauseOrDispose { canvasViewModel.setVisible(false) }
+                }
                 // Fall back to the track's metadata duration until the engine reports its own, so a
                 // restored (or still-buffering) track shows its real elapsed second immediately instead
                 // of 0:00 while the stream resolves.
+                val npAudioFormat by playbackViewModel.audioFormat.collectAsStateWithLifecycle()
                 val npDurationMs = playbackState.durationMs.takeIf { it > 0L } ?: (np?.track?.durationMs ?: 0L)
                 val npProgress = if (npDurationMs > 0L) {
                     (playbackState.positionMs.toFloat() / npDurationMs).coerceIn(0f, 1f)
@@ -274,6 +295,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                 NowPlayingScreen(
                     title = np?.track?.title ?: stringResource(fm.rizx.player.R.string.now_playing_empty),
                     artist = np?.track?.artists?.joinToString { it.name }?.ifEmpty { "—" } ?: "—",
+                    audioFormat = npAudioFormat,
                     artworkUrl = npArtworkUrl,
                     isPlaying = playbackState.isPlaying,
                     progress = npProgress,
@@ -303,7 +325,10 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     shuffleOn = queue.shuffleOn,
                     onToggleRepeat = queueViewModel::cycleRepeatMode,
                     onToggleShuffle = queueViewModel::toggleShuffle,
-                    canvasVideo = canvasViewModel::attach,
+                    // Null until there is something to attach it to: the screen creates the surface on
+                    // this, not on the fade, so the first frame has somewhere to land — but a song with
+                    // no canvas must still not pay for a TextureView.
+                    canvasVideo = if (canvasState.hasCandidate) canvasViewModel::attach else null,
                     canvasPlaying = canvasState.playing,
                     queue = queue,
                     // Parity with the full Queue screen: tapping a drawer row must actually start that song
@@ -318,7 +343,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                             onDismiss = onDismiss,
                             download = track?.let { downloadStates[it.source.identityKey] },
                             canvasOn = canvasOn,
-                            canvasAvailable = canvasState.playing || canvasState.loading,
+                            canvasAvailable = canvasState.playing || canvasState.resolving,
                             onDownload = { track?.let(libraryViewModel::downloadTrack) },
                             onDeleteDownload = { track?.let { libraryViewModel.deleteDownload(it.source.identityKey) } },
                             onToggleCanvas = canvasViewModel::toggle,
@@ -443,6 +468,9 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                         positionMs = playbackState.positionMs,
                         durationMs = miniDurationMs,
                         onSeek = playbackViewModel::seekToFraction,
+                        // Read from the same map the rows use, not from the format readout, so the bar and
+                        // a list agree — and so the tag survives the setting that hides the spec line.
+                        losslessLabel = mini?.track?.source?.identityKey?.let { losslessCodecs[it] },
                     )
                 }
                 if (showNav) {

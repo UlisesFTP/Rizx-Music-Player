@@ -31,8 +31,23 @@ object DeezerIds {
  * DTOs never escape this layer (ADR 0006).
  */
 
-private fun coverSet(xl: String?, medium: String?): ArtworkSet? {
+/**
+ * The three sizes Deezer publishes, each labelled with what it is actually good for.
+ *
+ * **The 500px one used to be missing, and that cost more data than anything else in the app.** `pick()`
+ * only considers variants whose purpose is `null` or matches, so with the XL as the sole `COVER` a
+ * `pick(COVER, 512)` had exactly one candidate: a 1000×1000 JPEG. Every tile in a 60-item Home feed was
+ * fetching one — measured at 63-212 KB each against Deezer today, where the 500px version of the same
+ * cover is 22-87 KB and looks identical at tile size.
+ *
+ * Both the 500 and the 1000 are `COVER`, and the **requested size** picks between them — which is what
+ * `pick()` was written to do and could not, having been given one option. A tile asking for 512 gets the
+ * 500 (a 12px difference); a full-screen hero asking for 1080 gets the 1000, because upscaling the 500
+ * by 2.16× trips the scorer's penalty. The 250 stays a `THUMBNAIL`, which is the rung data saving drops to.
+ */
+private fun coverSet(xl: String?, big: String?, medium: String?): ArtworkSet? {
     val variants = buildList {
+        big?.takeIf { it.isNotBlank() }?.let { add(Artwork(it, 500, 500, ArtworkPurpose.COVER)) }
         xl?.takeIf { it.isNotBlank() }?.let { add(Artwork(it, 1000, 1000, ArtworkPurpose.COVER)) }
         medium?.takeIf { it.isNotBlank() }?.let { add(Artwork(it, 250, 250, ArtworkPurpose.THUMBNAIL)) }
     }
@@ -45,7 +60,7 @@ fun DeezerArtistShortDto.toArtistRef(): ArtistRef? {
     val n = name ?: return null
     return ArtistRef(
         name = n,
-        artwork = coverSet(pictureXl, pictureMedium),
+        artwork = coverSet(pictureXl, pictureBig, pictureMedium),
         source = DeezerIds.artist(id ?: 0),
         followers = nbFan,
     )
@@ -56,7 +71,7 @@ fun DeezerAlbumShortDto.toAlbumRef(): AlbumRef? {
     return AlbumRef(
         title = t,
         artists = listOfNotNull(artist?.toArtistRef()),
-        artwork = coverSet(coverXl, coverMedium),
+        artwork = coverSet(coverXl, coverBig, coverMedium),
         source = DeezerIds.album(id ?: 0),
         year = yearOf(releaseDate),
         kind = AlbumKind.of(recordType),
@@ -69,7 +84,7 @@ fun DeezerPlaylistDto.toPlaylistRef(): PlaylistRef? {
     return PlaylistRef(
         id = playlistId.toString(),
         name = t,
-        artwork = coverSet(pictureXl, pictureMedium),
+        artwork = coverSet(pictureXl, pictureBig, pictureMedium),
         source = DeezerIds.playlist(playlistId),
         trackCount = nbTracks,
     )
@@ -87,7 +102,7 @@ fun DeezerTrackDto.toTrackOrNull(): Track? {
         album = album?.toAlbumRef(),
         durationMs = duration?.let { it.toLong() * 1000 },
         trackNumber = trackPosition,
-        artwork = album?.let { coverSet(it.coverXl, it.coverMedium) },
+        artwork = album?.let { coverSet(it.coverXl, it.coverBig, it.coverMedium) },
         source = DeezerIds.track(trackId),
     )
 }
@@ -101,7 +116,7 @@ fun DeezerAlbumDto.toAlbum(): Album? {
         year = yearOf(releaseDate),
         // Deezer already reports "YYYY-MM-DD"; keep it whole so a tag can carry the exact date.
         releaseDateIso = releaseDate?.takeIf { it.isNotBlank() },
-        artwork = coverSet(coverXl, coverMedium),
+        artwork = coverSet(coverXl, coverBig, coverMedium),
         tracks = tracks?.data?.mapNotNull { it.toTrackOrNull() }.orEmpty(),
         totalTracks = nbTracks,
         durationMs = duration?.let { it.toLong() * 1000 },
@@ -117,7 +132,7 @@ fun DeezerArtistDto.toArtist(topTracks: List<Track>, albums: List<AlbumRef>): Ar
     val n = name ?: return null
     return Artist(
         name = n,
-        artwork = coverSet(pictureXl, pictureMedium),
+        artwork = coverSet(pictureXl, pictureBig, pictureMedium),
         topTracks = topTracks,
         albums = albums,
         followers = nbFan,

@@ -32,6 +32,7 @@ data class DeezerArtistShortDto(
     val id: Long? = null,
     val name: String? = null,
     @SerialName("picture_xl") val pictureXl: String? = null,
+    @SerialName("picture_big") val pictureBig: String? = null,
     @SerialName("picture_medium") val pictureMedium: String? = null,
     /**
      * Followers. Present on `search/artist` rows and it is the only thing that separates an artist
@@ -46,6 +47,7 @@ data class DeezerAlbumShortDto(
     val id: Long? = null,
     val title: String? = null,
     @SerialName("cover_xl") val coverXl: String? = null,
+    @SerialName("cover_big") val coverBig: String? = null,
     @SerialName("cover_medium") val coverMedium: String? = null,
     @SerialName("release_date") val releaseDate: String? = null,
     /**
@@ -64,6 +66,7 @@ data class DeezerAlbumDto(
     val id: Long? = null,
     val title: String? = null,
     @SerialName("cover_xl") val coverXl: String? = null,
+    @SerialName("cover_big") val coverBig: String? = null,
     @SerialName("cover_medium") val coverMedium: String? = null,
     @SerialName("release_date") val releaseDate: String? = null,
     @SerialName("nb_tracks") val nbTracks: Int? = null,
@@ -93,6 +96,7 @@ data class DeezerArtistDto(
     val id: Long? = null,
     val name: String? = null,
     @SerialName("picture_xl") val pictureXl: String? = null,
+    @SerialName("picture_big") val pictureBig: String? = null,
     @SerialName("picture_medium") val pictureMedium: String? = null,
     @SerialName("nb_fan") val nbFan: Long? = null,
 )
@@ -117,6 +121,7 @@ data class DeezerPlaylistDto(
     val id: Long? = null,
     val title: String? = null,
     @SerialName("picture_xl") val pictureXl: String? = null,
+    @SerialName("picture_big") val pictureBig: String? = null,
     @SerialName("picture_medium") val pictureMedium: String? = null,
     @SerialName("nb_tracks") val nbTracks: Int? = null,
 )

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Optional community-lossless audio. See docs/adr/0024-community-lossless-source.md.
+
+  Wording rules that are not stylistic: never "Apple Music Lossless", "Qobuz", "master original" or
+  "bit-perfect". The app can verify a FLAC container and its parameters; it cannot verify where the
+  file came from, whether it was ever transcoded from a lossy source, or who is licensed to distribute
+  it. Every string here says only what was measured.
+-->
+<resources>
+    <string name="pref_audio_quality">Audio quality</string>
+    <string name="pref_audio_quality_standard">Standard</string>
+    <string name="pref_audio_quality_standard_caption">Conservative. Never contacts a lossless index.</string>
+    <string name="pref_audio_quality_best">Best available</string>
+    <string name="pref_audio_quality_best_caption">Highest-quality compressed stream each source offers.</string>
+    <string name="pref_audio_quality_lossless">Prefer Lossless (experimental)</string>
+    <string name="pref_audio_quality_lossless_caption">Look for a verified FLAC first; fall back automatically.</string>
+
+    <string name="pref_lossless_unavailable">Install a FLAC index plugin to use this</string>
+    <string name="pref_lossless_wifi_only">Only look for Lossless on Wi-Fi</string>
+    <string name="pref_lossless_wifi_only_caption">FLAC files can be tens of MB per song.</string>
+    <string name="pref_lossless_download">Download FLAC when available</string>
+    <string name="pref_lossless_download_caption">Saves the original bytes; no conversion either way.</string>
+    <string name="pref_show_technical_format">Show technical format</string>
+    <string name="pref_show_technical_format_caption">Codec, depth and sample rate under the player.</string>
+
+    <string name="pref_lossless_source">Source</string>
+    <string name="pref_lossless_warning">Experimental source of files contributed by third parties. Rizx can verify the FLAC container and its duration, but not the origin or licence of the master. Use it only for content you have the right to access.</string>
+
+    <string name="lossless_provenance_community">Community index · origin not verified</string>
+    <string name="lossless_validation_container">FLAC container verified</string>
+</resources>

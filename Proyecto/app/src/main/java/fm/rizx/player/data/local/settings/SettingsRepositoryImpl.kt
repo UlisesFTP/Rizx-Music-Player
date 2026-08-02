@@ -7,6 +7,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.CanvasNetworkPolicy
+import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.PlaybackResolverSettings
 import fm.rizx.player.domain.model.RadioMode
@@ -131,10 +134,36 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.NORMALIZE_VOLUME] = enabled }
     }
 
-    override val hiResOutput: Flow<Boolean> = pref { it[Keys.HI_RES_OUTPUT] ?: false }
+    // A stored mode wins; otherwise migrate the legacy hiResOutput boolean (true→BEST_AVAILABLE); a fresh
+    // install has neither → STANDARD. LOSSLESS_PREFERRED is unreachable from here on purpose: it consults
+    // a source the user installed themselves, so inheriting it from an unrelated flag would be wrong.
+    override val audioQualityMode: Flow<AudioQualityMode> = pref { prefs ->
+        prefs[Keys.AUDIO_QUALITY_MODE]
+            ?.let { name -> AudioQualityMode.entries.firstOrNull { it.name == name } }
+            ?: if (prefs[Keys.HI_RES_OUTPUT] == true) AudioQualityMode.BEST_AVAILABLE else AudioQualityMode.STANDARD
+    }
 
-    override suspend fun setHiResOutput(enabled: Boolean) {
-        dataStore.edit { it[Keys.HI_RES_OUTPUT] = enabled }
+    override suspend fun setAudioQualityMode(mode: AudioQualityMode) {
+        dataStore.edit { it[Keys.AUDIO_QUALITY_MODE] = mode.name }
+    }
+
+    // On by default: 25-27 MB a song is an order of magnitude more than the stream it replaces.
+    override val losslessWifiOnly: Flow<Boolean> = pref { it[Keys.LOSSLESS_WIFI_ONLY] ?: true }
+
+    override suspend fun setLosslessWifiOnly(enabled: Boolean) {
+        dataStore.edit { it[Keys.LOSSLESS_WIFI_ONLY] = enabled }
+    }
+
+    override val losslessDownload: Flow<Boolean> = pref { it[Keys.LOSSLESS_DOWNLOAD] ?: false }
+
+    override suspend fun setLosslessDownload(enabled: Boolean) {
+        dataStore.edit { it[Keys.LOSSLESS_DOWNLOAD] = enabled }
+    }
+
+    override val showTechnicalFormat: Flow<Boolean> = pref { it[Keys.SHOW_TECHNICAL_FORMAT] ?: true }
+
+    override suspend fun setShowTechnicalFormat(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_TECHNICAL_FORMAT] = enabled }
     }
 
     // Off by default: a canvas pulls a video stream on top of the audio one, so it has to be asked for.
@@ -142,6 +171,48 @@ class SettingsRepositoryImpl(
 
     override suspend fun setCanvasEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.CANVAS] = enabled }
+    }
+
+    // Wi-Fi only by default. Stored by name like the other enums, so an unknown value falls back rather
+    // than crashing the flow.
+    override val canvasNetworkPolicy: Flow<CanvasNetworkPolicy> = pref { prefs ->
+        prefs[Keys.CANVAS_NETWORK]
+            ?.let { name -> CanvasNetworkPolicy.entries.firstOrNull { it.name == name } }
+            ?: CanvasNetworkPolicy.UNMETERED_ONLY
+    }
+
+    override suspend fun setCanvasNetworkPolicy(policy: CanvasNetworkPolicy) {
+        dataStore.edit { it[Keys.CANVAS_NETWORK] = policy.name }
+    }
+
+    // Off by default: decoding a second video is what power-save mode exists to stop.
+    override val canvasOnBatterySaver: Flow<Boolean> = pref { it[Keys.CANVAS_BATTERY_SAVER] ?: false }
+
+    override suspend fun setCanvasOnBatterySaver(allowed: Boolean) {
+        dataStore.edit { it[Keys.CANVAS_BATTERY_SAVER] = allowed }
+    }
+
+    override val canvasQuality: Flow<CanvasQuality> = pref { prefs ->
+        prefs[Keys.CANVAS_QUALITY]
+            ?.let { name -> CanvasQuality.entries.firstOrNull { it.name == name } }
+            ?: CanvasQuality.AUTO
+    }
+
+    override suspend fun setCanvasQuality(quality: CanvasQuality) {
+        dataStore.edit { it[Keys.CANVAS_QUALITY] = quality.name }
+    }
+
+    // Both sources on by default — the canvas switch above is the one that costs data.
+    override val canvasAppleEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_APPLE] ?: true }
+
+    override suspend fun setCanvasAppleEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.CANVAS_APPLE] = enabled }
+    }
+
+    override val canvasYoutubeEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_YOUTUBE] ?: true }
+
+    override suspend fun setCanvasYoutubeEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.CANVAS_YOUTUBE] = enabled }
     }
 
     // On by default: when a track has timings, the synced view is the point of the feature.
@@ -219,8 +290,18 @@ class SettingsRepositoryImpl(
         val CROSSFADE = booleanPreferencesKey("core.audio.crossfade")
         val GAPLESS = booleanPreferencesKey("core.audio.gapless")
         val NORMALIZE_VOLUME = booleanPreferencesKey("core.audio.normalizeVolume")
+        // HI_RES_OUTPUT is legacy — kept only so an existing install's old choice migrates into AUDIO_QUALITY_MODE.
         val HI_RES_OUTPUT = booleanPreferencesKey("core.audio.hiResOutput")
+        val AUDIO_QUALITY_MODE = stringPreferencesKey("core.audio.qualityMode")
+        val LOSSLESS_WIFI_ONLY = booleanPreferencesKey("core.audio.losslessWifiOnly")
+        val LOSSLESS_DOWNLOAD = booleanPreferencesKey("core.audio.losslessDownload")
+        val SHOW_TECHNICAL_FORMAT = booleanPreferencesKey("core.ui.showTechnicalFormat")
         val CANVAS = booleanPreferencesKey("core.ui.canvas")
+        val CANVAS_NETWORK = stringPreferencesKey("core.ui.canvasNetwork")
+        val CANVAS_BATTERY_SAVER = booleanPreferencesKey("core.ui.canvasBatterySaver")
+        val CANVAS_QUALITY = stringPreferencesKey("core.ui.canvasQuality")
+        val CANVAS_APPLE = booleanPreferencesKey("core.ui.canvasApple")
+        val CANVAS_YOUTUBE = booleanPreferencesKey("core.ui.canvasYoutube")
         val SYNCED_LYRICS = booleanPreferencesKey("core.ui.syncedLyrics")
         val AUDIO_CACHE_BYTES = longPreferencesKey("core.cache.audioBytes")
         val RECS_REGIONAL_CONSENT = booleanPreferencesKey("core.recs.regionalConsent")

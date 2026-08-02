@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pref_canvas">Carátulas animadas</string>
+    <string name="pref_canvas_off">Desactivado</string>
+    <string name="pref_canvas_on">Activado</string>
+    <string name="pref_canvas_enable">Mostrar arte animado tras la portada</string>
+    <string name="pref_canvas_enable_caption">Sin sonido y en bucle. Usa un segundo flujo además del audio.</string>
+
+    <string name="pref_canvas_sources">Fuentes</string>
+    <string name="pref_canvas_apple">Arte animado de Apple</string>
+    <string name="pref_canvas_apple_caption">Un bucle hecho para la portada. Es el que de verdad se anima.</string>
+    <string name="pref_canvas_youtube">Video musical de YouTube</string>
+    <string name="pref_canvas_youtube_caption">Se usa cuando Apple no tiene. Se busca, así que puede fallar.</string>
+
+    <string name="pref_canvas_quality">Calidad</string>
+    <string name="canvas_quality_auto">Automática</string>
+    <string name="canvas_quality_auto_caption">Hasta 720. Un tamaño sensato para arte bajo un degradado.</string>
+    <string name="canvas_quality_high">Alta</string>
+    <string name="canvas_quality_high_caption">Hasta 1080. Sólo el arte de Apple llega tan alto.</string>
+    <string name="canvas_quality_saver">Ahorro de datos</string>
+    <string name="canvas_quality_saver_caption">El tamaño mínimo utilizable. También se fuerza con datos móviles.</string>
+
+    <string name="pref_canvas_network">Red</string>
+    <string name="canvas_network_unmetered">Solo Wi-Fi</string>
+    <string name="canvas_network_unmetered_caption">Nunca con datos móviles, ni con un punto de acceso.</string>
+    <string name="canvas_network_any">Wi-Fi y datos móviles</string>
+    <string name="canvas_network_any_caption">Consume tu plan de datos. El ahorro de datos sigue bloqueándolo.</string>
+    <string name="pref_canvas_battery">Permitir con ahorro de batería</string>
+    <string name="pref_canvas_battery_caption">Desactivado: el modo de ahorro detiene el video.</string>
+
+    <string name="canvas_diagnostics">Última búsqueda</string>
+    <string name="canvas_diag_none">Todavía no se ha buscado nada.</string>
+    <string name="canvas_diag_cached">en caché</string>
+    <string name="canvas_diag_fresh">descargado</string>
+    <string name="canvas_reason_disabled">Desactivado</string>
+    <string name="canvas_reason_metered">Omitido: datos móviles</string>
+    <string name="canvas_reason_battery">Omitido: ahorro de batería</string>
+    <string name="canvas_reason_signal">Omitido: conexión débil</string>
+    <string name="canvas_reason_no_candidate">No hay video para esta canción</string>
+    <string name="canvas_reason_rejected">Se encontró un video, pero no es esta versión</string>
+    <string name="canvas_reason_error">No se pudo conectar con la fuente</string>
+</resources>

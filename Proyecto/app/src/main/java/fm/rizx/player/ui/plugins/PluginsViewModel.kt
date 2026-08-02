@@ -1,5 +1,6 @@
 package fm.rizx.player.ui.plugins
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,8 +14,10 @@ import fm.rizx.player.domain.provider.ProviderKind
 import fm.rizx.player.domain.provider.ProviderRegistry
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.domain.usecase.ProviderHealthProbe
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,11 +46,9 @@ data class StoreRow(
     val description: String,
     val author: String,
     val status: StoreStatus,
-    /** Stable reason key when [status] is [StoreStatus.UNSUPPORTED] (localized by the UI). */
-    val unsupportedReason: String? = null,
 )
 
-enum class StoreStatus { AVAILABLE, INSTALLING, INSTALLED, UNSUPPORTED, ERROR }
+enum class StoreStatus { AVAILABLE, INSTALLING, INSTALLED, ERROR }
 
 /** A downloaded plugin in the "Installed plugins" section. */
 data class InstalledPluginRow(
@@ -66,6 +67,8 @@ data class InstalledPluginRow(
 data class PluginsUiState(
     val rows: List<PluginRow> = emptyList(),
     val store: List<StoreRow> = emptyList(),
+    /** Archives shipped in the APK, installable with no network. Empty when the build carries none. */
+    val bundled: List<StoreRow> = emptyList(),
     val installedPlugins: List<InstalledPluginRow> = emptyList(),
     val registries: List<String> = emptyList(),
     val storeError: String? = null,
@@ -136,13 +139,64 @@ class PluginsViewModel @Inject constructor(
 
     fun install(id: String) {
         val entry = registryCache.firstOrNull { it.id == id } ?: return
-        if (!entry.isSupported || id in installing) return
+        if (id in installing) return
         installing.add(id)
         rebuildStore()
         viewModelScope.launch {
-            runCatching { plugins.install(entry) }
-                .onFailure { e -> _state.update { it.copy(storeError = e.toSafeMessage("Install failed. Please try again.")) } }
+            report(runCatching { plugins.install(entry) }, id, "Install failed. Please try again.")
             installing.remove(id)
+            snapshot()
+            rebuildStore()
+        }
+    }
+
+    /**
+     * Turns the outcome of an install into what the screen says — and, when it succeeded, into nothing.
+     *
+     * Three things were wrong with reporting it inline, all of which produce the same complaint ("it says
+     * install failed and the plugin is right there"):
+     *
+     * - **A success left the previous failure on screen.** Nothing cleared `storeError` except reloading
+     *   the store, so one bad attempt — a rate-limited GitHub, a flaky moment — labelled every later one.
+     * - **A cancelled install was reported as a failed one.** `runCatching` catches `CancellationException`
+     *   too, so navigating away mid-install ended in "Install failed" for work that was merely stopped.
+     * - **A failure that nonetheless installed said so anyway.** [installedId] settles it against the
+     *   actual list rather than against the exception.
+     *
+     * The cause is logged rather than shown: `toSafeMessage` exists precisely because provider and
+     * transpiler detail is for logs, not for a screen — but with nothing logged, a failure here was
+     * unexplainable to anyone, including me.
+     */
+    private suspend fun report(result: Result<Any?>, expectedId: String?, fallback: String) {
+        val error = result.exceptionOrNull()
+        if (error is CancellationException) throw error
+        // Read the list rather than the cached copy: the cache is refreshed by a flow collector that may
+        // not have run yet, and "is it installed" is the whole question being asked.
+        val current = runCatching { plugins.installed.first() }.getOrDefault(installedCache)
+        if (error == null || (expectedId != null && current.any { it.id == expectedId })) {
+            _state.update { it.copy(storeError = null) }
+            return
+        }
+        Log.w("Plugins", "install of '${expectedId ?: "?"}' failed", error)
+        _state.update { it.copy(storeError = error.toSafeMessage(fallback)) }
+    }
+
+    /**
+     * Installs a plugin bundled in the APK — no network, no URL to paste.
+     *
+     * [assetName] rather than an id: the real id comes out of the archive's own manifest during the
+     * install, so until then the file is all there is to name it by.
+     */
+    fun installBundled(assetName: String) {
+        if (assetName in installing) return
+        installing.add(assetName)
+        rebuildStore()
+        viewModelScope.launch {
+            // The archive's own manifest settles the id, so the "did it install after all" check has to
+            // ask the bundled entry for it — the asset's file name is not it.
+            val expected = plugins.bundled().firstOrNull { it.assetName == assetName }?.id
+            report(runCatching { plugins.installBundled(assetName) }, expected, "Install failed. Please try again.")
+            installing.remove(assetName)
             snapshot()
             rebuildStore()
         }
@@ -155,8 +209,9 @@ class PluginsViewModel @Inject constructor(
         installing.add(id)
         rebuildStore()
         viewModelScope.launch {
-            runCatching { plugins.update(entry) }
-                .onFailure { e -> _state.update { it.copy(storeError = e.toSafeMessage("Update failed. Please try again.")) } }
+            // An update that fails leaves the *previous* version installed, so the id being present is not
+            // evidence the update worked — this one reports on the exception alone.
+            report(runCatching { plugins.update(entry) }, expectedId = null, fallback = "Update failed. Please try again.")
             installing.remove(id)
             snapshot()
             rebuildStore()
@@ -169,9 +224,8 @@ class PluginsViewModel @Inject constructor(
         if (trimmed.isBlank() || _state.value.sideloadBusy) return
         _state.update { it.copy(sideloadBusy = true) }
         viewModelScope.launch {
-            runCatching { plugins.installFromUrl(trimmed) }
-                .onSuccess { _state.update { s -> s.copy(storeError = null) } }
-                .onFailure { e -> _state.update { it.copy(storeError = e.toSafeMessage("Couldn't install from that URL")) } }
+            // No expected id: a URL says nothing about what is inside the archive until it is open.
+            report(runCatching { plugins.installFromUrl(trimmed) }, expectedId = null, fallback = "Couldn't install from that URL")
             _state.update { it.copy(sideloadBusy = false) }
             snapshot()
         }
@@ -250,8 +304,8 @@ class PluginsViewModel @Inject constructor(
         val installedIds = installedCache.map { it.id }.toSet()
         _state.update {
             it.copy(
-                // Every registry entry is listed; the ones that can't run here say WHY instead of
-                // vanishing — transparency beats a mysteriously short catalog (ADR 0019).
+                // The registry, minus the entries Rizx already does natively — those are filtered out
+                // upstream in PluginRegistryClient and never reach here.
                 store = registryCache.map { entry ->
                     StoreRow(
                         id = entry.id,
@@ -260,12 +314,25 @@ class PluginsViewModel @Inject constructor(
                         description = entry.description,
                         author = entry.author,
                         status = when {
-                            !entry.isSupported -> StoreStatus.UNSUPPORTED
                             entry.id in installing -> StoreStatus.INSTALLING
                             entry.id in installedIds -> StoreStatus.INSTALLED
                             else -> StoreStatus.AVAILABLE
                         },
-                        unsupportedReason = entry.unsupportedReason,
+                    )
+                },
+                // Keyed by asset name, since the archive's own manifest settles the real id on install.
+                bundled = plugins.bundled().map { entry ->
+                    StoreRow(
+                        id = entry.assetName,
+                        displayName = entry.name,
+                        category = entry.category,
+                        description = entry.description,
+                        author = "",
+                        status = when {
+                            entry.assetName in installing -> StoreStatus.INSTALLING
+                            entry.id in installedIds -> StoreStatus.INSTALLED
+                            else -> StoreStatus.AVAILABLE
+                        },
                     )
                 },
             )

@@ -1,9 +1,13 @@
 package fm.rizx.player.domain.repository
 
+import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.CanvasNetworkPolicy
+import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /**
  * Core app settings, persisted in DataStore (§7.3/§7.4). MVP covers the settings the app actually
@@ -73,13 +77,44 @@ interface SettingsRepository {
     suspend fun setNormalizeVolume(enabled: Boolean)
 
     /**
-     * Hi-Res output: force ExoPlayer's 32-bit float PCM output path so high-resolution audio (24-bit /
-     * high-sample-rate local lossless files) isn't truncated to 16-bit. **Off by default.** Applies to the
-     * next playback session (the audio sink is built once, at service start); it's a no-op for 16-bit/lossy
-     * sources and on devices whose DAC can't do float.
+     * How hard to work for audio quality: conservative, best compressed, or try for a verified FLAC
+     * first. Replaces the old `hiResOutput` boolean, whose stored value migrates in
+     * (`false → STANDARD`, `true → BEST_AVAILABLE`) — **never** into
+     * [AudioQualityMode.LOSSLESS_PREFERRED], which has to be chosen.
      */
+    val audioQualityMode: Flow<AudioQualityMode>
+    suspend fun setAudioQualityMode(mode: AudioQualityMode)
+
+    /**
+     * Hi-Res output: force ExoPlayer's 32-bit float PCM output path so high-resolution audio (24-bit /
+     * high-sample-rate local lossless files) isn't truncated to 16-bit. Applies to the next playback
+     * session (the audio sink is built once, at service start); it's a no-op for 16-bit/lossy sources and
+     * on devices whose DAC can't do float.
+     *
+     * Now derived rather than stored, so the callers that only care about "better than standard" keep
+     * working unchanged. Anything that must distinguish *which* better — clearing the resolved-URL cache
+     * when the mode changes, for instance — has to read [audioQualityMode] instead, since both non-standard
+     * modes map to `true` here.
+     */
+    @Deprecated("Read audioQualityMode; this collapses two distinct modes into one flag.")
     val hiResOutput: Flow<Boolean>
-    suspend fun setHiResOutput(enabled: Boolean)
+        get() = audioQualityMode.map { it.prefersBestCompressed }
+
+    /**
+     * Only look for a lossless file on an unmetered connection. **On by default**: the files measured
+     * against the reference index run 25-27 MB each, which is an order of magnitude more than the
+     * compressed stream it replaces.
+     */
+    val losslessWifiOnly: Flow<Boolean>
+    suspend fun setLosslessWifiOnly(enabled: Boolean)
+
+    /** Download the FLAC instead of the compressed stream when one verifies. Off by default (size). */
+    val losslessDownload: Flow<Boolean>
+    suspend fun setLosslessDownload(enabled: Boolean)
+
+    /** Show the codec/depth/rate line under the player. On by default — it is the honest part of this feature. */
+    val showTechnicalFormat: Flow<Boolean>
+    suspend fun setShowTechnicalFormat(enabled: Boolean)
 
     /**
      * Play the song's video muted behind the Now Playing artwork. **Off by default**: it pulls a second
@@ -88,6 +123,42 @@ interface SettingsRepository {
      */
     val canvasEnabled: Flow<Boolean>
     suspend fun setCanvasEnabled(enabled: Boolean)
+
+    /**
+     * Which connections a canvas may be fetched over. Defaults to [CanvasNetworkPolicy.UNMETERED_ONLY] —
+     * a canvas is a *second* stream on top of the audio one, so spending mobile data on it has to be
+     * asked for. Metered is decided by the system's own flag, not by the radio, so a phone hotspot
+     * counts as mobile data.
+     */
+    val canvasNetworkPolicy: Flow<CanvasNetworkPolicy>
+    suspend fun setCanvasNetworkPolicy(policy: CanvasNetworkPolicy)
+
+    /**
+     * Whether a canvas may still play in the device's power-save mode. **Off by default**: decoding a
+     * second video stream is exactly what power-save mode exists to stop.
+     */
+    val canvasOnBatterySaver: Flow<Boolean>
+    suspend fun setCanvasOnBatterySaver(allowed: Boolean)
+
+    /**
+     * How large a canvas to ask for. Meaningful because Apple's motion artwork is one HLS URL holding a
+     * ladder up to 2160² — the cap is what picks the rung. Mobile data and a low-RAM device still
+     * overrule it (`CanvasGate.quality`).
+     */
+    val canvasQuality: Flow<CanvasQuality>
+    suspend fun setCanvasQuality(quality: CanvasQuality)
+
+    /** Apple's motion album artwork as a canvas source. On by default — it is the one that loops. */
+    val canvasAppleEnabled: Flow<Boolean>
+    suspend fun setCanvasAppleEnabled(enabled: Boolean)
+
+    /**
+     * YouTube's music video as the canvas fallback. On by default, and separately switchable because it
+     * is the source that can be *wrong*: Apple either has this album's loop or it hasn't, whereas
+     * YouTube is a search over a catalogue full of near-misses.
+     */
+    val canvasYoutubeEnabled: Flow<Boolean>
+    suspend fun setCanvasYoutubeEnabled(enabled: Boolean)
 
     /**
      * Show lyrics as a karaoke-style timed view (**on by default**) rather than plain scrolling prose.

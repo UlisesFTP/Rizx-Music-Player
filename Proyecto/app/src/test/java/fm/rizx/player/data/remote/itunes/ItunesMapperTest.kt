@@ -46,11 +46,11 @@ class ItunesMapperTest {
     }
 
     @Test
-    fun `artwork upsizes the 100px thumbnail to a 600px cover`() {
+    fun `artwork upsizes the 100px thumbnail to a 1000px cover`() {
         val art = decode(sample).first().toTrackOrNull()!!.artwork!!.items
 
-        val cover = art.first { it.width == 600 }
-        assertEquals("https://art/600x600bb.jpg", cover.url)
+        val cover = art.first { it.width == 1000 }
+        assertEquals("https://art/1000x1000bb.jpg", cover.url)
         assertTrue(art.any { it.url == "https://art/100x100bb.jpg" })
     }
 

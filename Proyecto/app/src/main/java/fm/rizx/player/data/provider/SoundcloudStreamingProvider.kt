@@ -11,7 +11,7 @@ import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.ProviderKind
 import fm.rizx.player.domain.provider.StreamingProvider
-import fm.rizx.player.domain.repository.SettingsRepository
+import fm.rizx.player.core.network.DataSaverState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +30,7 @@ import java.io.IOException
 class SoundcloudStreamingProvider(
     private val client: SoundcloudExtractorClient,
     private val networkMonitor: NetworkMonitor,
-    private val settings: SettingsRepository,
+    private val dataSaver: DataSaverState,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : StreamingProvider {
 
@@ -55,10 +55,8 @@ class SoundcloudStreamingProvider(
     }
 
     /** Max quality by default; lower only when the user asked to save data (see the YouTube provider). */
-    private suspend fun shouldPreferLow(): Boolean {
-        val net = networkMonitor.snapshot()
-        return settings.dataSaver.first() && (net.isCellular || net.isBadSignal)
-    }
+    private suspend fun shouldPreferLow(): Boolean =
+        dataSaver.saving.first() || networkMonitor.snapshot().isBadSignal
 
     private suspend fun <T> guarded(block: suspend () -> T): T = try {
         withContext(io) { block() }

@@ -1,6 +1,12 @@
 package fm.rizx.player.playback.service
 
 import androidx.media3.common.util.UnstableApi
+import fm.rizx.player.domain.lossless.FlacStreamInfo
+import fm.rizx.player.domain.lossless.LosslessCandidate
+import fm.rizx.player.domain.lossless.LosslessIndexItem
+import fm.rizx.player.domain.lossless.LosslessMatchEvidence
+import fm.rizx.player.domain.lossless.LosslessResolver
+import fm.rizx.player.domain.lossless.ValidatedLosslessStream
 import fm.rizx.player.domain.model.PlaybackResolverSettings
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.QueueItem
@@ -39,6 +45,25 @@ class QueueStreamResolverTest {
     private val candidate = StreamCandidate(id = "c1", title = "Song", source = ref)
     private val stream = Stream(url = "https://cdn/audio", protocol = StreamProtocol.HTTPS, source = ref)
 
+    /** A community FLAC that already passed the matcher and the header check. */
+    private val flac = ValidatedLosslessStream(
+        candidate = LosslessCandidate(
+            item = LosslessIndexItem(song = "Song", artist = "Artist", url = "https://host/song.flac"),
+            matchScore = 100,
+            evidence = LosslessMatchEvidence(titleMatched = true, artistMatched = true),
+        ),
+        url = "https://host/song.flac",
+        info = FlacStreamInfo(
+            sampleRateHz = 44_100,
+            bitsPerSample = 16,
+            channels = 2,
+            totalSamples = 44_100L * 180,
+            durationMs = 180_000,
+            contentLength = 27_110_494L,
+            effectiveBitrateKbps = 1205,
+        ),
+    )
+
     private fun resolverReturningStream(): StreamingResolver {
         val r = mockk<StreamingResolver>()
         coEvery { r.resolveCandidatesForTrack(any()) } returns CandidateResult.Success(listOf(candidate))
@@ -61,7 +86,76 @@ class QueueStreamResolverTest {
         settings: PlaybackResolverSettings = PlaybackResolverSettings(),
         downloads: DownloadRepository = noDownloads(),
         library: LocalLibraryRepository = noLocal(),
-    ) = QueueStreamResolver(mockk<QueueRepository>(relaxed = true), resolver, settings, downloads, library)
+        lossless: LosslessResolver? = null,
+    ) = QueueStreamResolver(
+        mockk<QueueRepository>(relaxed = true), resolver, settings, downloads, library,
+        audioCache = null, lossless = lossless,
+    )
+
+    // ---- the community-lossless step ----
+
+    /**
+     * The ordering the whole feature depends on: **above** the ordinary chain.
+     *
+     * It cannot live inside the provider chain, because `StreamingRepositoryImpl` resolves a track
+     * against its native owner first — so a track that came from YouTube would never reach a lossless
+     * step placed down there.
+     */
+    @Test
+    fun `a verified FLAC wins over the ordinary chain`() = runBlocking {
+        val resolver = resolverReturningStream()
+        val qsr = subject(resolver, lossless = losslessReturning(flac))
+
+        val resolved = qsr.resolveCached(item)
+
+        assertEquals("https://host/song.flac", resolved?.url)
+        assertEquals("FLAC", resolved?.codec)
+        assertEquals(16, resolved?.bitsPerSample)
+        coVerify(exactly = 0) { resolver.resolveCandidatesForTrack(any()) }
+    }
+
+    @Test
+    fun `no verified FLAC simply carries on with the ordinary chain`() = runBlocking {
+        val qsr = subject(resolverReturningStream(), lossless = losslessReturning(null))
+
+        assertEquals(stream, qsr.resolveCached(item))
+    }
+
+    @Test
+    fun `a downloaded file still beats the index — no network for a song already on disk`() = runBlocking {
+        val local = Stream(url = "file:///music/song.m4a", protocol = StreamProtocol.FILE, source = ref)
+        val downloads = mockk<DownloadRepository> { every { localStream(any()) } returns local }
+        val lossless = losslessReturning(flac)
+
+        assertEquals(local, subject(resolverReturningStream(), downloads = downloads, lossless = lossless).resolveCached(item))
+        coVerify(exactly = 0) { lossless.resolve(any()) }
+    }
+
+    @Test
+    fun `an exploding lossless resolver cannot stop a song from playing`() = runBlocking {
+        val lossless = mockk<LosslessResolver> {
+            coEvery { resolve(any()) } throws IllegalStateException("index on fire")
+        }
+
+        assertEquals(stream, subject(resolverReturningStream(), lossless = lossless).resolveCached(item))
+    }
+
+    @Test
+    fun `suppressing a track after a failed FLAC drops it back to the ordinary stream for good`() = runBlocking {
+        // The mid-song fallback: the header verified, the host then died. Re-resolving would hand back
+        // the same dead URL, so the step is one-way for the rest of the session.
+        val lossless = losslessReturning(flac)
+        val qsr = subject(resolverReturningStream(), lossless = lossless)
+
+        assertEquals("https://host/song.flac", qsr.resolveCached(item)?.url)
+        qsr.suppressLossless(ref.identityKey)
+
+        assertEquals(stream, qsr.resolveCached(item))
+    }
+
+    private fun losslessReturning(result: ValidatedLosslessStream?) = mockk<LosslessResolver> {
+        coEvery { resolve(any()) } returns result
+    }
 
     @Test
     fun `resolves once then serves the cached stream without re-resolving`() = runBlocking {

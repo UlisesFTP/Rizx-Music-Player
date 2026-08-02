@@ -67,6 +67,7 @@ import fm.rizx.player.domain.model.PlaylistSummary
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.CodeLabel
+import fm.rizx.player.ui.components.tileUrl
 import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.DownloadButton
 import fm.rizx.player.ui.components.FilterEmpty
@@ -584,7 +585,7 @@ private fun TrackRow(track: Track, onPlay: () -> Unit, trailing: @Composable (Ro
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(13.dp),
     ) {
-        CoverArt(tintFor(track.source.id), initial = null, Modifier.size(46.dp), imageUrl = track.artwork.coverUrl())
+        CoverArt(tintFor(track.source.id), initial = null, Modifier.size(46.dp), imageUrl = track.artwork.tileUrl())
         Column(Modifier.weight(1f)) {
             Text(track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(

@@ -2,6 +2,7 @@ package fm.rizx.player.ui.screens
 
 import fm.rizx.player.ui.components.tintFor
 import fm.rizx.player.ui.components.CoverArt
+import fm.rizx.player.domain.model.AudioFormatUi
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.domain.model.PlaybackQueue
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -97,6 +98,7 @@ import fm.rizx.player.domain.model.RepeatMode
 import fm.rizx.player.domain.usecase.LinkedArtist
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.brutalShadow
+import fm.rizx.player.ui.theme.code
 import fm.rizx.player.ui.theme.cornerBrackets
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.dot
@@ -140,6 +142,13 @@ fun NowPlayingScreen(
     /** Opens one artist's page. */
     onOpenArtist: (ProviderRef) -> Unit = {},
     album: String = "",
+    /**
+     * What is actually decoding, when anything is known about it — `FLAC · 16-bit · 48 kHz`.
+     *
+     * Null hides the line entirely, which is the honest state for a song nobody measured: the setting is
+     * off, the stream resolver had nothing to say, or the next track hasn't resolved yet.
+     */
+    audioFormat: AudioFormatUi? = null,
     trackIndex: Int = 0,
     trackCount: Int = 1,
     // A mode, not a flag: the chip has to tell "repeat the queue" apart from "repeat this song".
@@ -318,21 +327,24 @@ fun NowPlayingScreen(
                         )
                     }
                 }
-                // The canvas: the song's own video, muted and looping, fading in over the artwork once it
-                // is actually playing — so a track with no video, or a slow extraction, simply never
+                // The canvas: animated cover art, muted and looping, fading in over the artwork once a
+                // real frame has been decoded — so a track with no canvas, or a slow lookup, never
                 // reveals anything and the cover stays put.
+                //
+                // The surface is created as soon as there is a player to attach it to, and only its
+                // *alpha* follows [canvasPlaying]. Gating the AndroidView itself on the fade deadlocks:
+                // the fade waits for the first rendered frame, and the first frame can never be rendered
+                // because there is no surface to render it onto.
                 if (canvasVideo != null) {
                     val fade by animateFloatAsState(
                         targetValue = if (canvasPlaying) 1f else 0f,
                         animationSpec = tween(600),
                         label = "canvasFade",
                     )
-                    if (fade > 0f) {
-                        AndroidView(
-                            factory = { ctx -> TextureView(ctx).also(canvasVideo) },
-                            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = fade },
-                        )
-                    }
+                    AndroidView(
+                        factory = { ctx -> TextureView(ctx).also(canvasVideo) },
+                        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = fade },
+                    )
                 }
                 // Bottom scrim — fades the cover into the zone below (paper in light, the wash in dark).
                 //
@@ -571,6 +583,7 @@ fun NowPlayingScreen(
                                 onOpenArtist = onOpenArtist,
                                 shadow = npTextShadow,
                             )
+                            AudioFormatLine(audioFormat, npTextShadow)
                         }
                     }
 
@@ -800,6 +813,32 @@ private fun ArtistLine(
             )
         }
     }
+}
+
+/**
+ * One line of monospace saying what is decoding: `FLAC · 16-bit · 48 kHz`, `OPUS · 160 kbps · 48 kHz`.
+ *
+ * Deliberately quiet — it is information, not a badge. A lossless codec gets the accent colour because
+ * that is the fact worth spotting at a glance, and **it is decided by the codec, never by the bitrate**:
+ * a large lossy file is still lossy.
+ *
+ * The word `BIT-PERFECT` appears nowhere in this app. Between Android's mixer, the automatic equalizer,
+ * loudness normalisation and the crossfade envelope, the samples reaching the DAC are not the samples in
+ * the file, and claiming otherwise would be the one dishonest line in a feature built on measuring things.
+ */
+@Composable
+private fun AudioFormatLine(format: AudioFormatUi?, shadow: Shadow?) {
+    val label = format?.shortLabel ?: return
+    val c = RizxTheme.colors
+    Text(
+        label,
+        style = code(11).copy(shadow = shadow),
+        color = if (format.isLosslessCodec) c.accent else c.text2.copy(alpha = 0.7f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(top = 6.dp),
+    )
 }
 
 /**

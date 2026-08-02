@@ -81,6 +81,15 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    testOptions {
+        unitTests {
+            // Android's stub `android.jar` throws on every call by default, which makes a single
+            // `Log.w` in an otherwise pure class untestable — the exception escapes the coroutine and
+            // the assertion that follows never runs. Returning defaults instead lets a class keep its
+            // diagnostics without dragging Robolectric in for them.
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Data saver. See docs/adr/0025-data-saver.md.
+
+  The wording rule here: never claim a preference was changed. Data saving *overrides* the audio quality
+  and the animated covers while it is on; the stored choice is untouched and comes back. So these strings
+  say "forced by" and "paused by", not "set to".
+-->
+<resources>
+    <string name="pref_data_saver_caption">Lower-bitrate audio, smaller artwork, no animated covers, and downloads wait for Wi-Fi.</string>
+
+    <!-- Shown as the value of a row whose real setting is being overridden right now. -->
+    <string name="pref_forced_by_data_saver">Forced by Data saver</string>
+    <string name="pref_paused_by_data_saver">Paused by Data saver</string>
+    <string name="pref_data_saver_system">Android\'s Data saver is on</string>
+
+    <string name="canvas_reason_data_saver">Skipped: data saver</string>
+    <string name="download_blocked_data_saver">Waiting for Wi-Fi — Data saver is on</string>
+</resources>

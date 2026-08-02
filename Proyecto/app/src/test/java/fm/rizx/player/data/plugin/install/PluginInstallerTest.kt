@@ -163,6 +163,16 @@ class PluginInstallerTest {
     }
 
     @Test
+    fun `the id an archive installs under is derivable from its name alone`() {
+        // The store compares a manifest name against the installed directory list to decide whether to
+        // draw "Install" or "Installed", so the two have to agree before anything is installed.
+        assertEquals("rizx-community-flac", PluginInstaller.pluginIdFor("rizx-community-flac"))
+        assertEquals("rizx-lossless", PluginInstaller.pluginIdFor("Rizx Lossless"))
+        assertEquals("rizx-lossless", PluginInstaller.pluginIdFor("@rizx/lossless"))
+        assertEquals("nuclear-plugin-discogs", PluginInstaller.pluginIdFor("nuclear-plugin-discogs"))
+    }
+
+    @Test
     fun `entry resolution tolerates the legacy src-stripped key`() {
         val sources = mapOf("src/index" to PluginSourceFile("", PluginSourceKind.TS))
 

@@ -1,5 +1,6 @@
 package fm.rizx.player.data.plugin.bridge
 
+import fm.rizx.player.domain.lossless.LosslessIndexItem
 import fm.rizx.player.domain.model.Album
 import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.Artist
@@ -108,6 +109,33 @@ object JsModelMappers {
         val ref = toProviderRef(obj, fallbackProvider, name)
         return PlaylistRef(id = ref.id, name = name, artwork = artworkOf(obj), source = ref)
     }
+
+    /**
+     * Rows of a community lossless index.
+     *
+     * Deliberately **not** routed through [parseStreamCandidates]: a `StreamCandidate` has no artist
+     * field, and the artist is the single signal that keeps a same-titled recording by somebody else
+     * out of the player. The three required keys are the shape every Echo-compatible index publishes;
+     * the rest are read when a richer index offers them and simply stay null when it doesn't.
+     */
+    fun parseLosslessIndexItems(jsonStr: String, json: Json): List<LosslessIndexItem> =
+        topLevelArray(jsonStr, json).mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val song = obj.str("song", "title", "name") ?: return@mapNotNull null
+            val artist = obj.str("artist", "artists", "author") ?: return@mapNotNull null
+            val url = obj.str("url", "downloadUrl", "stream") ?: return@mapNotNull null
+            LosslessIndexItem(
+                song = song,
+                artist = artist,
+                url = url,
+                album = obj.str("album"),
+                durationMs = obj["durationMs"]?.jsonPrimitive?.doubleOrNull?.toLong(),
+                isrc = obj.str("isrc"),
+                sha256 = obj.str("sha256", "checksum"),
+                license = obj.str("license"),
+                sourceName = obj.str("sourceName", "source_name"),
+            )
+        }
 
     private fun topLevelArray(jsonStr: String, json: Json): List<JsonElement> =
         runCatching { (json.parseToJsonElement(jsonStr) as? JsonArray)?.jsonArray }.getOrNull() ?: emptyList()

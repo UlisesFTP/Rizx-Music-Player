@@ -79,8 +79,20 @@ fun PluginsScreen(vm: PluginsViewModel = hiltViewModel()) {
         if (storeTab) {
             // state.storeError is sourced from the ViewModel; left as a raw literal there (not localized here).
             state.storeError?.let { Text(it, style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 12.dp)) }
+            // Bundled with the app: no network, no URL to paste, and nothing published anywhere. Absent
+            // when the build carries none, which is the case for a clone of the public repository.
+            if (state.bundled.isNotEmpty()) {
+                Section(stringResource(R.string.plugins_section_bundled))
+                state.bundled.forEach { row -> StoreRow(row, onInstall = { vm.installBundled(row.id) }) }
+            }
+
+            // Grouped by category rather than one flat list of fifteen. The category used to be glued to
+            // the name on each row, where it read as part of it; as a heading it does the job it was for.
             Section(stringResource(R.string.plugins_section_nuclear_store))
-            state.store.forEach { row -> StoreRow(row, onInstall = { vm.install(row.id) }) }
+            state.store.groupBy { it.category }.toSortedMap().forEach { (category, rows) ->
+                CategoryLabel(category)
+                rows.forEach { row -> StoreRow(row, onInstall = { vm.install(row.id) }) }
+            }
 
             Section(stringResource(R.string.plugins_section_open))
             ActionRow(
@@ -263,6 +275,17 @@ private fun InstalledRow(row: PluginRow, onSelect: () -> Unit, onToggle: (Boolea
     }
 }
 
+/** A category heading inside the store — quieter than [Section], which separates whole areas. */
+@Composable
+private fun CategoryLabel(category: String) {
+    Text(
+        category.replaceFirstChar { it.uppercase() },
+        style = code(11),
+        color = RizxTheme.colors.muted,
+        modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
+    )
+}
+
 @Composable
 private fun StoreRow(row: StoreRow, onInstall: () -> Unit) {
     val c = RizxTheme.colors
@@ -272,22 +295,18 @@ private fun StoreRow(row: StoreRow, onInstall: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text("${row.displayName}  ·  ${row.category}", style = mr(15, FontWeight.SemiBold), color = c.text)
+            // The name on its own line. It used to share one string with the category — "Bandcamp
+            // Dashboard · dashboard" — which read as part of the name and pushed the real name onto a
+            // second line on every long entry. The category is now the section this row sits under.
+            Text(row.displayName, style = mr(15, FontWeight.SemiBold), color = c.text)
             if (row.description.isNotBlank()) {
                 Text(row.description, style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 2.dp))
-            }
-            if (row.status == StoreStatus.UNSUPPORTED) {
-                Text(
-                    unsupportedReasonLabel(row.unsupportedReason),
-                    style = mr(12, FontWeight.Medium), color = c.redAccent, modifier = Modifier.padding(top = 2.dp),
-                )
             }
         }
         val (label, actionable) = when (row.status) {
             StoreStatus.AVAILABLE -> stringResource(R.string.plugins_install) to true
             StoreStatus.INSTALLING -> stringResource(R.string.plugins_installing) to false
             StoreStatus.INSTALLED -> stringResource(R.string.plugins_installed) to false
-            StoreStatus.UNSUPPORTED -> stringResource(R.string.plugins_not_compatible) to false
             StoreStatus.ERROR -> stringResource(R.string.action_retry) to true
         }
         Text(
@@ -341,13 +360,6 @@ private fun InstalledPluginRow(
         )
         Switch(checked = row.enabled, onCheckedChange = onToggle)
     }
-}
-
-/** Maps a stable unsupported-reason key to its localized explanation. */
-@Composable
-private fun unsupportedReasonLabel(reason: String?): String = when (reason) {
-    "native-equivalent" -> stringResource(R.string.plugins_reason_native_equivalent)
-    else -> stringResource(R.string.plugins_not_compatible)
 }
 
 @Composable

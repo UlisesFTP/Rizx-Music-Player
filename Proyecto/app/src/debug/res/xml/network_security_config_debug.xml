@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only. Never merged into release.
+
+  Android blocks cleartext HTTP by default, and it should: the app's own guards (LosslessUrlGuard, the
+  plugin fetch bridge) depend on that being true. The single exception here is `10.0.2.2`, which is the
+  emulator's alias for the development machine's loopback — the only way to sideload a locally-built
+  plugin zip without publishing it somewhere public first.
+
+  Deliberately one host and no wildcards: `cleartextTrafficPermitted="true"` on base-config would turn
+  the whole debug build into something that cannot be used to test the HTTPS-only rules.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

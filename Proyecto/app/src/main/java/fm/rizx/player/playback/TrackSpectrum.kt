@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -120,34 +119,10 @@ class TrackSpectrum @Inject constructor() {
 
     private fun append(buffer: ByteBuffer) {
         // The tap keeps running for the waveform; this side only costs anything while a song is being
-        // listened to.
+        // listened to. A lossless track arrives as float — which is exactly the case this measurement was
+        // never actually getting, until the tap moved off the sink's processor chain.
         if (!measuring) return
-        val ch = channels
-        val dup = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
-        when (encoding) {
-            C.ENCODING_PCM_16BIT -> {
-                val shorts = dup.asShortBuffer()
-                val frames = shorts.remaining() / ch
-                for (f in 0 until frames) {
-                    var sum = 0
-                    val base = f * ch
-                    for (c in 0 until ch) sum += shorts.get(base + c).toInt()
-                    push((sum.toFloat() / ch) / 32_768f)
-                }
-            }
-            // Hi-Res output makes the whole pipeline float; the measurement has to read both.
-            C.ENCODING_PCM_FLOAT -> {
-                val floats = dup.asFloatBuffer()
-                val frames = floats.remaining() / ch
-                for (f in 0 until frames) {
-                    var sum = 0f
-                    val base = f * ch
-                    for (c in 0 until ch) sum += floats.get(base + c)
-                    push(sum / ch)
-                }
-            }
-            else -> return
-        }
+        buffer.forEachMonoSample(channels, encoding) { push(it) }
     }
 
     private fun push(sample: Float) {

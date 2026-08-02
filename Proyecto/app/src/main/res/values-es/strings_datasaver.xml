@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pref_data_saver_caption">Audio de menor bitrate, portadas más pequeñas, sin portadas animadas, y las descargas esperan al Wi-Fi.</string>
+
+    <string name="pref_forced_by_data_saver">Forzado por Ahorro de datos</string>
+    <string name="pref_paused_by_data_saver">En pausa por Ahorro de datos</string>
+    <string name="pref_data_saver_system">El Ahorro de datos de Android está activo</string>
+
+    <string name="canvas_reason_data_saver">Omitido: ahorro de datos</string>
+    <string name="download_blocked_data_saver">Esperando al Wi-Fi — Ahorro de datos activo</string>
+</resources>

@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -41,6 +42,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         applyOrientationPolicy()
+        keepScreenAwake()
         setContent {
             // The activity-scoped PlayerViewModel drives both the live theme and playback.
             val playerViewModel: PlayerViewModel = hiltViewModel()
@@ -78,6 +80,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * The screen doesn't dim while the app is on screen.
+     *
+     * A **window** flag rather than a wake lock, which is what makes it safe: the system honours it only
+     * while this window is actually visible, so it costs nothing the moment the user presses Home, locks
+     * the phone, or switches app — and there is no lock to leak if the process dies. It needs no
+     * permission for the same reason.
+     *
+     * Playback in the background is unaffected either way: that runs in the foreground service, which is
+     * what keeps audio alive with the screen off.
+     */
+    private fun keepScreenAwake() {
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     /**

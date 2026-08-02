@@ -13,7 +13,7 @@ import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.ProviderKind
 import fm.rizx.player.domain.provider.StreamingProvider
-import fm.rizx.player.domain.repository.SettingsRepository
+import fm.rizx.player.core.network.DataSaverState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +32,7 @@ import java.io.IOException
 class YoutubeStreamingProvider(
     private val client: YoutubeExtractorClient,
     private val networkMonitor: NetworkMonitor,
-    private val settings: SettingsRepository,
+    private val dataSaver: DataSaverState,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : StreamingProvider {
 
@@ -67,20 +67,23 @@ class YoutubeStreamingProvider(
         client.streamInfo(url).toBestAudioStreamOrNull(
             candidate,
             preferLow = shouldPreferLow(),
-            maxQuality = !forDownload && settings.hiResOutput.first(),
+            maxQuality = !forDownload && dataSaver.effectiveQualityMode().prefersBestCompressed,
         ) ?: throw AppError.ProviderFailure(name, "no audio stream for ${candidate.id}")
     }
 
     /**
-     * Max quality by default; drop to a lower bitrate only when the user turns on Data saver — on
-     * cellular, or on a link too weak to carry the good stream. A weak signal on its own no longer
-     * downgrades: the estimate is unreliable, and silently serving the worst stream to someone who never
-     * asked to save data was the app's biggest hidden quality leak.
+     * Max quality by default; drop to a lower bitrate when the user asked to save data, or when the link
+     * is too weak to carry the good stream anyway.
+     *
+     * **No network condition on the saving half any more.** It used to require `isCellular`, which meant
+     * the switch did nothing on home Wi-Fi *and* nothing on a phone hotspot — the one case where it
+     * matters most, since a hotspot reports Wi-Fi transport while billing somebody's data plan. The
+     * switch now means what it says on every connection; [DataSaverState] is where that is decided.
+     *
+     * A weak signal stays a separate trigger and is not data saving: it is the link not managing more.
      */
-    private suspend fun shouldPreferLow(): Boolean {
-        val net = networkMonitor.snapshot()
-        return settings.dataSaver.first() && (net.isCellular || net.isBadSignal)
-    }
+    private suspend fun shouldPreferLow(): Boolean =
+        dataSaver.saving.first() || networkMonitor.snapshot().isBadSignal
 
     private suspend fun <T> guarded(block: suspend () -> T): T = try {
         withContext(io) { block() }

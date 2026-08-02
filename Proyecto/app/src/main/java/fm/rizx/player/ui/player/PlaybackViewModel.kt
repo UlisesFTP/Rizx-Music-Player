@@ -4,13 +4,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fm.rizx.player.core.network.DataSaverState
 import fm.rizx.player.playback.AudioVisualizer
 import fm.rizx.player.data.artwork.TrackArtworkEnricher
+import fm.rizx.player.domain.model.AudioFormatUi
 import fm.rizx.player.domain.model.QueueItem
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
+import fm.rizx.player.domain.model.heroUrl
+import fm.rizx.player.domain.playback.NowPlayingFormat
 import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.playback.PlaybackState
+import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.domain.repository.QueueRepository
 import fm.rizx.player.domain.usecase.LinkedArtist
@@ -18,6 +23,7 @@ import fm.rizx.player.domain.usecase.ResolveTrackArtistsUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -42,6 +48,9 @@ class PlaybackViewModel @Inject constructor(
     private val resolveTrackArtists: ResolveTrackArtistsUseCase,
     visualizer: AudioVisualizer,
     queue: QueueRepository,
+    nowPlayingFormat: NowPlayingFormat,
+    settings: SettingsRepository,
+    dataSaver: DataSaverState,
 ) : ViewModel() {
 
     val state: StateFlow<PlaybackState> = controller.state
@@ -66,6 +75,35 @@ class PlaybackViewModel @Inject constructor(
         .distinctUntilChangedBy { it?.source?.identityKey }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /**
+     * The codec/depth/rate line for the song on screen, or null when there is nothing honest to say.
+     *
+     * The id check is what keeps it truthful across a skip: the resolver publishes per queue item, and
+     * for the second or two before the next track resolves the previous answer is still the newest one.
+     * Showing it then would put "FLAC · 16-bit · 48 kHz" under a song that is about to play as Opus.
+     */
+    val audioFormat: StateFlow<AudioFormatUi?> =
+        combine(currentItem, nowPlayingFormat.current, settings.showTechnicalFormat) { item, entry, show ->
+            if (!show || item == null || entry == null || entry.queueItemId != item.id) null else entry.format
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Songs known to play losslessly, so a row anywhere in the app can mark one.
+     *
+     * Not gated on `showTechnicalFormat`: that setting is about the codec/depth/rate *readout* under the
+     * player ("Show technical format"), and this is a quality mark rather than a spec line.
+     */
+    val losslessCodecs: StateFlow<Map<String, String>> = nowPlayingFormat.losslessCodecs
+
+    /**
+     * Whether grids and lists should fetch the cheap artwork rung.
+     *
+     * Lives here rather than in a screen's ViewModel because it is provided once at the root and read by
+     * every tile in the app; this one is already the app-wide ViewModel that `RizxApp` holds.
+     */
+    val thriftyArtwork: StateFlow<Boolean> =
+        dataSaver.saving.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     /** Whether the currently-playing track is favorited (live, so the heart updates immediately). */
     val currentIsFavorite: StateFlow<Boolean> = currentItem
         .flatMapLatest { item -> item?.let { favorites.isFavoriteTrack(it.track.source) } ?: flowOf(false) }
@@ -83,7 +121,9 @@ class PlaybackViewModel @Inject constructor(
         .flatMapLatest { track ->
             track ?: return@flatMapLatest flowOf<String?>(null)
             flow {
-                val own = track.artwork.coverUrl()
+                // heroUrl, not coverUrl: this one fills the screen, so it asks for the largest rung a
+                // provider publishes rather than the tile-sized one every grid now takes.
+                val own = track.artwork.heroUrl()
                 emit(own)
                 val best = runCatching { artwork.coverFor(track) }.getOrNull()
                 if (best != null && best != own) emit(best)

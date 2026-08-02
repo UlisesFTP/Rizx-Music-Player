@@ -27,7 +27,13 @@ class PluginRegistryClient(
     suspend fun fetch(extraRegistries: List<String> = emptyList()): List<RegistryPlugin> = withContext(Dispatchers.IO) {
         try {
             val merged = LinkedHashMap<String, RegistryPlugin>()
-            for (plugin in fetchOne(REGISTRY_URL)) merged.putIfAbsent(plugin.id, plugin)
+            // Filtered here rather than in the UI so the ones Rizx already does natively never enter the
+            // app at all — not in the store, not in an update check, not in a search. A user-added
+            // registry is left alone: somebody who typed a URL in meant it.
+            for (plugin in fetchOne(REGISTRY_URL)) {
+                if (plugin.id in RegistryPlugin.REPLACED_BY_NATIVE) continue
+                merged.putIfAbsent(plugin.id, plugin)
+            }
             for (url in extraRegistries) {
                 runCatching { for (plugin in fetchOne(url)) merged.putIfAbsent(plugin.id, plugin) }
             }
