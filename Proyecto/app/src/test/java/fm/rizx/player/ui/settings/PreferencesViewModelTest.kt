@@ -12,6 +12,7 @@ import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.provider.DefaultProviderRegistry
 import fm.rizx.player.domain.model.AudioQualityMode
 import fm.rizx.player.domain.model.DashboardCapability
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.playback.AudioEffectsController
 import fm.rizx.player.domain.provider.DashboardProvider
@@ -136,17 +137,17 @@ class PreferencesViewModelTest {
         }
 
     @Test
-    fun `the lossless sub-settings default to wifi-only, no download, readout on`() =
+    fun `the lossless sub-settings default to wifi-only, original downloads, readout on`() =
         runTest(mainDispatcherRule.dispatcher.scheduler) {
             val vm = vm()
             assertEquals(true, vm.losslessWifiOnly.value)
-            assertEquals(false, vm.losslessDownload.value)
+            assertEquals(DownloadFormat.ORIGINAL, vm.downloadFormat.value)
             assertEquals(true, vm.showTechnicalFormat.value)
 
-            vm.losslessDownload.test {
-                assertEquals(false, awaitItem())
-                vm.setLosslessDownload(true)
-                assertEquals(true, awaitItem())
+            vm.downloadFormat.test {
+                assertEquals(DownloadFormat.ORIGINAL, awaitItem())
+                vm.setDownloadFormat(DownloadFormat.MP3)
+                assertEquals(DownloadFormat.MP3, awaitItem())
             }
         }
 

@@ -44,6 +44,12 @@
 -keep class * extends androidx.room.RoomDatabase { <init>(); }
 -dontwarn androidx.room.paging.**
 
+# ---- jump3r (MP3 encoder for the MP3 download format) ----
+# Its convenience wrapper (lowlevel.LameEncoder) and WAV reader reference javax.sound, which Android
+# doesn't have. Our encoder drives the mp3.* engine directly and never loads those classes, so the
+# references are unreachable, not missing.
+-dontwarn javax.sound.**
+
 # ---- Hilt / Dagger (the Hilt Gradle plugin adds most rules; keep entry points safe) ----
 -keep class dagger.hilt.** { *; }
 

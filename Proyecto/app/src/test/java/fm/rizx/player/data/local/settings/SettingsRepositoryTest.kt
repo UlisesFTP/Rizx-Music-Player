@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import kotlinx.coroutines.flow.first
@@ -111,20 +112,34 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `lossless settings default to wifi-only, no download, technical readout on`() = runTest {
+    fun `lossless settings default to wifi-only, original downloads, technical readout on`() = runTest {
         val repo = SettingsRepositoryImpl(backgroundScope.newStore())
 
         assertEquals(true, repo.losslessWifiOnly.first())
-        assertEquals(false, repo.losslessDownload.first())
+        assertEquals(DownloadFormat.ORIGINAL, repo.downloadFormat.first())
         assertEquals(true, repo.showTechnicalFormat.first())
 
         repo.setLosslessWifiOnly(false)
-        repo.setLosslessDownload(true)
+        repo.setDownloadFormat(DownloadFormat.OPUS)
         repo.setShowTechnicalFormat(false)
 
         assertEquals(false, repo.losslessWifiOnly.first())
-        assertEquals(true, repo.losslessDownload.first())
+        assertEquals(DownloadFormat.OPUS, repo.downloadFormat.first())
         assertEquals(false, repo.showTechnicalFormat.first())
+    }
+
+    @Test
+    fun `the old download-FLAC switch migrates into the format, and a chosen format wins over it`() = runTest {
+        val store = backgroundScope.newStore()
+        val repo = SettingsRepositoryImpl(store)
+
+        // Legacy install: the boolean is set, the format key does not exist yet.
+        store.edit { it[booleanPreferencesKey("core.audio.losslessDownload")] = true }
+        assertEquals(DownloadFormat.FLAC, repo.downloadFormat.first())
+
+        // The user then picks something explicitly — the stored format must win from here on.
+        repo.setDownloadFormat(DownloadFormat.MP3)
+        assertEquals(DownloadFormat.MP3, repo.downloadFormat.first())
     }
 
     @Test

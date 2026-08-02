@@ -3,6 +3,7 @@ package fm.rizx.player.data.repository
 import fm.rizx.player.data.provider.FakeStreamingProvider
 import fm.rizx.player.data.provider.FakeStreamingProviderB
 import fm.rizx.player.domain.lossless.LosslessIndexProvider
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.Stream
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.Track
@@ -66,8 +67,8 @@ class StreamingRepositoryImpl(
     override suspend fun getStreamUrl(candidate: StreamCandidate): Stream =
         providerFor(candidate).getStreamUrl(candidate)
 
-    override suspend fun getDownloadStreamUrl(candidate: StreamCandidate): Stream =
-        providerFor(candidate).getDownloadStreamUrl(candidate)
+    override suspend fun getDownloadStreamUrl(candidate: StreamCandidate, format: DownloadFormat): Stream =
+        providerFor(candidate).getDownloadStreamUrl(candidate, format)
 
     /** The provider that produced [candidate], else the active one. */
     private fun providerFor(candidate: StreamCandidate): StreamingProvider =

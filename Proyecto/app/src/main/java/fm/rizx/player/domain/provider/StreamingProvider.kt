@@ -1,5 +1,6 @@
 package fm.rizx.player.domain.provider
 
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.Stream
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.Track
@@ -26,8 +27,13 @@ interface StreamingProvider : ProviderDescriptor {
      * [getStreamUrl] for a stream that will be **written to a file** rather than played once.
      *
      * A provider may legitimately want a different pick here: the best-sounding codec isn't always the
-     * one a download can carry tags in. Defaults to [getStreamUrl], so providers with nothing to choose
-     * between are unaffected.
+     * one a download can carry tags in, and [format] says which of those the user valued —
+     * [DownloadFormat.ORIGINAL] wants the taggable rendition, [DownloadFormat.prefersBestSource] wants
+     * the best-sounding one (to keep as-is, or to feed the MP3 encoder the most information). Defaults
+     * to [getStreamUrl], so providers with nothing to choose between are unaffected.
      */
-    suspend fun getDownloadStreamUrl(candidate: StreamCandidate): Stream = getStreamUrl(candidate)
+    suspend fun getDownloadStreamUrl(
+        candidate: StreamCandidate,
+        format: DownloadFormat = DownloadFormat.ORIGINAL,
+    ): Stream = getStreamUrl(candidate)
 }

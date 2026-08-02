@@ -19,6 +19,13 @@ import fm.rizx.player.domain.model.Track
 object LocalIds {
     const val PROVIDER = "local"
 
+    /**
+     * Provider for audio opened through the system file picker (SAF). Its id **is the document URI** —
+     * which is a stable name for the document (the analogue of MediaStore's `_ID`), not an ephemeral
+     * resolved URL, so holding it as identity is inside the rules.
+     */
+    const val FILE_PROVIDER = "file"
+
     /** The `MediaStore.Audio.Media` external-primary collection, as a literal (avoids Android deps here). */
     const val AUDIO_CONTENT_URI = "content://media/external/audio/media"
 
@@ -26,12 +33,15 @@ object LocalIds {
     fun album(id: Long) = ProviderRef(PROVIDER, "album:$id")
     fun artist(id: Long) = ProviderRef(PROVIDER, "artist:$id")
 
+    fun file(uri: String) = ProviderRef(FILE_PROVIDER, uri)
+
     /** Strips the `album:`/`artist:` namespace to recover the raw MediaStore id. */
     fun rawId(source: ProviderRef): String = source.id.substringAfter(':')
 
     /** MediaStore album-art URI. Coil loads it; falls back to the tinted `CoverArt` when the art is absent. */
     fun albumArtUri(albumId: Long): String = "content://media/external/audio/albumart/$albumId"
 }
+
 
 /** MediaStore reports missing artist/album as this sentinel. */
 private const val UNKNOWN = "<unknown>"
@@ -73,5 +83,37 @@ fun localTrack(
         // equalizer reads a local song and a streamed one through exactly one field.
         tags = listOfNotNull(genre?.takeIf { it.isNotBlank() && !it.equals(UNKNOWN, ignoreCase = true) }),
         source = LocalIds.track(id),
+    )
+}
+
+/**
+ * A [Track] for an audio document opened through the file picker. Pure, so the fallbacks test on the JVM.
+ *
+ * The fallback chain is where the honesty lives: a tagged file shows its tags; an untagged one shows its
+ * **file name without the extension** — which is what the user chose in the picker and how they think of
+ * it — never "Unknown", which for a picked file would name nothing.
+ */
+fun fileTrack(
+    uri: String,
+    displayName: String?,
+    title: String?,
+    artist: String?,
+    album: String?,
+    durationMs: Long?,
+    /** A cached copy of the embedded picture, as a `file://`-loadable absolute path. */
+    artworkPath: String? = null,
+): Track {
+    val fallbackTitle = displayName?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }
+    val artwork = artworkPath?.let { ArtworkSet(listOf(Artwork(url = "file://$it"))) }
+    return Track(
+        title = title?.takeIf { it.isNotBlank() } ?: fallbackTitle ?: "Audio",
+        artists = listOfNotNull(artist?.takeIf { it.isNotBlank() }?.let { ArtistCredit(name = it) }),
+        // The album ref's id namespaces on the *name*: two picked files claiming the same album title
+        // group together, which is the only grouping a bare document can offer.
+        album = album?.takeIf { it.isNotBlank() }
+            ?.let { AlbumRef(title = it, artwork = artwork, source = ProviderRef(LocalIds.FILE_PROVIDER, "album:$it")) },
+        durationMs = durationMs?.takeIf { it > 0 },
+        artwork = artwork,
+        source = LocalIds.file(uri),
     )
 }

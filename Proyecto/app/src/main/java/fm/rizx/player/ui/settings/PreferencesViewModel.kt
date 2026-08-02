@@ -10,6 +10,7 @@ import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl.Companion.DEFAULT_AUDIO_CACHE_BYTES
 import fm.rizx.player.domain.lossless.LosslessIndexSource
 import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.CanvasDiagnostics
 import fm.rizx.player.domain.model.CanvasNetworkPolicy
 import fm.rizx.player.domain.model.CanvasQuality
@@ -174,7 +175,7 @@ class PreferencesViewModel @Inject constructor(
 
     /** Only look for a FLAC on an unmetered link. On by default — these files run 25-27 MB. */
     val losslessWifiOnly: StateFlow<Boolean> = settings.losslessWifiOnly.asState(true)
-    val losslessDownload: StateFlow<Boolean> = settings.losslessDownload.asState(false)
+    val downloadFormat: StateFlow<DownloadFormat> = settings.downloadFormat.asState(DownloadFormat.ORIGINAL)
     val showTechnicalFormat: StateFlow<Boolean> = settings.showTechnicalFormat.asState(true)
 
     private val _cacheSize = MutableStateFlow(cache.diskSizeLabel())
@@ -204,8 +205,8 @@ class PreferencesViewModel @Inject constructor(
         viewModelScope.launch { settings.setLosslessWifiOnly(enabled) }
     }
 
-    fun setLosslessDownload(enabled: Boolean) {
-        viewModelScope.launch { settings.setLosslessDownload(enabled) }
+    fun setDownloadFormat(format: DownloadFormat) {
+        viewModelScope.launch { settings.setDownloadFormat(format) }
     }
 
     fun setShowTechnicalFormat(enabled: Boolean) {

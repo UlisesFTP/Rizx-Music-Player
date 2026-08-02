@@ -1,5 +1,6 @@
 package fm.rizx.player.domain.repository
 
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadedTrack
 import fm.rizx.player.domain.model.Stream
@@ -39,8 +40,13 @@ interface DownloadRepository {
      */
     fun localStream(track: Track): Stream?
 
-    /** Queues [track] for download. Already-downloaded or in-flight tracks are ignored. */
-    fun download(track: Track)
+    /**
+     * Queues [track] for download. Already-downloaded or in-flight tracks are ignored.
+     *
+     * [format] overrides the Settings default for this one download (the "Download as…" menu); null —
+     * every ordinary call site — means the user's configured [DownloadFormat].
+     */
+    fun download(track: Track, format: DownloadFormat? = null)
 
     /** Queues every not-yet-downloaded track in [tracks], in order. */
     fun downloadAll(tracks: List<Track>)

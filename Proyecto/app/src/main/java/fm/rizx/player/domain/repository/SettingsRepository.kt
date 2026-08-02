@@ -2,6 +2,7 @@ package fm.rizx.player.domain.repository
 
 import fm.rizx.player.domain.model.AudioQualityMode
 import fm.rizx.player.domain.model.CanvasNetworkPolicy
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
@@ -108,9 +109,13 @@ interface SettingsRepository {
     val losslessWifiOnly: Flow<Boolean>
     suspend fun setLosslessWifiOnly(enabled: Boolean)
 
-    /** Download the FLAC instead of the compressed stream when one verifies. Off by default (size). */
-    val losslessDownload: Flow<Boolean>
-    suspend fun setLosslessDownload(enabled: Boolean)
+    /**
+     * What a download saves: the taggable original (default), the best compressed rendition (Opus),
+     * an LAME 320 CBR MP3, or a verified community FLAC when one exists. Replaces the old
+     * `losslessDownload` boolean, whose stored value migrates in (`true → FLAC`).
+     */
+    val downloadFormat: Flow<DownloadFormat>
+    suspend fun setDownloadFormat(format: DownloadFormat)
 
     /** Show the codec/depth/rate line under the player. On by default — it is the honest part of this feature. */
     val showTechnicalFormat: Flow<Boolean>

@@ -39,6 +39,7 @@ import fm.rizx.player.domain.model.CanvasBlockReason
 import fm.rizx.player.domain.model.CanvasDiagnostics
 import fm.rizx.player.domain.model.CanvasNetworkPolicy
 import fm.rizx.player.domain.model.CanvasQuality
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
@@ -78,7 +79,7 @@ fun PreferencesScreen(
     // In force right now, from either switch — separate from `dataSaver`, which is only Rizx's own.
     val savingActive by vm.savingActive.collectAsStateWithLifecycle()
     val losslessWifiOnly by vm.losslessWifiOnly.collectAsStateWithLifecycle()
-    val losslessDownload by vm.losslessDownload.collectAsStateWithLifecycle()
+    val downloadFormat by vm.downloadFormat.collectAsStateWithLifecycle()
     val showTechnicalFormat by vm.showTechnicalFormat.collectAsStateWithLifecycle()
     val audioOutputLabel by vm.audioOutputLabel.collectAsStateWithLifecycle()
     val dataSaver by vm.dataSaver.collectAsStateWithLifecycle()
@@ -103,6 +104,7 @@ fun PreferencesScreen(
     var lyricsQualityDialogOpen by remember { mutableStateOf(false) }
     var canvasDialogOpen by remember { mutableStateOf(false) }
     var audioQualityDialogOpen by remember { mutableStateOf(false) }
+    var downloadFormatDialogOpen by remember { mutableStateOf(false) }
     val feedProvider by vm.feedProvider.collectAsStateWithLifecycle()
     val feedSources by vm.feedSources.collectAsStateWithLifecycle()
     var feedDialogOpen by remember { mutableStateOf(false) }
@@ -172,6 +174,15 @@ fun PreferencesScreen(
                 vm.refreshLosslessAvailability()
                 audioQualityDialogOpen = true
             },
+        )
+        // What a download saves. Its own row rather than a toggle inside the audio dialog (where the old
+        // FLAC switch lived) because it now names four different answers, and the one it replaces is the
+        // migration's job to carry over.
+        SettingRow(
+            title = stringResource(R.string.pref_download_format),
+            value = stringResource(downloadFormatLabel(downloadFormat)),
+            caption = stringResource(downloadFormatCaption(downloadFormat)),
+            onClick = { downloadFormatDialogOpen = true },
         )
 
         SectionLabel(stringResource(R.string.settings_appearance))
@@ -311,13 +322,22 @@ fun PreferencesScreen(
             mode = audioQuality,
             losslessAvailable = losslessAvailable,
             wifiOnly = losslessWifiOnly,
-            downloadFlac = losslessDownload,
             showTechnical = showTechnicalFormat,
             onSetMode = vm::setAudioQuality,
             onSetWifiOnly = vm::setLosslessWifiOnly,
-            onSetDownload = vm::setLosslessDownload,
             onSetShowTechnical = vm::setShowTechnicalFormat,
             onDismiss = { audioQualityDialogOpen = false },
+        )
+    }
+    if (downloadFormatDialogOpen) {
+        CaptionedOptionDialog(
+            title = stringResource(R.string.pref_download_format),
+            options = DownloadFormat.entries,
+            current = downloadFormat,
+            label = { stringResource(downloadFormatLabel(it)) },
+            caption = { stringResource(downloadFormatCaption(it)) },
+            onSelect = { format -> vm.setDownloadFormat(format); downloadFormatDialogOpen = false },
+            onDismiss = { downloadFormatDialogOpen = false },
         )
     }
 
@@ -354,6 +374,22 @@ fun PreferencesScreen(
 
 /** One row of the feed-source picker: a registered dashboard provider, or the "all combined" option. */
 private data class FeedOption(val id: String, val name: String, val caption: String)
+
+/** The @StringRes name of a [DownloadFormat]. */
+private fun downloadFormatLabel(format: DownloadFormat): Int = when (format) {
+    DownloadFormat.ORIGINAL -> R.string.download_format_original
+    DownloadFormat.OPUS -> R.string.download_format_opus
+    DownloadFormat.MP3 -> R.string.download_format_mp3
+    DownloadFormat.FLAC -> R.string.download_format_flac
+}
+
+/** One honest line per format — what it saves and what it costs, tradeoffs included. */
+private fun downloadFormatCaption(format: DownloadFormat): Int = when (format) {
+    DownloadFormat.ORIGINAL -> R.string.download_format_original_caption
+    DownloadFormat.OPUS -> R.string.download_format_opus_caption
+    DownloadFormat.MP3 -> R.string.download_format_mp3_caption
+    DownloadFormat.FLAC -> R.string.download_format_flac_caption
+}
 
 /** The @StringRes name of a [RadioMode], as the user thinks of it — by the service, not the mechanism. */
 private fun radioAlgorithmLabel(mode: RadioMode): Int = when (mode) {
@@ -467,11 +503,9 @@ private fun AudioQualityDialog(
     mode: AudioQualityMode,
     losslessAvailable: Boolean,
     wifiOnly: Boolean,
-    downloadFlac: Boolean,
     showTechnical: Boolean,
     onSetMode: (AudioQualityMode) -> Unit,
     onSetWifiOnly: (Boolean) -> Unit,
-    onSetDownload: (Boolean) -> Unit,
     onSetShowTechnical: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -524,12 +558,8 @@ private fun AudioQualityDialog(
                     checked = wifiOnly,
                     onToggle = { onSetWifiOnly(!wifiOnly) },
                 )
-                DialogToggleRow(
-                    title = stringResource(R.string.pref_lossless_download),
-                    caption = stringResource(R.string.pref_lossless_download_caption),
-                    checked = downloadFlac,
-                    onToggle = { onSetDownload(!downloadFlac) },
-                )
+                // The old "download the FLAC" toggle lived here; it grew into the Download format row
+                // outside this dialog, where it names all four answers instead of one.
             }
 
             DialogToggleRow(

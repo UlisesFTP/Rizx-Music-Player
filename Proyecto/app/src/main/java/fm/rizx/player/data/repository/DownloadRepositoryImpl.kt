@@ -3,14 +3,18 @@ package fm.rizx.player.data.repository
 import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.data.download.AudioTagWriter
 import fm.rizx.player.data.download.DownloadNotifier
+import fm.rizx.player.data.download.DownloadedFile
 import fm.rizx.player.data.download.MediaStoreExporter
+import fm.rizx.player.data.download.Mp3Transcoder
 import fm.rizx.player.data.download.NotDownloadableException
 import fm.rizx.player.data.download.TrackDownloader
 import fm.rizx.player.core.network.DataSaverState
 import fm.rizx.player.data.download.isDownloadable
+import fm.rizx.player.domain.repository.CachedAudioReader
 import fm.rizx.player.data.lossless.toStream
 import fm.rizx.player.domain.lossless.LosslessResolver
 import fm.rizx.player.data.local.store.DownloadIndexStore
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadStatus
 import fm.rizx.player.domain.model.DownloadedTrack
@@ -41,8 +45,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
@@ -54,9 +58,10 @@ import java.util.concurrent.ConcurrentHashMap
  * deliberately preserves `localFile`, so a path written into those copies would outlive the deleted file
  * forever with nothing to clean it up. One keyed index instead.
  *
- * **Sequential by construction.** Kotlin's [Mutex] is FIFO-fair, so wrapping each fetch in one yields an
- * ordered, one-file-at-a-time queue with no actor, channel or semaphore — and it keeps a 40-track batch
- * from saturating a connection the user may also be streaming over.
+ * **Two at a time.** The queue used to be a FIFO [Mutex] — strictly one file at a time — which made a
+ * 40-track batch a serial hour. A [Semaphore] of [MAX_PARALLEL_TRACKS] halves that wall-clock while the
+ * per-file worker cap in [TrackDownloader] keeps the socket count civil for whatever the user is
+ * actively streaming.
  */
 class DownloadRepositoryImpl(
     private val store: DownloadIndexStore,
@@ -73,14 +78,18 @@ class DownloadRepositoryImpl(
     io: CoroutineDispatcher = Dispatchers.IO,
     /** The optional community-FLAC source. Null in tests that don't exercise it, and whenever it is off. */
     private val lossless: LosslessResolver? = null,
-    /** Read for the "download FLAC when available" switch alone. Null pairs with a null [lossless]. */
+    /** Read for the download-format preference. Null in tests that pin the format per call. */
     private val settings: SettingsRepository? = null,
     /** Holds a download back while saving data on a metered link. Null in tests that don't exercise it. */
     private val dataSaver: DataSaverState? = null,
+    /** Re-encodes to MP3 for [DownloadFormat.MP3]. Null in tests that don't exercise conversion. */
+    private val transcoder: Mp3Transcoder? = null,
+    /** The streaming byte-cache, for downloads of songs already heard. Null degrades to the network. */
+    private val cachedAudio: CachedAudioReader? = null,
 ) : DownloadRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + io)
-    private val fetchLock = Mutex() // FIFO-fair ⇒ this *is* the queue
+    private val fetchSlots = Semaphore(MAX_PARALLEL_TRACKS)
     private val jobs = ConcurrentHashMap<String, Job>()
 
     /** Album identityKey → its tagging info; one lookup per album, not per track. */
@@ -133,14 +142,14 @@ class DownloadRepositoryImpl(
 
     // ---- Writes ----
 
-    override fun download(track: Track) {
+    override fun download(track: Track, format: DownloadFormat?) {
         val key = track.source.identityKey
         if (_index.value.containsKey(key) || jobs.containsKey(key)) return
         setTransient(key, DownloadState(DownloadStatus.QUEUED))
         notifier.start()
         jobs[key] = scope.launch {
             try {
-                fetchLock.withLock { fetch(track, key) }
+                fetchSlots.withPermit { fetch(track, key, format ?: configuredFormat()) }
             } catch (e: CancellationException) {
                 clearTransient(key)
                 throw e
@@ -231,7 +240,11 @@ class DownloadRepositoryImpl(
         return info
     }
 
-    private suspend fun fetch(track: Track, key: String) {
+    /** The Settings default, or [DownloadFormat.ORIGINAL] when this instance was built without settings. */
+    private suspend fun configuredFormat(): DownloadFormat =
+        settings?.downloadFormat?.first() ?: DownloadFormat.ORIGINAL
+
+    private suspend fun fetch(track: Track, key: String, format: DownloadFormat) {
         // The one thing in the app that pulls a whole song's worth of bytes on purpose — 5 MB for an M4A,
         // 25 MB for a FLAC — and until now the only one that never asked what the connection costs.
         //
@@ -241,27 +254,23 @@ class DownloadRepositoryImpl(
             throw NotDownloadableException("Waiting for Wi-Fi — data saver is on")
         }
         setTransient(key, DownloadState(DownloadStatus.DOWNLOADING))
-        val resolved = resolveForDownload(track) ?: throw NotDownloadableException("No playable source found")
-        if (!resolved.stream.isDownloadable()) {
-            throw NotDownloadableException("No downloadable source for this song")
-        }
-        val done = downloader.download(key, resolved.stream, resolved.sha256) { percent ->
-            setTransient(key, DownloadState(DownloadStatus.DOWNLOADING, progressPercent = percent))
-        }
+        val done = fromByteCache(track, key, format)
+            ?: fromNetwork(track, key, format)
+        val finished = convertIfWanted(done, key, format)
         // Embed the metadata *into* the file so the song carries its cover, artist, album and date into any
         // other player. Best-effort by design: the bytes on disk are already a valid, playable download, so
         // a tagging failure must not fail it.
         tagWriter?.let { writer ->
             val info = runCatching { albumInfoFor(track) }.getOrNull()
-            runCatching { writer.tag(done.file, track, info?.title, info?.releaseDateIso, info?.year) }
+            runCatching { writer.tag(finished.file, track, info?.title, info?.releaseDateIso, info?.year) }
         }
         val entry = DownloadedTrack(
             // Keep only the durable half: the resolved URL that fetched these bytes is ephemeral.
             track = track.stripResolutionState(),
-            fileName = done.file.name,
-            sizeBytes = done.sizeBytes,
-            container = done.container,
-            mimeType = done.mimeType,
+            fileName = finished.file.name,
+            sizeBytes = finished.sizeBytes,
+            container = finished.container,
+            mimeType = finished.mimeType,
             downloadedAtIso = now().toString(),
         )
         // Index only after the file is validated and renamed — an entry pointing at a partial file would
@@ -270,28 +279,112 @@ class DownloadRepositoryImpl(
         clearTransient(key)
     }
 
+    private suspend fun fromNetwork(track: Track, key: String, format: DownloadFormat): DownloadedFile {
+        val resolved = resolveForDownload(track, format) ?: throw NotDownloadableException("No playable source found")
+        if (!resolved.stream.isDownloadable()) {
+            throw NotDownloadableException("No downloadable source for this song")
+        }
+        return downloader.download(key, resolved.stream, resolved.sha256) { percent ->
+            setTransient(key, DownloadState(DownloadStatus.DOWNLOADING, progressPercent = percent))
+        }
+    }
+
+    /**
+     * A song the user has already listened to is already on disk, byte for byte, in the streaming cache —
+     * so "download" for it can be a local copy: zero network, near-instant. Only buckets whose codec is
+     * what the chosen format would have fetched anyway are adopted:
+     *
+     * - [DownloadFormat.ORIGINAL] takes only the **taggable** containers it has always produced (m4a,
+     *   mp3, flac) — never a cached Opus, which would silently change what "Original" saves.
+     * - [DownloadFormat.OPUS] takes the Opus/WebM buckets.
+     * - [DownloadFormat.MP3] takes anything whole as *input* for the encoder (the container doesn't
+     *   matter; the extractor sniffs it) — the conversion still runs, only the network fetch is skipped.
+     * - [DownloadFormat.FLAC] never adopts: its resolver owns verification (magic + optional sha), and a
+     *   cached copy exists only when lossless streaming already fetched it — rare enough not to special-case.
+     *
+     * Best-effort throughout: a `false` copy (eviction raced us) just falls through to the network.
+     */
+    private suspend fun fromByteCache(track: Track, key: String, format: DownloadFormat): DownloadedFile? {
+        val reader = cachedAudio ?: return null
+        if (format == DownloadFormat.FLAC) return null
+        val cached = runCatching { reader.fullyCachedCodecs(key) }.getOrDefault(emptyList())
+        if (cached.isEmpty()) return null
+
+        val (codec, container) = when (format) {
+            DownloadFormat.ORIGINAL -> cached.firstOrNull { it.containerForTaggable() != null }
+                ?.let { it to it.containerForTaggable()!! }
+            DownloadFormat.OPUS -> cached.firstOrNull { it.isOpusFamily() }?.let { it to "webm" }
+            DownloadFormat.MP3 -> cached.firstOrNull()?.let { it to it.containerForAnything() }
+            DownloadFormat.FLAC -> null
+        } ?: return null
+        return runCatching {
+            downloader.adopt(key, container, mimeType = null) { part ->
+                val ok = part.outputStream().use { out -> reader.copyTo(key, codec, out) }
+                if (!ok) throw NotDownloadableException("cache copy incomplete")
+            }
+        }.getOrNull()
+    }
+
+    /** The taggable container this cache bucket maps to, or null when adopting it would change ORIGINAL. */
+    private fun String.containerForTaggable(): String? = when {
+        contains("m4a") || contains("aac") || contains("mp4") -> "m4a"
+        contains("mp3") -> "mp3"
+        contains("flac") -> "flac"
+        else -> null
+    }
+
+    private fun String.isOpusFamily(): Boolean = contains("opus") || contains("webm")
+
+    /** Any bucket serves as MP3 input; this only names the temp file the extractor will sniff anyway. */
+    private fun String.containerForAnything(): String = containerForTaggable() ?: "webm"
+
+    /**
+     * The MP3 format's second act: decode the fetched file, encode it as LAME 320 CBR, and adopt the
+     * result through the same validate-and-rename pipeline as any download. A source that is already
+     * MP3 (Audius) is kept as-is — a lossy→lossy re-encode with nothing to gain is pure loss.
+     */
+    private suspend fun convertIfWanted(done: DownloadedFile, key: String, format: DownloadFormat): DownloadedFile {
+        if (format != DownloadFormat.MP3 || done.container.equals("mp3", ignoreCase = true)) return done
+        val converter = transcoder
+            ?: throw NotDownloadableException("MP3 conversion is unavailable")
+        setTransient(key, DownloadState(DownloadStatus.CONVERTING))
+        return try {
+            downloader.adopt(key, container = "mp3", mimeType = "audio/mpeg") { part ->
+                converter.transcode(done.file, part)
+            }
+        } finally {
+            // The source file was the *download*; the adopted MP3 replaces it under a different name, so
+            // the original must not survive as an orphan for the startup sweep to find.
+            if (!done.file.name.endsWith(".mp3")) done.file.delete()
+        }
+    }
+
     /** A stream to save, plus the digest to check it against when the source published one. */
     private data class ResolvedForDownload(val stream: Stream, val sha256: String? = null)
 
-    private suspend fun resolveForDownload(track: Track): ResolvedForDownload? {
-        losslessDownloadStream(track)?.let { return it }
+    private suspend fun resolveForDownload(track: Track, format: DownloadFormat): ResolvedForDownload? {
+        if (format == DownloadFormat.FLAC) {
+            losslessDownloadStream(track)?.let { return it }
+            // No verified FLAC for this song: fall back to exactly what ORIGINAL would have saved.
+        }
         val candidates = when (val r = resolver.resolveCandidatesForTrack(track)) {
             is CandidateResult.Success -> r.candidates
             is CandidateResult.Failure -> return null
         }
         for (candidate in candidates.filterNot { it.failed }) {
-            // forDownload: ask for a container the tag writer can actually write into (see
-            // StreamingProvider.getDownloadStreamUrl) — an untagged file is worse than a better codec.
-            resolver.resolveStreamForCandidate(candidate, forDownload = true).stream
+            // forDownload: ORIGINAL asks for a container the tag writer can write into (an untagged file
+            // is worse than a better codec); OPUS/MP3 ask for the best-sounding rendition instead — one
+            // to keep, the other to feed the encoder. See StreamingProvider.getDownloadStreamUrl.
+            resolver.resolveStreamForCandidate(candidate, forDownload = true, downloadFormat = format).stream
                 ?.let { return ResolvedForDownload(it) }
         }
         return null
     }
 
     /**
-     * A verified FLAC to save instead of the compressed stream, when the user asked for that.
+     * A verified FLAC to save instead of the compressed stream, when the format asks for one.
      *
-     * Two separate switches on purpose: preferring lossless for *listening* costs bandwidth once, while
+     * A separate choice from *listening* lossless on purpose: streaming it costs bandwidth once, while
      * downloading it costs 25-27 MB of storage per song permanently, and those are different decisions.
      *
      * Nothing is converted in either direction — the bytes that arrive are the bytes that are written.
@@ -300,7 +393,6 @@ class DownloadRepositoryImpl(
      */
     private suspend fun losslessDownloadStream(track: Track): ResolvedForDownload? {
         val resolverForFlac = lossless ?: return null
-        if (settings?.losslessDownload?.first() != true) return null
         val validated = try {
             resolverForFlac.resolve(track)
         } catch (e: CancellationException) {
@@ -336,5 +428,13 @@ class DownloadRepositoryImpl(
 
     private fun clearTransient(key: String) {
         _transient.value = _transient.value - key
+    }
+
+    private companion object {
+        /**
+         * Two, not more: each file already opens up to three range sockets, and the person this queue
+         * belongs to is often streaming a song over the same link at the same time.
+         */
+        const val MAX_PARALLEL_TRACKS = 2
     }
 }

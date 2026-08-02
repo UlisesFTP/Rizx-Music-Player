@@ -11,8 +11,6 @@
     <string name="pref_lossless_unavailable">Installez un plugin d\'index FLAC pour l\'utiliser</string>
     <string name="pref_lossless_wifi_only">Chercher le Lossless en Wi-Fi uniquement</string>
     <string name="pref_lossless_wifi_only_caption">Un FLAC peut peser des dizaines de Mo par morceau.</string>
-    <string name="pref_lossless_download">Télécharger le FLAC quand il existe</string>
-    <string name="pref_lossless_download_caption">Conserve les octets d\'origine ; aucune conversion.</string>
     <string name="pref_show_technical_format">Afficher le format technique</string>
     <string name="pref_show_technical_format_caption">Codec, profondeur et fréquence sous le lecteur.</string>
 

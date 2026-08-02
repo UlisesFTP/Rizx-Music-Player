@@ -71,6 +71,10 @@ fun DownloadButton(
                 )
             }
 
+            // Converting is not cancellable from here on purpose: the bytes are already fetched, and
+            // stopping a re-encode mid-file to save nothing but CPU would just throw the download away.
+            DownloadStatus.CONVERTING -> CodeLabel(stringResource(R.string.ui_download_converting), size = 10)
+
             DownloadStatus.COMPLETE -> RizxIconButton(
                 Icons.Filled.DownloadDone,
                 stringResource(R.string.ui_download_complete_desc),
@@ -106,7 +110,9 @@ fun DownloadAllButton(
     val c = RizxTheme.colors
     val statuses = tracks.map { states[it.source.identityKey]?.status }
     val done = statuses.count { it == DownloadStatus.COMPLETE }
-    val inFlight = statuses.count { it == DownloadStatus.QUEUED || it == DownloadStatus.DOWNLOADING }
+    val inFlight = statuses.count {
+        it == DownloadStatus.QUEUED || it == DownloadStatus.DOWNLOADING || it == DownloadStatus.CONVERTING
+    }
     val allDone = done == tracks.size
 
     val label = when {

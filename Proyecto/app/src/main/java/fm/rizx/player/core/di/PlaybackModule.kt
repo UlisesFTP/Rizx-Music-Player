@@ -51,6 +51,13 @@ abstract class PlaybackModule {
             favorites: FavoritesRepository,
         ): AudioCache = AudioCache(context, settings, favorites)
 
+        /** Lets a download of an already-heard song copy from the byte cache instead of the network. */
+        @Provides
+        @Singleton
+        @UnstableApi
+        fun provideCachedAudioReader(audioCache: AudioCache): fm.rizx.player.domain.repository.CachedAudioReader =
+            fm.rizx.player.playback.cache.CachedAudioReaderImpl(audioCache)
+
         /** Finishes half-cached songs on Wi-Fi; driven by the playback service, which is already alive. */
         @Provides
         @Singleton

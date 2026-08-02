@@ -12,4 +12,6 @@ data class PlaylistSummary(
     val isReadOnly: Boolean = false,
     /** Cover for the list row, when one is known. A plain URL — list rows only ever need one size. */
     val artworkUrl: String? = null,
+    /** True for playlists that arrived via an import (Spotify/YouTube/Deezer URL or file), not made here. */
+    val isImported: Boolean = false,
 )

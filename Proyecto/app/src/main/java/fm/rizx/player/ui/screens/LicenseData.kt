@@ -30,6 +30,7 @@ object LicenseData {
         DependencyLicense("Retrofit", "2.11.0", "Apache-2.0"),
         DependencyLicense("Retrofit KotlinX Serialization Converter", "2.11.0", "Apache-2.0"),
         DependencyLicense("OkHttp + Logging Interceptor", "4.12.0", "Apache-2.0"),
+        DependencyLicense("jump3r (LAME 3.98.4 Java port)", "1.0.5", "LGPL-2.1+"),
     )
 
     /** Test-only libraries (not shipped in the APK), listed for completeness. */

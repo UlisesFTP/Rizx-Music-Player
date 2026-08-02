@@ -33,7 +33,7 @@ interface PlaylistDao {
     @Query(
         """
         SELECT p.id AS id, p.name AS name, p.description AS description, p.isReadOnly AS isReadOnly,
-               p.artworkUrl AS artworkUrl, COUNT(i.id) AS itemCount
+               p.artworkUrl AS artworkUrl, p.originProvider AS originProvider, COUNT(i.id) AS itemCount
         FROM playlists p LEFT JOIN playlist_items i ON i.playlistId = p.id
         GROUP BY p.id
         ORDER BY p.lastModifiedIso DESC

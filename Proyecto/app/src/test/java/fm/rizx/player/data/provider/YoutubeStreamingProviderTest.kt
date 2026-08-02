@@ -10,6 +10,7 @@ import fm.rizx.player.FakeSettingsRepository
 import fm.rizx.player.dataSaverState
 import fm.rizx.player.domain.model.ArtistCredit
 import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.StreamProtocol
@@ -164,6 +165,27 @@ class YoutubeStreamingProviderTest {
             assertEquals("https://cdn/opus", provider.getStreamUrl(ytCandidate()).url)
             assertEquals("https://cdn/m4a", provider.getDownloadStreamUrl(ytCandidate()).url)
         }
+
+    @Test
+    fun `the Opus and MP3 download formats ask for the best source instead — and the default stays put`() =
+        runBlocking {
+            // Hi-Res OFF, which is the telling case: the format's own request must win where the old
+            // behaviour would have picked M4A.
+            val provider = provider(FakeClient(info = { aacAndOpus() }))
+            assertEquals("https://cdn/opus", provider.getDownloadStreamUrl(ytCandidate(), DownloadFormat.OPUS).url)
+            // MP3 re-encodes, so it wants the most information the source offers — the Opus 160.
+            assertEquals("https://cdn/opus", provider.getDownloadStreamUrl(ytCandidate(), DownloadFormat.MP3).url)
+            // ORIGINAL (and FLAC's fallback) are byte-for-byte the historical pick.
+            assertEquals("https://cdn/m4a", provider.getDownloadStreamUrl(ytCandidate(), DownloadFormat.ORIGINAL).url)
+            assertEquals("https://cdn/m4a", provider.getDownloadStreamUrl(ytCandidate(), DownloadFormat.FLAC).url)
+        }
+
+    @Test
+    fun `a video with no Opus falls back to M4A for the best-source formats`() = runBlocking {
+        val onlyAac = streamInfoWith(listOf(audio("https://cdn/m4a", MediaFormat.M4A, 128)))
+        val provider = provider(FakeClient(info = { onlyAac }))
+        assertEquals("https://cdn/m4a", provider.getDownloadStreamUrl(ytCandidate(), DownloadFormat.OPUS).url)
+    }
 
     @Test
     fun `a weak signal alone no longer downgrades — only the user's data saver does`() = runBlocking {

@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Videocam
@@ -19,6 +21,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
@@ -26,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import fm.rizx.player.R
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadStatus
 import fm.rizx.player.ui.theme.RizxTheme
@@ -47,8 +54,15 @@ fun NowPlayingMenu(
     onDeleteDownload: () -> Unit,
     onToggleCanvas: () -> Unit,
     onShare: () -> Unit,
+    /** Present = the menu also offers "Download as…" with an explicit format for this one song. */
+    onDownloadAs: ((DownloadFormat) -> Unit)? = null,
 ) {
     val c = RizxTheme.colors
+    // Flat second level rather than a nested popup: a DropdownMenu inside a DropdownMenu anchors to the
+    // window, not the row, and lands somewhere surprising. Expanding in place keeps every option inside
+    // the one panel the finger is already on.
+    var formatsOpen by remember { mutableStateOf(false) }
+    if (!expanded && formatsOpen) formatsOpen = false
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
@@ -58,13 +72,32 @@ fun NowPlayingMenu(
         modifier = Modifier.background(c.elev),
     ) {
         when (download?.status) {
-            null -> MenuRow(Icons.Filled.FileDownload, stringResource(R.string.action_download), c.text) { onDismiss(); onDownload() }
+            null -> {
+                MenuRow(Icons.Filled.FileDownload, stringResource(R.string.action_download), c.text) { onDismiss(); onDownload() }
+                if (onDownloadAs != null) {
+                    MenuRow(
+                        icon = if (formatsOpen) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        label = stringResource(R.string.player_download_as),
+                        tint = c.text2,
+                    ) { formatsOpen = !formatsOpen }
+                    if (formatsOpen) {
+                        DownloadFormat.entries.forEach { format ->
+                            MenuRow(Icons.Filled.FileDownload, "   " + stringResource(downloadFormatMenuLabel(format)), c.text2) {
+                                onDismiss(); onDownloadAs(format)
+                            }
+                        }
+                    }
+                }
+            }
 
             DownloadStatus.QUEUED ->
                 MenuRow(Icons.Filled.FileDownload, stringResource(R.string.player_queued_for_download), c.muted, enabled = false) {}
 
             DownloadStatus.DOWNLOADING ->
                 MenuRow(Icons.Filled.FileDownload, stringResource(R.string.player_downloading_percent, download.progressPercent), c.muted, enabled = false) {}
+
+            DownloadStatus.CONVERTING ->
+                MenuRow(Icons.Filled.FileDownload, stringResource(R.string.player_converting_mp3), c.muted, enabled = false) {}
 
             DownloadStatus.COMPLETE ->
                 MenuRow(Icons.Filled.DownloadDone, stringResource(R.string.player_downloaded_remove), c.text) { onDismiss(); onDeleteDownload() }
@@ -124,6 +157,14 @@ fun android.content.Context.openAudioOutputSwitcher() {
     if (runCatching { startActivity(panel) }.isFailure) {
         runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)) }
     }
+}
+
+/** Short menu names — the Settings dialog owns the long explanations. */
+private fun downloadFormatMenuLabel(format: DownloadFormat): Int = when (format) {
+    DownloadFormat.ORIGINAL -> R.string.download_format_original
+    DownloadFormat.OPUS -> R.string.download_format_opus
+    DownloadFormat.MP3 -> R.string.download_format_mp3
+    DownloadFormat.FLAC -> R.string.download_format_flac
 }
 
 @Composable

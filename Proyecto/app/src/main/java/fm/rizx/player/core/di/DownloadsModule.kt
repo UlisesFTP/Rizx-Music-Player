@@ -11,12 +11,16 @@ import fm.rizx.player.data.download.AudioTagWriter
 import fm.rizx.player.data.download.DownloadNotifier
 import fm.rizx.player.data.download.MediaStoreExporter
 import fm.rizx.player.data.download.MediaStoreExporterImpl
+import fm.rizx.player.data.download.Mp3Transcoder
 import fm.rizx.player.data.download.ServiceDownloadNotifier
 import fm.rizx.player.data.download.TrackDownloader
 import fm.rizx.player.data.local.store.DownloadIndexStore
 import fm.rizx.player.data.repository.DownloadRepositoryImpl
 import fm.rizx.player.core.network.DataSaverState
+import fm.rizx.player.core.network.DownloadHttp
+import fm.rizx.player.core.network.NetworkMonitor
 import fm.rizx.player.domain.lossless.LosslessResolver
+import fm.rizx.player.domain.repository.CachedAudioReader
 import fm.rizx.player.domain.provider.ProviderRegistry
 import fm.rizx.player.domain.repository.DownloadRepository
 import fm.rizx.player.domain.repository.SettingsRepository
@@ -57,8 +61,18 @@ object DownloadsModule {
 
     @Provides
     @Singleton
-    fun provideTrackDownloader(client: OkHttpClient, @DownloadsDir dir: File): TrackDownloader =
-        TrackDownloader(client, dir)
+    fun provideTrackDownloader(
+        @DownloadHttp client: OkHttpClient,
+        @DownloadsDir dir: File,
+        network: NetworkMonitor,
+    ): TrackDownloader =
+        TrackDownloader(
+            client,
+            dir,
+            // On a struggling link, three parallel readers would only fight whatever the user is
+            // actively listening to — one is the polite (and net faster) choice there.
+            maxWorkers = { if (runCatching { network.snapshot().isBadSignal }.getOrDefault(false)) 1 else 3 },
+        )
 
     @Provides
     @Singleton
@@ -75,6 +89,11 @@ object DownloadsModule {
     @Singleton
     fun provideAudioTagWriter(client: OkHttpClient): AudioTagWriter = AudioTagWriter(client)
 
+    /** Decodes with the framework, encodes with jump3r — the "MP3" download format's converter. */
+    @Provides
+    @Singleton
+    fun provideMp3Transcoder(): Mp3Transcoder = Mp3Transcoder()
+
     @Provides
     @Singleton
     fun provideDownloadRepository(
@@ -88,6 +107,8 @@ object DownloadsModule {
         lossless: LosslessResolver,
         settings: SettingsRepository,
         dataSaver: DataSaverState,
+        transcoder: Mp3Transcoder,
+        cachedAudio: CachedAudioReader,
     ): DownloadRepository = DownloadRepositoryImpl(
         store = store,
         downloader = downloader,
@@ -99,6 +120,8 @@ object DownloadsModule {
         lossless = lossless,
         settings = settings,
         dataSaver = dataSaver,
+        transcoder = transcoder,
+        cachedAudio = cachedAudio,
     )
 }
 

@@ -19,8 +19,6 @@
     <string name="pref_lossless_unavailable">Install a FLAC index plugin to use this</string>
     <string name="pref_lossless_wifi_only">Only look for Lossless on Wi-Fi</string>
     <string name="pref_lossless_wifi_only_caption">FLAC files can be tens of MB per song.</string>
-    <string name="pref_lossless_download">Download FLAC when available</string>
-    <string name="pref_lossless_download_caption">Saves the original bytes; no conversion either way.</string>
     <string name="pref_show_technical_format">Show technical format</string>
     <string name="pref_show_technical_format_caption">Codec, depth and sample rate under the player.</string>
 

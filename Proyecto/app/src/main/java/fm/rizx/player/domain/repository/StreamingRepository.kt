@@ -1,5 +1,6 @@
 package fm.rizx.player.domain.repository
 
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.Stream
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.Track
@@ -19,7 +20,10 @@ interface StreamingRepository {
     suspend fun getStreamUrl(candidate: StreamCandidate): Stream
 
     /** [getStreamUrl] for a stream destined for a file — see [StreamingProvider.getDownloadStreamUrl]. */
-    suspend fun getDownloadStreamUrl(candidate: StreamCandidate): Stream = getStreamUrl(candidate)
+    suspend fun getDownloadStreamUrl(
+        candidate: StreamCandidate,
+        format: DownloadFormat = DownloadFormat.ORIGINAL,
+    ): Stream = getStreamUrl(candidate)
 }
 
 class NoStreamingProviderException : Exception("No streaming provider is active")

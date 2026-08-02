@@ -101,6 +101,27 @@ object NetworkModule {
             .build()
     }
 
+    /**
+     * The client that moves whole songs. Derived from the shared one (same pool, same timeouts, same
+     * User-Agent) minus the two things that are right for catalogue calls and wrong for audio bodies:
+     *
+     * - **the disk cache** — OkHttp would happily store a 5 MB song body, evicting most of the 20 MB
+     *   catalogue cache to remember bytes that are already being written to a file;
+     * - **the offline-fallback interceptor** — its synthetic `504 only-if-cached` answer turns a real
+     *   network failure into a riddle, and a downloader wants the real error.
+     */
+    @Provides
+    @Singleton
+    @DownloadHttp
+    fun provideDownloadHttpClient(shared: OkHttpClient): OkHttpClient =
+        shared.newBuilder()
+            .cache(null)
+            .apply {
+                interceptors().removeAll { it is OfflineCacheFallbackInterceptor }
+                networkInterceptors().removeAll { it is CatalogueCacheControlInterceptor }
+            }
+            .build()
+
     /** Per-country most-played charts (keyless RSS) for the regional Home rows. */
     @Provides
     @Singleton
@@ -278,3 +299,8 @@ object NetworkModule {
         youtube: YoutubeExtractorClient,
     ): PlaylistSourcesSearch = DefaultPlaylistSourcesSearch(deezerApi, youtube)
 }
+
+/** The cache-free client that downloads whole songs — see [NetworkModule.provideDownloadHttpClient]. */
+@javax.inject.Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class DownloadHttp

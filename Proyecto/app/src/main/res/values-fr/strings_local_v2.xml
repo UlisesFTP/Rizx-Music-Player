@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="local_tab_playlists">Playlists</string>
+    <string name="local_tab_files">Fichiers</string>
+
+    <string name="local_play_all">TOUT LIRE</string>
+    <string name="local_shuffle">ALÉATOIRE</string>
+    <string name="local_stats_songs">%1$d titres</string>
+
+    <string name="local_sort_label">Trier</string>
+    <string name="local_sort_title">Titre</string>
+    <string name="local_sort_recent">Ajoutés récemment</string>
+    <string name="local_sort_artist">Artiste</string>
+    <string name="local_sort_duration">Durée</string>
+
+    <string name="local_open_files_title">Ouvrir des fichiers…</string>
+    <string name="local_open_files_caption">Choisis un ou plusieurs audios d\'où tu veux : SD, USB, téléchargements d\'autres apps.</string>
+    <string name="local_open_folder_title">Ouvrir un dossier…</string>
+    <string name="local_open_folder_caption">Lit un dossier entier dans l\'ordre des fichiers.</string>
+    <string name="local_open_shortcut">Ouvrir des fichiers audio</string>
+    <string name="local_recently_opened">Ouverts récemment</string>
+    <string name="local_no_opened_title">Rien d\'ouvert pour l\'instant</string>
+    <string name="local_no_opened_body">Les audios ouverts avec l\'explorateur apparaissent ici et restent lisibles.</string>
+    <string name="local_folder_skipped">%1$d fichiers au-delà de la limite de 500 titres ont été laissés de côté.</string>
+    <string name="local_forget_file">Retirer des récents</string>
+
+    <string name="local_play_next">Lire ensuite</string>
+    <string name="local_add_to_queue">Ajouter à la file</string>
+    <string name="local_add_to_playlist">Ajouter à une playlist</string>
+    <string name="local_like">J\'aime</string>
+    <string name="local_unlike">Retirer des J\'aime</string>
+    <string name="local_more_for">Plus d\'options</string>
+
+    <string name="local_albums_heading">Albums</string>
+    <string name="local_no_playlists_title">Aucune playlist à toi pour l\'instant</string>
+    <string name="local_no_playlists_body">Crées-en une ici et remplis-la depuis le menu de n\'importe quel titre, local ou en streaming.</string>
+</resources>

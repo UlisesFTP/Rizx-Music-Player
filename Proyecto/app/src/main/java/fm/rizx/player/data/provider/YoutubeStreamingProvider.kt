@@ -8,6 +8,7 @@ import fm.rizx.player.data.remote.youtube.toBestAudioStreamOrNull
 import fm.rizx.player.data.remote.youtube.toStreamCandidateOrNull
 import fm.rizx.player.data.remote.youtube.toYoutubeCandidateOrNull
 import fm.rizx.player.data.remote.youtube.youtubeWatchUrl
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.Stream
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.Track
@@ -55,19 +56,29 @@ class YoutubeStreamingProvider(
     override suspend fun getStreamUrl(candidate: StreamCandidate): Stream = stream(candidate, forDownload = false)
 
     /**
-     * Downloads deliberately stay on the standard (M4A) pick even in Hi-Res mode: `AudioTagWriter` can
-     * only write tags into MP4/MP3/FLAC/Ogg containers, so an Opus-in-WebM download would land with no
-     * title, artist or cover and export to the music library that way. Streaming keeps the better codec.
+     * The download pick depends on what the download is *for* (the user's [DownloadFormat]):
+     *
+     * - [DownloadFormat.ORIGINAL] (and FLAC's fallback) keeps the historical pick — the standard M4A,
+     *   because `AudioTagWriter` can only write tags into MP4/MP3/FLAC/Ogg containers, and an untagged
+     *   file is worse than a better codec. Byte-for-byte what downloads have always saved.
+     * - [DownloadFormat.OPUS] and [DownloadFormat.MP3] ask for the best-sounding rendition instead
+     *   (Opus 160 when the video has one — the same pick streaming's high-quality mode makes): Opus to
+     *   keep as-is, MP3 to hand the encoder the most information before it is spent. The ranking falls
+     *   back to M4A on its own for videos that publish no Opus.
      */
-    override suspend fun getDownloadStreamUrl(candidate: StreamCandidate): Stream =
-        stream(candidate, forDownload = true)
+    override suspend fun getDownloadStreamUrl(candidate: StreamCandidate, format: DownloadFormat): Stream =
+        stream(candidate, forDownload = true, bestSource = format.prefersBestSource)
 
-    private suspend fun stream(candidate: StreamCandidate, forDownload: Boolean): Stream = guarded {
+    private suspend fun stream(
+        candidate: StreamCandidate,
+        forDownload: Boolean,
+        bestSource: Boolean = false,
+    ): Stream = guarded {
         val url = candidate.source.url ?: youtubeWatchUrl(candidate.id)
         client.streamInfo(url).toBestAudioStreamOrNull(
             candidate,
             preferLow = shouldPreferLow(),
-            maxQuality = !forDownload && dataSaver.effectiveQualityMode().prefersBestCompressed,
+            maxQuality = bestSource || (!forDownload && dataSaver.effectiveQualityMode().prefersBestCompressed),
         ) ?: throw AppError.ProviderFailure(name, "no audio stream for ${candidate.id}")
     }
 

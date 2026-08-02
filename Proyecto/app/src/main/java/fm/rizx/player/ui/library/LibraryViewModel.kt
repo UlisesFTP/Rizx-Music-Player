@@ -134,6 +134,10 @@ class LibraryViewModel @Inject constructor(
 
     fun downloadTrack(track: Track) = downloads.download(track)
 
+    /** The "Download as…" menu: this one download in an explicit format, ignoring the Settings default. */
+    fun downloadTrackAs(track: Track, format: fm.rizx.player.domain.model.DownloadFormat) =
+        downloads.download(track, format)
+
     fun downloadAll(tracks: List<Track>) = downloads.downloadAll(tracks)
 
     fun cancelDownload(key: String) = downloads.cancel(key)

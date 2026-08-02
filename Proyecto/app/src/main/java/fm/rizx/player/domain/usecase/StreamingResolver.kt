@@ -1,5 +1,6 @@
 package fm.rizx.player.domain.usecase
 
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.PlaybackResolverSettings
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.Track
@@ -59,12 +60,14 @@ class StreamingResolver @Inject constructor(
     suspend fun resolveStreamForCandidate(
         candidate: StreamCandidate,
         forDownload: Boolean = false,
+        /** Which rendition a download wants — see [StreamingProvider.getDownloadStreamUrl]. */
+        downloadFormat: DownloadFormat = DownloadFormat.ORIGINAL,
     ): StreamCandidate {
         if (candidate.failed) return candidate
         if (candidate.stream != null && !candidate.isStreamExpired(nowEpochMs())) return candidate
         return try {
             val stream = withRetry {
-                if (forDownload) streaming.getDownloadStreamUrl(candidate) else streaming.getStreamUrl(candidate)
+                if (forDownload) streaming.getDownloadStreamUrl(candidate, downloadFormat) else streaming.getStreamUrl(candidate)
             }
             candidate.copy(
                 stream = stream,

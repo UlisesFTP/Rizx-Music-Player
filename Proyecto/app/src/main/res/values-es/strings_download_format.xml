@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pref_download_format">Formato de descarga</string>
+
+    <string name="download_format_original">Original</string>
+    <string name="download_format_original_caption">Tal como llega (M4A de YouTube). Compatible y con carátula incrustada.</string>
+    <string name="download_format_opus">Opus</string>
+    <string name="download_format_opus_caption">La mejor calidad por MB, sin recodificar. Al exportarlo va sin etiquetas incrustadas.</string>
+    <string name="download_format_mp3">MP3 · 320</string>
+    <string name="download_format_mp3_caption">Recodificado con LAME para máxima compatibilidad. No puede sonar mejor que la fuente.</string>
+    <string name="download_format_flac">FLAC si está disponible</string>
+    <string name="download_format_flac_caption">Un archivo lossless verificado cuando el índice lo tiene; si no, Original. 25–30 MB por canción.</string>
+
+    <string name="player_download_as">Descargar en…</string>
+    <string name="player_converting_mp3">Convirtiendo a MP3…</string>
+    <string name="ui_download_converting">MP3…</string>
+</resources>

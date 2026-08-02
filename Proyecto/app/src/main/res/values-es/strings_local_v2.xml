@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="local_tab_playlists">Playlists</string>
+    <string name="local_tab_files">Archivos</string>
+
+    <string name="local_play_all">REPRODUCIR TODO</string>
+    <string name="local_shuffle">ALEATORIO</string>
+    <string name="local_stats_songs">%1$d canciones</string>
+
+    <string name="local_sort_label">Ordenar</string>
+    <string name="local_sort_title">Título</string>
+    <string name="local_sort_recent">Añadidas recientemente</string>
+    <string name="local_sort_artist">Artista</string>
+    <string name="local_sort_duration">Duración</string>
+
+    <string name="local_open_files_title">Abrir archivos…</string>
+    <string name="local_open_files_caption">Elige uno o varios audios de donde sea: SD, USB, descargas de otras apps.</string>
+    <string name="local_open_folder_title">Abrir carpeta…</string>
+    <string name="local_open_folder_caption">Reproduce una carpeta entera en su orden de archivos.</string>
+    <string name="local_open_shortcut">Abrir archivos de audio</string>
+    <string name="local_recently_opened">Abiertos recientemente</string>
+    <string name="local_no_opened_title">Aún no has abierto nada</string>
+    <string name="local_no_opened_body">Los audios que abras con el explorador aparecen aquí y se quedan reproducibles.</string>
+    <string name="local_folder_skipped">%1$d archivos quedaron fuera del límite de 500 canciones.</string>
+    <string name="local_forget_file">Quitar de recientes</string>
+
+    <string name="local_play_next">Reproducir siguiente</string>
+    <string name="local_add_to_queue">Añadir a la cola</string>
+    <string name="local_add_to_playlist">Añadir a playlist</string>
+    <string name="local_like">Me gusta</string>
+    <string name="local_unlike">Quitar de Me gusta</string>
+    <string name="local_more_for">Más opciones</string>
+
+    <string name="local_albums_heading">Álbumes</string>
+    <string name="local_no_playlists_title">Aún no tienes playlists propias</string>
+    <string name="local_no_playlists_body">Crea una aquí y llénala desde el menú de cualquier canción, local o de streaming.</string>
+</resources>

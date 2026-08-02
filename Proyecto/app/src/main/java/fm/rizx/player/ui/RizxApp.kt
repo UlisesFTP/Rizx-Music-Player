@@ -246,19 +246,36 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     onBack = { nav.popBackStack() },
                     onOpenAlbum = { nav.navigate(Routes.localAlbum(it)) },
                     onOpenArtist = { nav.navigate(Routes.localArtist(it)) },
+                    onOpenPlaylist = { nav.navigate(Routes.playlistDetail(it)) },
+                    onAddToPlaylist = { addToPlaylistTrack = it },
+                    onAddToQueue = queueViewModel::addToQueue,
+                    onAddNext = queueViewModel::addNext,
                 )
             }
             composable(
                 Routes.LOCAL_ALBUM_ROUTE,
                 arguments = listOf(navArgument("albumId") { type = NavType.StringType }),
             ) { entry ->
-                LocalAlbumScreen(albumId = entry.arguments?.getString("albumId").orEmpty(), onBack = { nav.popBackStack() })
+                LocalAlbumScreen(
+                    albumId = entry.arguments?.getString("albumId").orEmpty(),
+                    onBack = { nav.popBackStack() },
+                    onAddToPlaylist = { addToPlaylistTrack = it },
+                    onAddToQueue = queueViewModel::addToQueue,
+                    onAddNext = queueViewModel::addNext,
+                )
             }
             composable(
                 Routes.LOCAL_ARTIST_ROUTE,
                 arguments = listOf(navArgument("artistId") { type = NavType.StringType }),
             ) { entry ->
-                LocalArtistScreen(artistId = entry.arguments?.getString("artistId").orEmpty(), onBack = { nav.popBackStack() })
+                LocalArtistScreen(
+                    artistId = entry.arguments?.getString("artistId").orEmpty(),
+                    onBack = { nav.popBackStack() },
+                    onOpenAlbum = { nav.navigate(Routes.localAlbum(it)) },
+                    onAddToPlaylist = { addToPlaylistTrack = it },
+                    onAddToQueue = queueViewModel::addToQueue,
+                    onAddNext = queueViewModel::addNext,
+                )
             }
             composable(
                 Routes.NOW_PLAYING,
@@ -345,6 +362,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                             canvasOn = canvasOn,
                             canvasAvailable = canvasState.playing || canvasState.resolving,
                             onDownload = { track?.let(libraryViewModel::downloadTrack) },
+                            onDownloadAs = { format -> track?.let { libraryViewModel.downloadTrackAs(it, format) } },
                             onDeleteDownload = { track?.let { libraryViewModel.deleteDownload(it.source.identityKey) } },
                             onToggleCanvas = canvasViewModel::toggle,
                             onShare = { track?.let { context.shareTrack(it) } },

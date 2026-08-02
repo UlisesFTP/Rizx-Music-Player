@@ -167,6 +167,13 @@ dependencies {
     // artwork path, neither of which exists on Android. Remove if it doesn't hold up.
     implementation("net.jthink:jaudiotagger:3.0.1")
 
+    // MP3 encoding for the "MP3" download format (LAME 3.98.4 ported to pure Java; LGPL, Maven Central).
+    // Android has no MP3 *encoder* (MediaCodec only decodes), so this can't be done with the framework.
+    // Pure JVM on purpose: no NDK, no per-ABI .so, and the encode path is unit-testable. Its convenience
+    // `lowlevel.LameEncoder` touches javax.sound (absent on Android) — our wrapper drives the `mp3.*`
+    // engine directly and never loads that class.
+    implementation("de.sciss:jump3r:1.0.5")
+
     // Instrumented UI tests. The karaoke lyrics view is the one screen whose correctness is a *timing*
     // question — active line, sweep, auto-scroll — and none of that can be asserted on the JVM. These
     // run only with a device attached (`./gradlew connectedDebugAndroidTest`); the JVM suite is unaffected.

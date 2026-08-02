@@ -2,6 +2,7 @@ package fm.rizx.player
 
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.CanvasNetworkPolicy
 import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
@@ -82,9 +83,9 @@ class FakeSettingsRepository : SettingsRepository {
     override val losslessWifiOnly: Flow<Boolean> = losslessWifiOnlyFlow
     override suspend fun setLosslessWifiOnly(enabled: Boolean) { losslessWifiOnlyFlow.value = enabled }
 
-    val losslessDownloadFlow = MutableStateFlow(false)
-    override val losslessDownload: Flow<Boolean> = losslessDownloadFlow
-    override suspend fun setLosslessDownload(enabled: Boolean) { losslessDownloadFlow.value = enabled }
+    val downloadFormatFlow = MutableStateFlow(DownloadFormat.ORIGINAL)
+    override val downloadFormat: Flow<DownloadFormat> = downloadFormatFlow
+    override suspend fun setDownloadFormat(format: DownloadFormat) { downloadFormatFlow.value = format }
 
     val showTechnicalFormatFlow = MutableStateFlow(true)
     override val showTechnicalFormat: Flow<Boolean> = showTechnicalFormatFlow

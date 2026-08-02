@@ -1,5 +1,6 @@
 package fm.rizx.player
 
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadedTrack
 import fm.rizx.player.domain.model.Stream
@@ -16,7 +17,7 @@ class NoDownloads : DownloadRepository {
     override val downloads: StateFlow<List<DownloadedTrack>> = MutableStateFlow(emptyList())
     override val states: StateFlow<Map<String, DownloadState>> = MutableStateFlow(emptyMap())
     override fun localStream(track: Track): Stream? = null
-    override fun download(track: Track) = Unit
+    override fun download(track: Track, format: DownloadFormat?) = Unit
     override fun downloadAll(tracks: List<Track>) = Unit
     override fun cancel(key: String) = Unit
     override suspend fun delete(key: String) = Unit

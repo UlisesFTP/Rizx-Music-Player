@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.CanvasNetworkPolicy
 import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
@@ -154,10 +155,16 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.LOSSLESS_WIFI_ONLY] = enabled }
     }
 
-    override val losslessDownload: Flow<Boolean> = pref { it[Keys.LOSSLESS_DOWNLOAD] ?: false }
+    // A stored format wins; otherwise migrate the legacy losslessDownload boolean (true→FLAC); a fresh
+    // install has neither → ORIGINAL, which is byte-for-byte the behaviour downloads have always had.
+    override val downloadFormat: Flow<DownloadFormat> = pref { prefs ->
+        prefs[Keys.DOWNLOAD_FORMAT]
+            ?.let { name -> DownloadFormat.entries.firstOrNull { it.name == name } }
+            ?: if (prefs[Keys.LOSSLESS_DOWNLOAD] == true) DownloadFormat.FLAC else DownloadFormat.ORIGINAL
+    }
 
-    override suspend fun setLosslessDownload(enabled: Boolean) {
-        dataStore.edit { it[Keys.LOSSLESS_DOWNLOAD] = enabled }
+    override suspend fun setDownloadFormat(format: DownloadFormat) {
+        dataStore.edit { it[Keys.DOWNLOAD_FORMAT] = format.name }
     }
 
     override val showTechnicalFormat: Flow<Boolean> = pref { it[Keys.SHOW_TECHNICAL_FORMAT] ?: true }
@@ -294,7 +301,9 @@ class SettingsRepositoryImpl(
         val HI_RES_OUTPUT = booleanPreferencesKey("core.audio.hiResOutput")
         val AUDIO_QUALITY_MODE = stringPreferencesKey("core.audio.qualityMode")
         val LOSSLESS_WIFI_ONLY = booleanPreferencesKey("core.audio.losslessWifiOnly")
+        // LOSSLESS_DOWNLOAD is legacy — kept only so an existing install's old choice migrates into DOWNLOAD_FORMAT.
         val LOSSLESS_DOWNLOAD = booleanPreferencesKey("core.audio.losslessDownload")
+        val DOWNLOAD_FORMAT = stringPreferencesKey("core.downloads.format")
         val SHOW_TECHNICAL_FORMAT = booleanPreferencesKey("core.ui.showTechnicalFormat")
         val CANVAS = booleanPreferencesKey("core.ui.canvas")
         val CANVAS_NETWORK = stringPreferencesKey("core.ui.canvasNetwork")

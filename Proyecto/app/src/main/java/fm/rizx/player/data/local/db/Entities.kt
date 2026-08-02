@@ -109,4 +109,6 @@ data class PlaylistSummaryRow(
     val isReadOnly: Boolean,
     val itemCount: Int,
     val artworkUrl: String? = null,
+    /** Non-null when the playlist arrived via an import — what "your own playlists" filters out. */
+    val originProvider: String? = null,
 )

@@ -1,7 +1,10 @@
 package fm.rizx.player.domain.model
 
-/** Where a track is in the download pipeline. Only [COMPLETE] survives a restart — the rest are in-flight. */
-enum class DownloadStatus { QUEUED, DOWNLOADING, COMPLETE, FAILED }
+/**
+ * Where a track is in the download pipeline. Only [COMPLETE] survives a restart — the rest are in-flight.
+ * [CONVERTING] is the MP3 format's re-encode step, after the bytes have landed and before they're indexed.
+ */
+enum class DownloadStatus { QUEUED, DOWNLOADING, CONVERTING, COMPLETE, FAILED }
 
 /**
  * A track whose audio is on disk, ready to play with no network.

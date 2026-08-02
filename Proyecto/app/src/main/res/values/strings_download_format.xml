@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Download formats: the Settings row, its four options, and the in-flight states they add. -->
+<resources>
+    <string name="pref_download_format">Download format</string>
+
+    <string name="download_format_original">Original</string>
+    <string name="download_format_original_caption">As it arrives (M4A from YouTube). Compatible and carries cover art.</string>
+    <string name="download_format_opus">Opus</string>
+    <string name="download_format_opus_caption">Best quality per MB, kept as-is. Exports without embedded tags.</string>
+    <string name="download_format_mp3">MP3 · 320</string>
+    <string name="download_format_mp3_caption">Re-encoded with LAME for maximum compatibility. Can\'t sound better than the source.</string>
+    <string name="download_format_flac">FLAC when available</string>
+    <string name="download_format_flac_caption">A verified lossless file when the index has one; otherwise Original. 25–30 MB per song.</string>
+
+    <string name="player_download_as">Download as…</string>
+    <string name="player_converting_mp3">Converting to MP3…</string>
+    <string name="ui_download_converting">MP3…</string>
+</resources>

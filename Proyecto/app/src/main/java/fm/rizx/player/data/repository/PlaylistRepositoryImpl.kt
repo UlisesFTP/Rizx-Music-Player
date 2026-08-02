@@ -46,7 +46,10 @@ class PlaylistRepositoryImpl(
     override fun playlists(): Flow<List<PlaylistSummary>> =
         dao.observeSummaries().map { rows ->
             rows.map {
-                PlaylistSummary(it.id, it.name, it.description, it.itemCount, it.isReadOnly, it.artworkUrl)
+                PlaylistSummary(
+                    it.id, it.name, it.description, it.itemCount, it.isReadOnly, it.artworkUrl,
+                    isImported = it.originProvider != null,
+                )
             }
         }
 

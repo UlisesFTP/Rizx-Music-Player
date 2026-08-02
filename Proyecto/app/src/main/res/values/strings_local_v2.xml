@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Local player v2: playlists/files views, header actions, sorting, the file explorer. -->
+<resources>
+    <string name="local_tab_playlists">Playlists</string>
+    <string name="local_tab_files">Files</string>
+
+    <string name="local_play_all">PLAY ALL</string>
+    <string name="local_shuffle">SHUFFLE</string>
+    <string name="local_stats_songs">%1$d songs</string>
+
+    <string name="local_sort_label">Sort</string>
+    <string name="local_sort_title">Title</string>
+    <string name="local_sort_recent">Recently added</string>
+    <string name="local_sort_artist">Artist</string>
+    <string name="local_sort_duration">Duration</string>
+
+    <string name="local_open_files_title">Open files…</string>
+    <string name="local_open_files_caption">Pick one or more audio files from anywhere — SD card, USB, other apps\' downloads.</string>
+    <string name="local_open_folder_title">Open folder…</string>
+    <string name="local_open_folder_caption">Play a whole folder in file order.</string>
+    <string name="local_open_shortcut">Open audio files</string>
+    <string name="local_recently_opened">Recently opened</string>
+    <string name="local_no_opened_title">Nothing opened yet</string>
+    <string name="local_no_opened_body">Audio you open with the file explorer shows up here and stays playable.</string>
+    <string name="local_folder_skipped">%1$d files over the 500-song limit were left out.</string>
+    <string name="local_forget_file">Remove from recents</string>
+
+    <string name="local_play_next">Play next</string>
+    <string name="local_add_to_queue">Add to queue</string>
+    <string name="local_add_to_playlist">Add to playlist</string>
+    <string name="local_like">Like</string>
+    <string name="local_unlike">Remove from Liked</string>
+    <string name="local_more_for">More options</string>
+
+    <string name="local_albums_heading">Albums</string>
+    <string name="local_no_playlists_title">No playlists of your own yet</string>
+    <string name="local_no_playlists_body">Create one here, then fill it from any song\'s menu — local or streaming.</string>
+</resources>
