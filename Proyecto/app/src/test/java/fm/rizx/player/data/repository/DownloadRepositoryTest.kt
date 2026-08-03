@@ -136,6 +136,31 @@ class DownloadRepositoryTest {
     }
 
     @Test
+    fun `a downloaded file reports what it is, so the player's readout is not blank offline`() = runTest {
+        server.enqueue(audioBody())
+        val timed = track.copy(durationMs = 2_048) // 2048 bytes over 2.048 s = 8 kbps, exactly
+        val repo = subject(resolverYielding(stream()))
+        repo.download(timed)
+
+        val local = repo.localStream(timed)!!
+
+        assertEquals("AAC", local.codec)
+        assertEquals(8, local.bitrateKbps)
+    }
+
+    @Test
+    fun `a download of unknown duration reports the codec and stays quiet about the bitrate`() = runTest {
+        server.enqueue(audioBody())
+        val repo = subject(resolverYielding(stream()))
+        repo.download(track)
+
+        val local = repo.localStream(track)!!
+
+        assertEquals("AAC", local.codec)
+        assertNull(local.bitrateKbps) // measured or absent — never inferred
+    }
+
+    @Test
     fun `falls back to the network when the file has vanished`() = runTest {
         server.enqueue(audioBody())
         val repo = subject(resolverYielding(stream()))

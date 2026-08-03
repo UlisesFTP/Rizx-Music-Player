@@ -9,8 +9,10 @@ import fm.rizx.player.data.local.store.HomeFeedStore
 import fm.rizx.player.domain.model.AppMix
 import fm.rizx.player.domain.model.DailyPick
 import fm.rizx.player.domain.model.Daypart
+import fm.rizx.player.domain.model.FeaturedPlaylist
 import fm.rizx.player.domain.model.ForYouSection
 import fm.rizx.player.domain.model.HomeFeed
+import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.PlayStat
 import fm.rizx.player.domain.model.QueueContext
 import fm.rizx.player.domain.model.QueueSourceKind
@@ -19,6 +21,7 @@ import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.repository.DashboardRepository
 import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.domain.repository.ForYouRepository
+import fm.rizx.player.domain.repository.PlaylistRepository
 import fm.rizx.player.domain.repository.QueueRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -109,6 +112,7 @@ class HomeViewModel @Inject constructor(
     private val cache: HomeFeedStore,
     private val settings: SettingsRepository,
     private val favorites: FavoritesRepository,
+    private val playlists: PlaylistRepository,
     recents: fm.rizx.player.domain.repository.RecentlyPlayedRepository,
 ) : ViewModel() {
 
@@ -335,14 +339,59 @@ class HomeViewModel @Inject constructor(
         playback.playContext(mix.tracks, 0, QueueContext(kind = QueueSourceKind.PLAYLIST, label = label))
     }
 
+    /**
+     * The speed dial's dice: one random song from the whole listening log — deeper than the grid
+     * shows, still only songs this listener actually played — started as an auto-radio so it keeps
+     * going. Random per tap on purpose; the dice that always lands the same way isn't one.
+     */
+    fun playSurprise() {
+        viewModelScope.launch {
+            val pool = attempt { history.first() }.getOrDefault(emptyList())
+            pool.randomOrNull()?.let { playback.playAutoRadio(it.track) }
+        }
+    }
+
+    /**
+     * A mood chip: resolve what the station is playing right now and queue it as a context, labeled
+     * [queueLabel] ("Station · Chill Out") — next/previous walk the station's list, they don't wander
+     * off into a radio. Resolution can fail quietly (offline chip = nothing happens); it never crashes.
+     */
+    fun playStation(providerId: String, station: MoodStation, queueLabel: String) {
+        viewModelScope.launch {
+            val tracks = attempt { dashboard.stationTracks(providerId, station.id, STATION_TRACKS) }
+                .getOrDefault(emptyList())
+            if (tracks.isEmpty()) return@launch
+            playback.playContext(tracks, 0, QueueContext(kind = QueueSourceKind.PLAYLIST, label = queueLabel))
+        }
+    }
+
+    /**
+     * A featured card's PLAY: fetch the playlist's real tracklist and queue it whole. The card's
+     * preview is the fallback — four songs beat a button that does nothing when the fetch fails.
+     */
+    fun playFeatured(featured: FeaturedPlaylist) {
+        viewModelScope.launch {
+            val full = attempt { playlists.previewPlaylist(featured.playlist.source) }.getOrDefault(emptyList())
+            val tracks = full.ifEmpty { featured.preview }
+            if (tracks.isEmpty()) return@launch
+            playback.playContext(tracks, 0, QueueContext(kind = QueueSourceKind.PLAYLIST, label = featured.playlist.name))
+        }
+    }
+
     /** The consent card's buttons; the consent collector in [init] refreshes the feed afterwards. */
     fun setRegionalConsent(consented: Boolean) {
         viewModelScope.launch { forYou.setRegionalConsent(consented) }
     }
 
     private companion object {
-        /** One carousel's worth — the row is a way back in, not the whole log. */
-        const val CONTINUE_ITEMS = ContinueListening.SLOTS
+        /**
+         * Two full speed-dial pages: 17 songs + the dice = 18 cells = 2×9. The grid holds more than
+         * the old carousel because a wall of thumb-sized covers *is* the denser presentation.
+         */
+        const val CONTINUE_ITEMS = 17
+
+        /** One queue's worth of a mood station — enough to settle in, small enough to land fast. */
+        const val STATION_TRACKS = 30
 
         /**
          * How deep the statistics read. The log keeps three hundred songs precisely so "you haven't

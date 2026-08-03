@@ -53,6 +53,7 @@ import fm.rizx.player.ui.components.MiniPlayer
 import fm.rizx.player.ui.components.LocalLosslessCodecs
 import fm.rizx.player.ui.components.LocalThriftyArtwork
 import fm.rizx.player.ui.components.RizxBottomNav
+import fm.rizx.player.ui.components.SaveDownloadsToPhoneDialog
 import fm.rizx.player.ui.library.AddToPlaylistDialog
 import fm.rizx.player.ui.library.LibraryViewModel
 import fm.rizx.player.ui.navigation.Routes
@@ -119,6 +120,21 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
             onPick = { libraryViewModel.addTrackToPlaylist(it, track) },
             onCreateNew = { libraryViewModel.createPlaylistWithTrack(it, track) },
             onDismiss = { addToPlaylistTrack = null },
+        )
+    }
+
+    // Asked once, on the first download, and from here rather than from a screen: downloads start in the
+    // Library, in an album, in a playlist and in the player's ⋮ menu, which are four different ViewModels
+    // and four different places this question would otherwise have to live.
+    val askSaveToPhone by libraryViewModel.askSaveToPhone.collectAsStateWithLifecycle()
+    var saveToPhoneOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(askSaveToPhone) { if (askSaveToPhone) saveToPhoneOpen = true }
+    if (saveToPhoneOpen) {
+        SaveDownloadsToPhoneDialog(
+            onChoose = { alsoPhone -> libraryViewModel.setSaveToPhone(alsoPhone); saveToPhoneOpen = false },
+            // Dismissing decides nothing, so nothing is stored: the next download asks again rather than
+            // quietly settling on an answer the user never gave.
+            onDismiss = { saveToPhoneOpen = false },
         )
     }
 

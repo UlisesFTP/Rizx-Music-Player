@@ -3,7 +3,31 @@ package fm.rizx.player.domain.model
 import kotlinx.serialization.Serializable
 
 /** Which dashboard sections a provider can supply (Phase 19). */
-enum class DashboardCapability { TOP_TRACKS, TOP_ARTISTS, TOP_ALBUMS, EDITORIAL_PLAYLISTS, NEW_RELEASES }
+enum class DashboardCapability { TOP_TRACKS, TOP_ARTISTS, TOP_ALBUMS, EDITORIAL_PLAYLISTS, NEW_RELEASES, MOOD_STATIONS, FEATURED_PLAYLISTS }
+
+/**
+ * A mood/genre station ("Chill Out", "¡Fiesta!", Pop…) as the provider curates it — the provider also
+ * localizes the titles, which is why this carries a display string rather than a mood enum of ours.
+ * [id] is the provider's own station id; the provider that supplied it (via [AttributedResult]) is the
+ * one that can resolve it to tracks, so the pair travels together to [stationTracks].
+ */
+@Serializable
+data class MoodStation(
+    val id: String,
+    val title: String,
+    val artworkUrl: String? = null,
+)
+
+/**
+ * An editorial playlist promoted to a full card: the ref plus the first few tracks, so the card can
+ * show what is inside before the user commits to opening it. The preview is a *peek*, not the list —
+ * playing the playlist still fetches the real tracklist.
+ */
+@Serializable
+data class FeaturedPlaylist(
+    val playlist: PlaylistRef,
+    val preview: List<Track> = emptyList(),
+)
 
 /**
  * A section's items **attributed** to the dashboard provider that produced them. Dashboard is a
@@ -31,8 +55,11 @@ data class HomeFeed(
     val topAlbums: List<AttributedResult<AlbumRef>> = emptyList(),
     val editorialPlaylists: List<AttributedResult<PlaylistRef>> = emptyList(),
     val newReleases: List<AttributedResult<AlbumRef>> = emptyList(),
+    val featured: List<AttributedResult<FeaturedPlaylist>> = emptyList(),
+    val stations: List<AttributedResult<MoodStation>> = emptyList(),
 ) {
     val isEmpty: Boolean
         get() = topTracks.isEmpty() && topArtists.isEmpty() && topAlbums.isEmpty() &&
-            editorialPlaylists.isEmpty() && newReleases.isEmpty()
+            editorialPlaylists.isEmpty() && newReleases.isEmpty() &&
+            featured.isEmpty() && stations.isEmpty()
 }

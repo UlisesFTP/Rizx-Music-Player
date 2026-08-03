@@ -143,3 +143,14 @@ data class DeezerPagedTracksDto(
     val data: List<DeezerTrackDto> = emptyList(),
     val total: Int? = null,
 )
+
+/** `/radio/lists` — the curated mood & genre stations. */
+@Serializable
+data class DeezerRadiosWrapper(val data: List<DeezerRadioDto> = emptyList())
+
+@Serializable
+data class DeezerRadioDto(
+    val id: Long? = null,
+    val title: String? = null,
+    @SerialName("picture_medium") val pictureMedium: String? = null,
+)

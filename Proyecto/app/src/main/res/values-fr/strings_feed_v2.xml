@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_surprise">Surprise</string>
+    <string name="home_moods_heading">Humeurs et genres</string>
+    <string name="home_station_of">Station · %1$s</string>
+    <string name="home_featured_heading">Playlists à la une</string>
+</resources>

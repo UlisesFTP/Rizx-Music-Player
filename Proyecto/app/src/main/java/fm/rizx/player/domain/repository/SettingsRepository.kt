@@ -117,6 +117,17 @@ interface SettingsRepository {
     val downloadFormat: Flow<DownloadFormat>
     suspend fun setDownloadFormat(format: DownloadFormat)
 
+    /**
+     * Whether a finished download is also copied into the phone's own `Music/Rizx` folder, where the file
+     * manager and every other player can see it. A download otherwise lives in app-private storage: it
+     * plays offline perfectly and is invisible to the rest of the device.
+     *
+     * **Absent = never asked**, exactly like [recsRegionalConsent]: the first download puts the question
+     * to the user rather than deciding for them, since the copy doubles what the song costs in storage.
+     */
+    val saveDownloadsToPhone: Flow<Boolean?>
+    suspend fun setSaveDownloadsToPhone(enabled: Boolean)
+
     /** Show the codec/depth/rate line under the player. On by default — it is the honest part of this feature. */
     val showTechnicalFormat: Flow<Boolean>
     suspend fun setShowTechnicalFormat(enabled: Boolean)

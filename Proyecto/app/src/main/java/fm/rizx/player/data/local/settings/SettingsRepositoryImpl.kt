@@ -167,6 +167,14 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.DOWNLOAD_FORMAT] = format.name }
     }
 
+    // Absent = never asked → the first download asks. Off until then, which is what downloads have
+    // always done: nothing leaves the app's own folder unless the user says so.
+    override val saveDownloadsToPhone: Flow<Boolean?> = pref { it[Keys.SAVE_DOWNLOADS_TO_PHONE] }
+
+    override suspend fun setSaveDownloadsToPhone(enabled: Boolean) {
+        dataStore.edit { it[Keys.SAVE_DOWNLOADS_TO_PHONE] = enabled }
+    }
+
     override val showTechnicalFormat: Flow<Boolean> = pref { it[Keys.SHOW_TECHNICAL_FORMAT] ?: true }
 
     override suspend fun setShowTechnicalFormat(enabled: Boolean) {
@@ -304,6 +312,7 @@ class SettingsRepositoryImpl(
         // LOSSLESS_DOWNLOAD is legacy — kept only so an existing install's old choice migrates into DOWNLOAD_FORMAT.
         val LOSSLESS_DOWNLOAD = booleanPreferencesKey("core.audio.losslessDownload")
         val DOWNLOAD_FORMAT = stringPreferencesKey("core.downloads.format")
+        val SAVE_DOWNLOADS_TO_PHONE = booleanPreferencesKey("core.downloads.saveToPhone")
         val SHOW_TECHNICAL_FORMAT = booleanPreferencesKey("core.ui.showTechnicalFormat")
         val CANVAS = booleanPreferencesKey("core.ui.canvas")
         val CANVAS_NETWORK = stringPreferencesKey("core.ui.canvasNetwork")

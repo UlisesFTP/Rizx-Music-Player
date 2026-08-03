@@ -9,6 +9,7 @@ import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.Artwork
 import fm.rizx.player.domain.model.ArtworkPurpose
 import fm.rizx.player.domain.model.ArtworkSet
+import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.SearchResults
@@ -87,6 +88,17 @@ fun DeezerPlaylistDto.toPlaylistRef(): PlaylistRef? {
         artwork = coverSet(pictureXl, pictureBig, pictureMedium),
         source = DeezerIds.playlist(playlistId),
         trackCount = nbTracks,
+    )
+}
+
+/** Titles arrive with stray whitespace ("80's ", verified live) — trimmed so dedupe-by-title works. */
+fun DeezerRadioDto.toMoodStation(): MoodStation? {
+    val stationId = id ?: return null
+    val t = title?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return MoodStation(
+        id = stationId.toString(),
+        title = t,
+        artworkUrl = pictureMedium?.takeIf { it.isNotBlank() },
     )
 }
 

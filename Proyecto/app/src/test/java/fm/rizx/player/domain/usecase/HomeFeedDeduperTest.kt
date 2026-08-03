@@ -66,8 +66,11 @@ class HomeFeedDeduperTest {
     fun `the charts drop what the personalized rows above already showed`() {
         val sections = listOf(
             ForYouSection.Mix("Seed", listOf(track("Chart hit"), track("A"), track("B"))),
-            ForYouSection.ArtistsForYou(listOf(artist("Justice"), artist("Cassius"), artist("Etienne"))),
-            ForYouSection.AlbumsForYou(listOf(album("Hyperdrama"), album("Woman"), album("Cross"))),
+            ForYouSection.SimilarTo(
+                "Daft Punk",
+                artists = listOf(artist("Justice"), artist("Cassius"), artist("Etienne")),
+                albums = listOf(album("Hyperdrama"), album("Woman"), album("Cross")),
+            ),
         )
         val feed = HomeFeed(
             topTracks = chart(track("Chart hit"), track("Another hit")),
@@ -80,6 +83,46 @@ class HomeFeedDeduperTest {
         assertEquals(listOf("Another hit"), out.feed.topTracks.single().items.map { it.title })
         assertEquals(listOf("Bad Bunny"), out.feed.topArtists.single().items.map { it.name })
         assertEquals(listOf("Nomada"), out.feed.topAlbums.single().items.map { it.title })
+    }
+
+    @Test
+    fun `a similar-to row survives on the combined weight of its two halves`() {
+        // Two artists + one album = three cards — enough for a row even though neither half alone
+        // reaches the minimum.
+        val sections = listOf(
+            ForYouSection.SimilarTo(
+                "Daft Punk",
+                artists = listOf(artist("Justice"), artist("Cassius")),
+                albums = listOf(album("Hyperdrama")),
+            ),
+        )
+
+        val out = deduper.dedupe(HomeFeed(), sections)
+
+        assertEquals(1, out.sections.size)
+    }
+
+    @Test
+    fun `a featured card claims its playlist so the plain carousel drops it, but its preview claims nothing`() {
+        val previewSong = track("Peek song")
+        val playlist = fm.rizx.player.domain.model.PlaylistRef(
+            id = "1", name = "Top México", source = ProviderRef("deezer", "playlist:1"),
+        )
+        val feed = HomeFeed(
+            featured = chart(fm.rizx.player.domain.model.FeaturedPlaylist(playlist, listOf(previewSong))),
+            editorialPlaylists = chart(
+                playlist,
+                fm.rizx.player.domain.model.PlaylistRef(id = "2", name = "Viral", source = ProviderRef("deezer", "playlist:2")),
+            ),
+            topTracks = chart(previewSong, track("Other hit")),
+        )
+
+        val out = deduper.dedupe(feed, emptyList())
+
+        assertEquals("the card keeps its playlist", 1, out.feed.featured.single().items.size)
+        assertEquals(listOf("Viral"), out.feed.editorialPlaylists.single().items.map { it.name })
+        // The peek is presentation, not a shelf: the chart keeps the song the card previewed.
+        assertEquals(listOf("Peek song", "Other hit"), out.feed.topTracks.single().items.map { it.title })
     }
 
     @Test

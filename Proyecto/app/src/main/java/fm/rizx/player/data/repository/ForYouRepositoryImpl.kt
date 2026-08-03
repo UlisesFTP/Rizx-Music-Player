@@ -7,6 +7,7 @@ import fm.rizx.player.data.remote.deezer.DeezerIds
 import fm.rizx.player.data.remote.deezer.toAlbumRef
 import fm.rizx.player.data.remote.deezer.toArtistRef
 import fm.rizx.player.data.remote.deezer.toTrackOrNull
+import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.ArtistCredit
 import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.ForYouSection
@@ -30,7 +31,8 @@ import kotlinx.coroutines.supervisorScope
  * Builds the personalized "For you" rows from the user's own taste (likes + recents):
  * - **Mix** rows — YT Music's real autoplay recommendations seeded by the user's tracks;
  * - **Because you like <artist>** — Deezer's artist radio for the most-listened artist;
- * - **Artists for you** — Deezer's related artists across the top taste artists.
+ * - **Similar to <artist>** — one row per top taste artist: Deezer's related artists plus records by
+ *   them, drawn as one mixed carousel (the shape every streaming feed uses for this).
  *
  * Rows are fetched concurrently and each is `runCatching`-isolated: a broken source drops its row,
  * never the feed. Cold start (no taste data) returns no sections. Also fronts the regional-consent
@@ -69,28 +71,22 @@ class ForYouRepositoryImpl(
             emit(emptyList())
             return@flow
         }
-        // Seeds and the top artist are picked **once**, here, and handed to both halves: the plan's
+        // Seeds and the anchor artists are picked **once**, here, and handed to both halves: the plan's
         // titles and the real rows' titles must be the same strings or the Home would swap a skeleton
         // for a differently-titled row instead of filling it. (`shuffle` alone would differ per call.)
         val seeds = mixSeeds(taste)
-        val artist = topArtists(taste).firstOrNull()
-        emit(plan(seeds, artist))
+        val anchors = topArtists(taste).take(SIMILAR_ANCHORS)
+        emit(plan(seeds, anchors))
 
         emit(
             supervisorScope {
-                // Three independent branches, all in flight at once. The discovery branch keeps its two
-                // rows together because both are built from the same related-artist lookup — and crucially
-                // `albumsForYou` now starts the moment that lookup lands instead of waiting behind the
-                // slow YT mixes, which used to add its two round-trips as pure tail latency.
+                // Three independent branches, all in flight at once: the YT mixes, the artist radio,
+                // and one "Similar to" neighborhood per anchor — each anchor its own coroutine, so one
+                // artist Deezer can't resolve costs its row and nothing else.
                 val mixes = async { mixSections(seeds) }
-                val because = async { becauseYouLike(artist) }
-                val discovery = async {
-                    val similar = relatedArtists(taste)
-                    val artistsRow = similar.takeIf { it.size >= MIN_ROW_ITEMS }
-                        ?.let { ForYouSection.ArtistsForYou(it.take(ROW_ITEMS)) }
-                    listOfNotNull(artistsRow, albumsForYou(similar))
-                }
-                mixes.await() + listOfNotNull(because.await()) + discovery.await()
+                val because = async { becauseYouLike(anchors.firstOrNull()) }
+                val similar = anchors.map { anchor -> async { similarTo(anchor) } }
+                mixes.await() + listOfNotNull(because.await()) + similar.mapNotNull { it.await() }
             },
         )
     }.flowOn(io)
@@ -101,14 +97,11 @@ class ForYouRepositoryImpl(
      * first network call. A planned row whose source then comes back empty collapses, which is one
      * row of movement instead of the whole block arriving at once.
      */
-    private fun plan(seeds: List<Track>, artist: ArtistCredit?): List<ForYouSection> = buildList {
+    private fun plan(seeds: List<Track>, anchors: List<ArtistCredit>): List<ForYouSection> = buildList {
         seeds.forEach { add(ForYouSection.Mix(seedTitle = it.title, items = emptyList())) }
-        // The three Deezer-backed rows all hang off a credited artist; with none, none of them can run.
-        if (artist != null) {
-            add(ForYouSection.BecauseYouLike(artistName = artist.name, items = emptyList()))
-            add(ForYouSection.ArtistsForYou(emptyList()))
-            add(ForYouSection.AlbumsForYou(emptyList()))
-        }
+        // The Deezer-backed rows all hang off credited artists; with none, none of them can run.
+        anchors.firstOrNull()?.let { add(ForYouSection.BecauseYouLike(artistName = it.name, items = emptyList())) }
+        anchors.forEach { add(ForYouSection.SimilarTo(anchorName = it.name)) }
     }
 
     /**
@@ -147,30 +140,28 @@ class ForYouRepositoryImpl(
             ?.let { ForYouSection.BecauseYouLike(artistName = artist.name, items = it) }
     }
 
-    /** Artists similar to the user's most-listened ones — the seed for both discovery rows. */
-    private suspend fun relatedArtists(taste: List<Track>): List<ArtistRef> = supervisorScope {
-        topArtists(taste).take(RELATED_SEEDS)
-            // One seed = up to two serialized Deezer calls (id lookup, then related), so three seeds ran
-            // as six round-trips in a row. Fanned out, it is two.
-            .map { credit ->
-                async {
-                    val id = deezerArtistId(credit) ?: return@async emptyList()
-                    runCatching { deezer.artistRelated(id, RELATED_PER_SEED).data.mapNotNull { it.toArtistRef() } }
-                        .getOrDefault(emptyList())
-                }
-            }
-            .awaitAll()
-            .flatten()
-            .distinctBy { it.source }
+    /**
+     * One anchor's neighborhood: Deezer's related artists, plus records by the closest of them. The two
+     * halves ride one row so the carousel can interleave circles and covers — the mixed shape the ask
+     * ("like a streaming app's feed") is about.
+     */
+    private suspend fun similarTo(anchor: ArtistCredit): ForYouSection.SimilarTo? = supervisorScope {
+        val id = deezerArtistId(anchor) ?: return@supervisorScope null
+        val related = runCatching { deezer.artistRelated(id, RELATED_PER_SEED).data.mapNotNull { it.toArtistRef() } }
+            .getOrDefault(emptyList())
+        val albums = albumsBy(related.take(ALBUM_SEEDS))
+        val artists = related.take(SIMILAR_ARTISTS)
+        ForYouSection.SimilarTo(anchorName = anchor.name, artists = artists, albums = albums.take(SIMILAR_ALBUMS))
+            .takeIf { it.size >= MIN_ROW_ITEMS }
     }
 
     /**
-     * Records by the first few similar artists. Deezer's `/artist/{id}/albums` omits the artist on each
+     * Records by the given similar artists. Deezer's `/artist/{id}/albums` omits the artist on each
      * row (it's implied by the endpoint), so it's carried over from the seed — otherwise every card
      * would render with a blank subtitle.
      */
-    private suspend fun albumsForYou(related: List<ArtistRef>): ForYouSection? = supervisorScope {
-        val perArtist = related.take(ALBUM_SEEDS)
+    private suspend fun albumsBy(related: List<ArtistRef>): List<AlbumRef> = supervisorScope {
+        val perArtist = related
             .map { artist ->
                 async {
                     val id = artist.source.takeIf { it.provider == DeezerIds.PROVIDER }
@@ -181,13 +172,11 @@ class ForYouRepositoryImpl(
                 }
             }
             .awaitAll()
-        // Round-robin rather than concatenated: a row of one artist's back catalogue reads as their
+        // Round-robin rather than concatenated: a run of one artist's back catalogue reads as their
         // discography, not as a recommendation.
-        val albums = (0 until (perArtist.maxOfOrNull { it.size } ?: 0))
+        (0 until (perArtist.maxOfOrNull { it.size } ?: 0))
             .flatMap { rank -> perArtist.mapNotNull { it.getOrNull(rank) } }
             .distinctBy { it.source }
-        albums.takeIf { it.size >= MIN_ROW_ITEMS }
-            ?.let { ForYouSection.AlbumsForYou(items = it.take(ROW_ITEMS)) }
     }
 
     /** The taste's credited artists by how often they appear, most-listened first. */
@@ -212,11 +201,17 @@ class ForYouRepositoryImpl(
         const val MIX_ROWS = 2
         const val ROW_ITEMS = 12
         const val MIN_ROW_ITEMS = 3
-        const val RELATED_SEEDS = 3
+
+        /** One "Similar to" row per anchor — the feed's per-artist neighborhoods, like any streaming app. */
+        const val SIMILAR_ANCHORS = 2
         const val RELATED_PER_SEED = 8
 
-        /** Albums come from a couple of the similar artists — enough for a row, two extra calls. */
+        /** How much of each half a row carries; interleaved in the UI, 12 cards max like every row. */
+        const val SIMILAR_ARTISTS = 6
+        const val SIMILAR_ALBUMS = 6
+
+        /** Albums come from the first similar artists — enough for the row's album half, two calls. */
         const val ALBUM_SEEDS = 2
-        const val ALBUMS_PER_SEED = 6
+        const val ALBUMS_PER_SEED = 4
     }
 }

@@ -61,4 +61,43 @@ class BlendingDashboardRepositoryTest {
         assertTrue(feed.topTracks.isEmpty())
         assertTrue(feed.editorialPlaylists.isEmpty())
     }
+
+    @Test
+    fun `single-source stations and featured cards pass through with their real attribution`() = runTest {
+        // The point of the passthrough: with one provider supplying them (Deezer today), the blend
+        // must not rename its contribution "Rizx" nor lose the providerId the station tap routes by.
+        val station = fm.rizx.player.domain.model.MoodStation("37121", "Chill Out")
+        val card = fm.rizx.player.domain.model.FeaturedPlaylist(
+            playlist = fm.rizx.player.domain.model.PlaylistRef(
+                id = "1", name = "Top", source = ProviderRef("deezer", "playlist:1"),
+            ),
+            preview = listOf(track("Peek", "deezer", "5")),
+        )
+        val inner = object : DashboardRepository {
+            override suspend fun homeFeed() = HomeFeed(
+                stations = listOf(AttributedResult("deezer-dashboard", "Deezer", listOf(station))),
+                featured = listOf(AttributedResult("deezer-dashboard", "Deezer", listOf(card))),
+            )
+        }
+
+        val feed = repo(inner).homeFeed()
+
+        assertEquals("deezer-dashboard", feed.stations.single().providerId)
+        assertEquals(listOf("Chill Out"), feed.stations.single().items.map { it.title })
+        assertEquals("deezer-dashboard", feed.featured.single().providerId)
+        assertEquals("Top", feed.featured.single().items.single().playlist.name)
+    }
+
+    @Test
+    fun `stationTracks is forwarded to the inner repository untouched`() = runTest {
+        val inner = object : DashboardRepository {
+            override suspend fun homeFeed() = HomeFeed()
+            override suspend fun stationTracks(providerId: String, stationId: String, limit: Int) =
+                listOf(track("From $providerId/$stationId", "deezer", "9"))
+        }
+
+        val tracks = repo(inner).stationTracks("deezer-dashboard", "37121", 30)
+
+        assertEquals(listOf("From deezer-dashboard/37121"), tracks.map { it.title })
+    }
 }

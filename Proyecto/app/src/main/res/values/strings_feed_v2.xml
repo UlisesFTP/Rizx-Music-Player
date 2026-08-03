@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Feed v2: speed dial, mood stations, featured playlist cards. -->
+<resources>
+    <string name="home_surprise">Surprise</string>
+    <string name="home_moods_heading">Moods &amp; genres</string>
+    <string name="home_station_of">Station · %1$s</string>
+    <string name="home_featured_heading">Featured playlists</string>
+</resources>

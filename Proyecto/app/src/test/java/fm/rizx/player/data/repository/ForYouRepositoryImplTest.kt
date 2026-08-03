@@ -81,8 +81,11 @@ class ForYouRepositoryImplTest {
         assertTrue("a planned row must carry no items", plan.all { it.size == 0 })
         assertEquals(listOf("Song A", "Song C"), plan.filterIsInstance<ForYouSection.Mix>().map { it.seedTitle })
         assertEquals("Artist X", plan.filterIsInstance<ForYouSection.BecauseYouLike>().single().artistName)
-        assertEquals(1, plan.filterIsInstance<ForYouSection.ArtistsForYou>().size)
-        assertEquals(1, plan.filterIsInstance<ForYouSection.AlbumsForYou>().size)
+        // One "Similar to" row per anchor, titled after them — most-listened first.
+        assertEquals(
+            listOf("Artist X", "Artist Y"),
+            plan.filterIsInstance<ForYouSection.SimilarTo>().map { it.anchorName },
+        )
     }
 
     @Test
@@ -168,32 +171,37 @@ class ForYouRepositoryImplTest {
 
         assertEquals(1, sections.filterIsInstance<ForYouSection.Mix>().size)
         assertTrue(sections.filterIsInstance<ForYouSection.BecauseYouLike>().isEmpty())
-        assertTrue(sections.filterIsInstance<ForYouSection.ArtistsForYou>().isEmpty())
-        assertTrue(sections.filterIsInstance<ForYouSection.AlbumsForYou>().isEmpty())
+        assertTrue(sections.filterIsInstance<ForYouSection.SimilarTo>().isEmpty())
     }
 
     @Test
-    fun `artists-for-you merges related artists across top seeds`() = runTest {
+    fun `similar-to carries the anchor's related artists and their records, artist filled in`() = runTest {
         val sections = repo(liked = relatedTaste(), deezer = relatedDeezer()).sections().last()
 
-        val row = sections.filterIsInstance<ForYouSection.ArtistsForYou>().single()
-        assertEquals(3, row.items.size)
-    }
-
-    @Test
-    fun `albums-for-you takes the related artists' records and carries their artist over`() = runTest {
-        val sections = repo(liked = relatedTaste(), deezer = relatedDeezer()).sections().last()
-
-        val row = sections.filterIsInstance<ForYouSection.AlbumsForYou>().single()
-        // Two related artists are seeded, three albums each, deduped by identity.
-        assertEquals(6, row.items.size)
+        val row = sections.filterIsInstance<ForYouSection.SimilarTo>().single()
+        assertEquals("Artist X", row.anchorName)
+        assertEquals(3, row.artists.size)
+        // Two related artists are seeded for albums, three each, deduped by identity.
+        assertEquals(6, row.albums.size)
         // Deezer's /artist/{id}/albums omits the artist per row — it must be filled in from the seed.
-        assertTrue(row.items.all { it.artists.singleOrNull()?.name?.startsWith("Related") == true })
-        // Round-robin, so the row alternates artists instead of listing one discography first.
+        assertTrue(row.albums.all { it.artists.singleOrNull()?.name?.startsWith("Related") == true })
+        // Round-robin, so the album half alternates artists instead of listing one discography first.
         assertEquals(
             listOf("Related 0", "Related 1", "Related 0", "Related 1", "Related 0", "Related 1"),
-            row.items.map { it.artists.single().name },
+            row.albums.map { it.artists.single().name },
         )
+    }
+
+    @Test
+    fun `an anchor Deezer cannot resolve drops its row, not the other anchor's`() = runTest {
+        val refX = ProviderRef("deezer", "artist:1")
+        // Artist X twice (the top anchor, with a ref), Artist Y once (no ref → needs a name lookup,
+        // which this Deezer fails) — so only X's neighborhood can be built.
+        val tracks = listOf(taste("S1", "Artist X", refX), taste("S2", "Artist X", refX), taste("S3", "Artist Y"))
+
+        val sections = repo(liked = tracks, deezer = relatedDeezer()).sections().last()
+
+        assertEquals(listOf("Artist X"), sections.filterIsInstance<ForYouSection.SimilarTo>().map { it.anchorName })
     }
 
     /** Taste that resolves to one Deezer artist id, so `artistRelated("1")` is the only seed call. */

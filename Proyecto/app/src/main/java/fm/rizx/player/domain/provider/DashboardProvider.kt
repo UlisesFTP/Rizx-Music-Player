@@ -3,6 +3,8 @@ package fm.rizx.player.domain.provider
 import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.DashboardCapability
+import fm.rizx.player.domain.model.FeaturedPlaylist
+import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.model.Track
 
@@ -20,4 +22,13 @@ interface DashboardProvider : ProviderDescriptor {
     suspend fun topAlbums(limit: Int): List<AlbumRef> = emptyList()
     suspend fun editorialPlaylists(limit: Int): List<PlaylistRef> = emptyList()
     suspend fun newReleases(limit: Int): List<AlbumRef> = emptyList()
+
+    /** A few editorial playlists worth a full card, each carrying a track preview. */
+    suspend fun featuredPlaylists(limit: Int): List<FeaturedPlaylist> = emptyList()
+
+    /** The provider's curated mood/genre stations, titles already localized by the provider. */
+    suspend fun moodStations(limit: Int): List<MoodStation> = emptyList()
+
+    /** What a station is playing right now — resolved at tap time, never persisted. */
+    suspend fun stationTracks(stationId: String, limit: Int): List<Track> = emptyList()
 }

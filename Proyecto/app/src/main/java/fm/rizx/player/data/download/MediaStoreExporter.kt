@@ -13,4 +13,12 @@ data class ExportedFile(val uri: String, val displayName: String)
  */
 interface MediaStoreExporter {
     suspend fun export(entry: DownloadedTrack, file: File): Result<ExportedFile>
+
+    /**
+     * Whether a copy exported earlier is still there. The user owns that file once it lands in their
+     * Music folder and may well have deleted or moved it, and MediaStore answers a second insert of the
+     * same name with `Song (1).opus` rather than an error — so "is it still there?" is the only way to
+     * tell re-publishing from duplicating.
+     */
+    suspend fun exists(uri: String): Boolean = false
 }

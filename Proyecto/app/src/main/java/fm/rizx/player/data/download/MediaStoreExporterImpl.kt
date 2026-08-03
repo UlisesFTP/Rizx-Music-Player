@@ -2,6 +2,7 @@ package fm.rizx.player.data.download
 
 import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import fm.rizx.player.domain.model.DownloadedTrack
@@ -81,6 +82,18 @@ class MediaStoreExporterImpl(
                 ExportedFile(uri = uri.toString(), displayName = displayName)
             }
         }
+
+    /**
+     * A one-column query is enough: the row exists or it doesn't. A uri from a previous install (or one
+     * the user deleted) answers with no rows or throws, and both mean the same thing here — publish again.
+     */
+    override suspend fun exists(uri: String): Boolean = withContext(io) {
+        runCatching {
+            context.contentResolver
+                .query(Uri.parse(uri), arrayOf(MediaStore.Audio.Media._ID), null, null, null)
+                ?.use { it.moveToFirst() } ?: false
+        }.getOrDefault(false)
+    }
 
     private companion object {
         const val FOLDER = "Rizx"

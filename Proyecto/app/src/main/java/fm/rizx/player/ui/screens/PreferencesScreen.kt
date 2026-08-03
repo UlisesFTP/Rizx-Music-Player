@@ -43,6 +43,7 @@ import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
+import fm.rizx.player.ui.components.CaptionedOptionDialog
 import fm.rizx.player.ui.components.RizxToggle
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
@@ -80,6 +81,7 @@ fun PreferencesScreen(
     val savingActive by vm.savingActive.collectAsStateWithLifecycle()
     val losslessWifiOnly by vm.losslessWifiOnly.collectAsStateWithLifecycle()
     val downloadFormat by vm.downloadFormat.collectAsStateWithLifecycle()
+    val saveToPhone by vm.saveToPhone.collectAsStateWithLifecycle()
     val showTechnicalFormat by vm.showTechnicalFormat.collectAsStateWithLifecycle()
     val audioOutputLabel by vm.audioOutputLabel.collectAsStateWithLifecycle()
     val dataSaver by vm.dataSaver.collectAsStateWithLifecycle()
@@ -184,6 +186,13 @@ fun PreferencesScreen(
             caption = stringResource(downloadFormatCaption(downloadFormat)),
             onClick = { downloadFormatDialogOpen = true },
         )
+        // Right under the format, because both answer "what do I end up with?". A download is otherwise
+        // app-private: it plays offline but no file manager and no other player can see it.
+        ToggleRowDetail(
+            title = stringResource(R.string.pref_save_to_phone),
+            caption = stringResource(R.string.pref_save_to_phone_caption),
+            checked = saveToPhone == true,
+        ) { vm.setSaveToPhone(saveToPhone != true) }
 
         SectionLabel(stringResource(R.string.settings_appearance))
         // A three-way picker (System / Light / Dark), like the language row — System (default) follows the
@@ -778,61 +787,6 @@ private fun DialogToggleRow(
             Text(caption, style = mr(12, FontWeight.Normal), color = c.muted, modifier = Modifier.padding(top = 2.dp))
         }
         RizxToggle(checked = checked, onToggle = onToggle, modifier = Modifier.padding(start = 12.dp))
-    }
-}
-
-/**
- * The brutalist picker used by settings whose options need explaining — same shell as [ThemeDialog], but
- * every row carries a caption, because with these choices the difference *is* the point.
- */
-@Composable
-private fun <T> CaptionedOptionDialog(
-    title: String,
-    options: List<T>,
-    current: T,
-    label: @Composable (T) -> String,
-    caption: @Composable (T) -> String,
-    onSelect: (T) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val c = RizxTheme.colors
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(c.elev)
-                .border(1.5.dp, c.hardLine)
-                .padding(bottom = 8.dp),
-        ) {
-            Text(
-                title,
-                style = sg(20, FontWeight.Bold, -0.01f),
-                color = c.text,
-                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp),
-            )
-            options.forEach { option ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = { onSelect(option) })
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(label(option), style = mr(15, FontWeight.SemiBold), color = c.text)
-                        Text(
-                            caption(option),
-                            style = mr(12, FontWeight.Normal),
-                            color = c.muted,
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
-                    }
-                    if (option == current) {
-                        Icon(RizxIcons.Check, "Selected", tint = c.redAccent, modifier = Modifier.padding(start = 12.dp).size(20.dp))
-                    }
-                }
-            }
-        }
     }
 }
 

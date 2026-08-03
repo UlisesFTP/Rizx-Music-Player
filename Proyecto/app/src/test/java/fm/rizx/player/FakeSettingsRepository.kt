@@ -87,6 +87,11 @@ class FakeSettingsRepository : SettingsRepository {
     override val downloadFormat: Flow<DownloadFormat> = downloadFormatFlow
     override suspend fun setDownloadFormat(format: DownloadFormat) { downloadFormatFlow.value = format }
 
+    /** Null = never asked, the state a fresh install is in. */
+    val saveDownloadsToPhoneFlow = MutableStateFlow<Boolean?>(null)
+    override val saveDownloadsToPhone: Flow<Boolean?> = saveDownloadsToPhoneFlow
+    override suspend fun setSaveDownloadsToPhone(enabled: Boolean) { saveDownloadsToPhoneFlow.value = enabled }
+
     val showTechnicalFormatFlow = MutableStateFlow(true)
     override val showTechnicalFormat: Flow<Boolean> = showTechnicalFormatFlow
     override suspend fun setShowTechnicalFormat(enabled: Boolean) { showTechnicalFormatFlow.value = enabled }

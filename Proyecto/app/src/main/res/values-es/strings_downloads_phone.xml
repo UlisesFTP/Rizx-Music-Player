@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="save_to_phone_title">¿Guardar las descargas en el teléfono?</string>
+    <string name="save_to_phone_only_rizx">Solo en Rizx</string>
+    <string name="save_to_phone_only_rizx_caption">Como hasta ahora: la canción se oye sin conexión, pero no la ve el gestor de archivos ni otro reproductor.</string>
+    <string name="save_to_phone_also_phone">También en la Música del teléfono</string>
+    <string name="save_to_phone_also_phone_caption">Se copia a Música/Rizx con su carátula y sus datos, visible desde cualquier app. Ocupa el doble.</string>
+
+    <string name="pref_save_to_phone">Guardar en el teléfono</string>
+    <string name="pref_save_to_phone_caption">Cada descarga se copia también a Música/Rizx, donde la encuentran tu gestor de archivos y otros reproductores.</string>
+
+    <string name="library_on_phone">En el teléfono</string>
+    <string name="library_save_to_phone">Guardar</string>
+    <string name="library_save_all_to_phone">Guardar %1$d en el teléfono</string>
+    <string name="library_downloads_explainer">Las descargas viven dentro de Rizx. Guárdalas en el teléfono para verlas en Música/Rizx desde cualquier app.</string>
+    <string name="library_on_phone_count">%1$d en el teléfono</string>
+    <string name="library_save_all_title">Guardar en el teléfono</string>
+    <string name="library_save_all_body">Se copiarán %1$s · %2$s a Música/Rizx. Siguen ocupando lo mismo dentro de Rizx.</string>
+    <string name="library_save_all_confirm">Guardar</string>
+    <string name="library_export_saved_one">1 canción guardada en Música/Rizx</string>
+    <string name="library_export_saved_many">%1$d canciones guardadas en Música/Rizx</string>
+    <string name="library_export_none">No hay nada nuevo que guardar</string>
+    <string name="library_delete_download_keeps_copy">La copia en Música/Rizx se queda en el teléfono.</string>
+</resources>

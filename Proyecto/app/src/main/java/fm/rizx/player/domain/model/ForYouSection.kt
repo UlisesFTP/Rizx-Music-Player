@@ -38,17 +38,19 @@ sealed interface ForYouSection {
         override val size: Int get() = items.size
     }
 
-    /** Artists similar to the user's favorites ("Artists for you"). */
+    /**
+     * One taste artist's neighborhood ("Similar to <anchor>"): artists like them and records by those
+     * artists, drawn as one mixed row — the shape every streaming feed uses for this. One section per
+     * anchor, so a listener with two strong artists gets two distinct rows instead of one merged pool
+     * (which is what the old `ArtistsForYou`/`AlbumsForYou` pair collapsed into).
+     */
     @Serializable
-    @SerialName("artists-for-you")
-    data class ArtistsForYou(val items: List<ArtistRef>) : ForYouSection {
-        override val size: Int get() = items.size
-    }
-
-    /** Records by those similar artists — the album-shaped half of the same discovery ("Albums for you"). */
-    @Serializable
-    @SerialName("albums-for-you")
-    data class AlbumsForYou(val items: List<AlbumRef>) : ForYouSection {
-        override val size: Int get() = items.size
+    @SerialName("similar-to")
+    data class SimilarTo(
+        val anchorName: String,
+        val artists: List<ArtistRef> = emptyList(),
+        val albums: List<AlbumRef> = emptyList(),
+    ) : ForYouSection {
+        override val size: Int get() = artists.size + albums.size
     }
 }

@@ -94,5 +94,7 @@ class DeezerPlaylistPagingTest {
         override suspend fun chart() = throw UnsupportedOperationException()
         override suspend fun playlist(id: String) = throw UnsupportedOperationException()
         override suspend fun playlistTracks(id: String, index: Int, limit: Int) = throw UnsupportedOperationException()
+        override suspend fun radioLists(limit: Int) = throw UnsupportedOperationException()
+        override suspend fun radioTracks(id: String, limit: Int) = throw UnsupportedOperationException()
     }
 }

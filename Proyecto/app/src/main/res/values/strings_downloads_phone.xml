@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Saving downloads into the phone's own Music folder: the one-time question, the Settings row, and the
+  Downloads tab's state and actions.
+-->
+<resources>
+    <!-- The question asked on the first download. -->
+    <string name="save_to_phone_title">Save downloads to your phone?</string>
+    <string name="save_to_phone_only_rizx">Only in Rizx</string>
+    <string name="save_to_phone_only_rizx_caption">As it is today: the song plays offline, but no file manager or other player can see it.</string>
+    <string name="save_to_phone_also_phone">Also in the phone\'s Music</string>
+    <string name="save_to_phone_also_phone_caption">Copied to Music/Rizx with its cover and details, visible from any app. Takes twice the space.</string>
+
+    <!-- Settings. -->
+    <string name="pref_save_to_phone">Save to the phone</string>
+    <string name="pref_save_to_phone_caption">Every download is also copied to Music/Rizx, where your file manager and other players can find it.</string>
+
+    <!-- Library → Downloads. -->
+    <string name="library_on_phone">On the phone</string>
+    <string name="library_save_to_phone">Save</string>
+    <string name="library_save_all_to_phone">Save %1$d to the phone</string>
+    <string name="library_downloads_explainer">Downloads live inside Rizx. Save them to the phone to find them in Music/Rizx from any app.</string>
+    <string name="library_on_phone_count">%1$d on the phone</string>
+    <string name="library_save_all_title">Save to the phone</string>
+    <string name="library_save_all_body">%1$s · %2$s will be copied to Music/Rizx. They keep taking the same space inside Rizx.</string>
+    <string name="library_save_all_confirm">Save</string>
+    <string name="library_export_saved_one">1 song saved to Music/Rizx</string>
+    <string name="library_export_saved_many">%1$d songs saved to Music/Rizx</string>
+    <string name="library_export_none">Nothing new to save</string>
+    <string name="library_delete_download_keeps_copy">The copy in Music/Rizx stays on your phone.</string>
+</resources>

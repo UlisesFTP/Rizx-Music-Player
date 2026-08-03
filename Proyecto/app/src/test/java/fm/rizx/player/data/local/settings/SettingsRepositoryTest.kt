@@ -13,6 +13,7 @@ import fm.rizx.player.domain.model.ThemeMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.nio.file.Files
 
@@ -156,5 +157,20 @@ class SettingsRepositoryTest {
         assertEquals(AudioQualityMode.LOSSLESS_PREFERRED, SettingsRepositoryImpl(store).audioQualityMode.first())
         repo.setAudioQualityMode(AudioQualityMode.STANDARD)
         assertEquals(AudioQualityMode.STANDARD, SettingsRepositoryImpl(store).audioQualityMode.first())
+    }
+
+    @Test
+    fun `saving downloads to the phone starts unanswered and remembers both answers`() = runTest {
+        val store = backgroundScope.newStore()
+        val repo = SettingsRepositoryImpl(store)
+
+        // Null, not false: "never asked" is what makes the first download put the question, and a stored
+        // false would silence it forever.
+        assertNull(repo.saveDownloadsToPhone.first())
+
+        repo.setSaveDownloadsToPhone(true)
+        assertEquals(true, SettingsRepositoryImpl(store).saveDownloadsToPhone.first())
+        repo.setSaveDownloadsToPhone(false)
+        assertEquals(false, SettingsRepositoryImpl(store).saveDownloadsToPhone.first())
     }
 }

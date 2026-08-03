@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="save_to_phone_title">Enregistrer les téléchargements sur le téléphone ?</string>
+    <string name="save_to_phone_only_rizx">Seulement dans Rizx</string>
+    <string name="save_to_phone_only_rizx_caption">Comme aujourd\'hui : le titre s\'écoute hors connexion, mais ni le gestionnaire de fichiers ni un autre lecteur ne le voient.</string>
+    <string name="save_to_phone_also_phone">Aussi dans la Musique du téléphone</string>
+    <string name="save_to_phone_also_phone_caption">Copié dans Musique/Rizx avec sa pochette et ses infos, visible depuis n\'importe quelle app. Prend deux fois la place.</string>
+
+    <string name="pref_save_to_phone">Enregistrer sur le téléphone</string>
+    <string name="pref_save_to_phone_caption">Chaque téléchargement est aussi copié dans Musique/Rizx, où votre gestionnaire de fichiers et d\'autres lecteurs le trouvent.</string>
+
+    <string name="library_on_phone">Sur le téléphone</string>
+    <string name="library_save_to_phone">Enregistrer</string>
+    <string name="library_save_all_to_phone">Enregistrer %1$d sur le téléphone</string>
+    <string name="library_downloads_explainer">Les téléchargements vivent dans Rizx. Enregistrez-les sur le téléphone pour les retrouver dans Musique/Rizx depuis n\'importe quelle app.</string>
+    <string name="library_on_phone_count">%1$d sur le téléphone</string>
+    <string name="library_save_all_title">Enregistrer sur le téléphone</string>
+    <string name="library_save_all_body">%1$s · %2$s seront copiés dans Musique/Rizx. Ils occupent toujours autant dans Rizx.</string>
+    <string name="library_save_all_confirm">Enregistrer</string>
+    <string name="library_export_saved_one">1 titre enregistré dans Musique/Rizx</string>
+    <string name="library_export_saved_many">%1$d titres enregistrés dans Musique/Rizx</string>
+    <string name="library_export_none">Rien de nouveau à enregistrer</string>
+    <string name="library_delete_download_keeps_copy">La copie dans Musique/Rizx reste sur le téléphone.</string>
+</resources>

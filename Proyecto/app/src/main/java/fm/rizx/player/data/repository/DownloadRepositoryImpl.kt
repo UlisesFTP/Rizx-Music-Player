@@ -7,8 +7,10 @@ import fm.rizx.player.data.download.DownloadedFile
 import fm.rizx.player.data.download.MediaStoreExporter
 import fm.rizx.player.data.download.Mp3Transcoder
 import fm.rizx.player.data.download.NotDownloadableException
+import fm.rizx.player.data.download.OpusRemuxer
 import fm.rizx.player.data.download.TrackDownloader
 import fm.rizx.player.core.network.DataSaverState
+import fm.rizx.player.data.download.exportFileName
 import fm.rizx.player.data.download.isDownloadable
 import fm.rizx.player.domain.repository.CachedAudioReader
 import fm.rizx.player.data.lossless.toStream
@@ -45,7 +47,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -84,12 +88,17 @@ class DownloadRepositoryImpl(
     private val dataSaver: DataSaverState? = null,
     /** Re-encodes to MP3 for [DownloadFormat.MP3]. Null in tests that don't exercise conversion. */
     private val transcoder: Mp3Transcoder? = null,
+    /** Rewraps WebM/Opus as Ogg Opus so it can be tagged. Null in tests that don't exercise it. */
+    private val opusRemuxer: OpusRemuxer? = null,
     /** The streaming byte-cache, for downloads of songs already heard. Null degrades to the network. */
     private val cachedAudio: CachedAudioReader? = null,
 ) : DownloadRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + io)
     private val fetchSlots = Semaphore(MAX_PARALLEL_TRACKS)
+
+    /** One publish at a time — see [export]. */
+    private val exportLock = Mutex()
     private val jobs = ConcurrentHashMap<String, Job>()
 
     /** Album identityKey → its tagging info; one lookup per album, not per track. */
@@ -132,12 +141,32 @@ class DownloadRepositoryImpl(
             url = file.toURI().toString(),
             protocol = StreamProtocol.FILE,
             mimeType = entry.mimeType,
+            // What the readout under the player says a downloaded song is. Measured, not guessed: the
+            // codec is the container's own, and the bitrate is this file's real bytes over its real
+            // duration — the same arithmetic the lossless mapper does. Without them the line simply went
+            // blank for every download, which is worse than saying the little that is actually known.
+            codec = codecOf(entry.container),
+            bitrateKbps = bitrateOf(entry.sizeBytes, track.durationMs),
             container = entry.container,
             qualityLabel = "Downloaded",
             durationMs = track.durationMs,
             contentLengthBytes = entry.sizeBytes,
             source = track.source,
         )
+    }
+
+    /** The codec a downloaded container holds. Null when we would only be guessing. */
+    private fun codecOf(container: String): String? = when (container.lowercase()) {
+        "m4a", "mp4", "aac" -> "AAC"
+        "mp3" -> "MP3"
+        "opus", "ogg", "oga", "webm" -> "OPUS"
+        "flac" -> "FLAC"
+        else -> null
+    }
+
+    private fun bitrateOf(sizeBytes: Long, durationMs: Long?): Int? {
+        if (durationMs == null || durationMs <= 0 || sizeBytes <= 0) return null
+        return (sizeBytes * 8 / durationMs).toInt().takeIf { it > 0 }
     }
 
     // ---- Writes ----
@@ -189,16 +218,48 @@ class DownloadRepositoryImpl(
         setTransient(key, DownloadState(DownloadStatus.FAILED, error = "File unreadable — streaming instead"))
     }
 
-    override suspend fun export(key: String): Result<String> {
-        val entry = _index.value[key] ?: return Result.failure(IllegalStateException("Not downloaded"))
+    /**
+     * Publishes a download into `Music/Rizx`, or reports why it couldn't.
+     *
+     * Serialized: MediaStore answers a repeat insert of the same name with `Artist - Title (1).opus`
+     * rather than refusing it, so two callers arriving together — the automatic copy and an impatient
+     * tap on the row's button — would leave two files behind. One at a time, and the second one finds
+     * the [DownloadedTrack.exportedUri] the first wrote.
+     */
+    override suspend fun export(key: String): Result<String> = exportLock.withLock {
+        val entry = _index.value[key] ?: return@withLock Result.failure(IllegalStateException("Not downloaded"))
+        // Already on the phone and still there? Then this is a no-op rather than a second copy.
+        entry.exportedUri?.let { uri ->
+            if (exporter.exists(uri)) return@withLock Result.success(entry.exportName())
+        }
         val file = downloader.fileFor(entry.fileName)
-            ?: return Result.failure(IllegalStateException("File is missing"))
-        return exporter.export(entry, file)
+            ?: return@withLock Result.failure(IllegalStateException("File is missing"))
+        exporter.export(entry, file)
             .onSuccess { persist(_index.value + (key to entry.copy(exportedUri = it.uri))) }
             .map { it.displayName }
     }
 
     // ---- Internals ----
+
+    /** The name this download wears in the phone's Music folder — the exporter's own naming, reused. */
+    private fun DownloadedTrack.exportName(): String = exportFileName(
+        artist = track.artists.joinToString { it.name },
+        title = track.title,
+        extension = container,
+        fallback = fileName.substringBeforeLast('.'),
+    )
+
+    /**
+     * Copies a finished download into the phone's Music folder when the user asked for that.
+     *
+     * Runs after the entry is indexed, and its failure is swallowed on purpose: the bytes are already a
+     * complete, playable, offline download, and "the copy didn't make it" is something the row's own
+     * button can fix — it must never turn a good download into a failed one.
+     */
+    private suspend fun copyToPhoneIfWanted(key: String) {
+        if (settings?.saveDownloadsToPhone?.first() != true) return
+        runCatching { export(key) }
+    }
 
     /** Album title + release date for tagging. */
     private data class AlbumInfo(val title: String?, val releaseDateIso: String?, val year: Int?)
@@ -256,7 +317,7 @@ class DownloadRepositoryImpl(
         setTransient(key, DownloadState(DownloadStatus.DOWNLOADING))
         val done = fromByteCache(track, key, format)
             ?: fromNetwork(track, key, format)
-        val finished = convertIfWanted(done, key, format)
+        val finished = repackageOpusIfWanted(convertIfWanted(done, key, format), key, format)
         // Embed the metadata *into* the file so the song carries its cover, artist, album and date into any
         // other player. Best-effort by design: the bytes on disk are already a valid, playable download, so
         // a tagging failure must not fail it.
@@ -276,6 +337,7 @@ class DownloadRepositoryImpl(
         // Index only after the file is validated and renamed — an entry pointing at a partial file would
         // be handed to ExoPlayer forever.
         persist(_index.value + (key to entry))
+        copyToPhoneIfWanted(key)
         clearTransient(key)
     }
 
@@ -359,6 +421,38 @@ class DownloadRepositoryImpl(
         }
     }
 
+    /**
+     * The Opus format's second act: YouTube ships Opus inside **WebM**, and nothing that runs on Android
+     * can write tags into that container — which is why an Opus download used to be the one format that
+     * arrived with no cover and no artist. Moving the packets into **Ogg** costs no quality (they are
+     * copied, not re-encoded), gives the file the `.opus` extension other players expect, and puts it in
+     * a container [AudioTagWriter] can write, which is the point.
+     *
+     * Best-effort, like the tagging it enables: a framework that refuses this file leaves the WebM
+     * exactly as downloaded — playable, just untagged, which is what every earlier version produced.
+     */
+    private suspend fun repackageOpusIfWanted(
+        done: DownloadedFile,
+        key: String,
+        format: DownloadFormat,
+    ): DownloadedFile {
+        if (format != DownloadFormat.OPUS || done.container.lowercase() in OGG_CONTAINERS) return done
+        val remuxer = opusRemuxer ?: return done
+        return try {
+            downloader.adopt(key, container = "opus", mimeType = "audio/ogg") { part ->
+                remuxer.remux(done.file, part)
+            }.also {
+                // The WebM was the *download*; the Ogg replaces it under a different name, so it must not
+                // survive as an orphan for the startup sweep to find.
+                done.file.delete()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            done
+        }
+    }
+
     /** A stream to save, plus the digest to check it against when the source published one. */
     private data class ResolvedForDownload(val stream: Stream, val sha256: String? = null)
 
@@ -436,5 +530,8 @@ class DownloadRepositoryImpl(
          * belongs to is often streaming a song over the same link at the same time.
          */
         const val MAX_PARALLEL_TRACKS = 2
+
+        /** Containers that already hold Opus the way the rest of the world expects it. */
+        val OGG_CONTAINERS = setOf("opus", "ogg", "oga")
     }
 }

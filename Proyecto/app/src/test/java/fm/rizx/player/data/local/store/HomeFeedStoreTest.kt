@@ -62,7 +62,10 @@ class HomeFeedStoreTest {
     fun `the feed and the personalized rows survive a round trip`() = runBlocking {
         val rows = listOf(
             ForYouSection.Mix(seedTitle = "Yellow", items = listOf(track("9"))),
-            ForYouSection.ArtistsForYou(listOf(ArtistRef(name = "Coldplay", source = ProviderRef("deezer", "a1")))),
+            ForYouSection.SimilarTo(
+                "Coldplay",
+                artists = listOf(ArtistRef(name = "Keane", source = ProviderRef("deezer", "a1"))),
+            ),
         )
         val subject = store()
 
@@ -72,7 +75,39 @@ class HomeFeedStoreTest {
         assertEquals(listOf("Song 1", "Song 2"), cached?.feed?.topTracks?.single()?.items?.map { it.title })
         assertEquals(2, cached?.sections?.size)
         assertTrue(cached?.sections?.first() is ForYouSection.Mix)
-        assertTrue(cached?.sections?.last() is ForYouSection.ArtistsForYou)
+        assertEquals("Coldplay", (cached?.sections?.last() as? ForYouSection.SimilarTo)?.anchorName)
+    }
+
+    @Test
+    fun `featured cards round-trip and their previews are stripped like any track`() = runBlocking {
+        val subject = store()
+        val featured = fm.rizx.player.domain.model.FeaturedPlaylist(
+            playlist = fm.rizx.player.domain.model.PlaylistRef(
+                id = "7", name = "Top México", source = ProviderRef("deezer", "playlist:7"),
+            ),
+            preview = listOf(track("5", streamUrl = "https://cdn/peek.m4a")),
+        )
+
+        subject.write(HomeFeed(featured = listOf(AttributedResult("d", "Deezer", listOf(featured)))), emptyList())
+
+        val raw = File(temp.root, "home_feed.json").readText()
+        assertFalse("a preview's stream url leaked into the cache", raw.contains("cdn"))
+        val cached = subject.read()!!
+        val card = cached.feed.featured.single().items.single()
+        assertEquals("Top México", card.playlist.name)
+        assertEquals("Song 5", card.preview.single().title)
+        assertTrue(card.preview.single().streamCandidates.isEmpty())
+    }
+
+    @Test
+    fun `a cache written with row shapes this build no longer knows degrades to nothing cached`() = runBlocking {
+        // The pre-feed-v2 builds wrote `artists-for-you` rows; decoding must fail closed into a cold
+        // load, never a crash on launch.
+        File(temp.root, "home_feed.json").writeText(
+            """{"savedAtIso":"$now","feed":{},"sections":[{"type":"artists-for-you","items":[]}]}""",
+        )
+
+        assertNull(store().read())
     }
 
     @Test

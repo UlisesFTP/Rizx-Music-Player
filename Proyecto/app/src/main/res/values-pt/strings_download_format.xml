@@ -5,7 +5,7 @@
     <string name="download_format_original">Original</string>
     <string name="download_format_original_caption">Como chega (M4A do YouTube). Compatível e com capa incorporada.</string>
     <string name="download_format_opus">Opus</string>
-    <string name="download_format_opus_caption">A melhor qualidade por MB, sem recodificar. Ao exportar vai sem etiquetas incorporadas.</string>
+    <string name="download_format_opus_caption">A melhor qualidade por MB, sem recodificar. Guardado como .opus e com capa.</string>
     <string name="download_format_mp3">MP3 · 320</string>
     <string name="download_format_mp3_caption">Recodificado com LAME para máxima compatibilidade. Não pode soar melhor que a fonte.</string>
     <string name="download_format_flac">FLAC quando disponível</string>

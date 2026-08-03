@@ -2,19 +2,26 @@ package fm.rizx.player.data.provider
 
 import fm.rizx.player.data.remote.deezer.DeezerApi
 import fm.rizx.player.data.remote.deezer.DeezerChartDto
+import fm.rizx.player.data.remote.deezer.DeezerIds
 import fm.rizx.player.data.remote.deezer.toAlbumRef
 import fm.rizx.player.data.remote.deezer.toArtistRef
+import fm.rizx.player.data.remote.deezer.toMoodStation
 import fm.rizx.player.data.remote.deezer.toPlaylistRef
 import fm.rizx.player.data.remote.deezer.toTrackOrNull
 import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.DashboardCapability
+import fm.rizx.player.domain.model.FeaturedPlaylist
+import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.DashboardProvider
 import fm.rizx.player.domain.provider.ProviderKind
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -40,6 +47,8 @@ class DeezerDashboardProvider(
         DashboardCapability.TOP_ARTISTS,
         DashboardCapability.TOP_ALBUMS,
         DashboardCapability.EDITORIAL_PLAYLISTS,
+        DashboardCapability.MOOD_STATIONS,
+        DashboardCapability.FEATURED_PLAYLISTS,
     )
 
     private val mutex = Mutex()
@@ -62,7 +71,46 @@ class DeezerDashboardProvider(
     override suspend fun editorialPlaylists(limit: Int): List<PlaylistRef> =
         chart().playlists.data.mapNotNull { it.toPlaylistRef() }.take(limit)
 
+    /**
+     * The first chart playlists promoted to full cards, each with a track peek (one extra call per
+     * card, fetched concurrently). A card that could not get its peek is dropped — its whole point is
+     * showing what's inside, and the plain carousel below still offers the playlist itself.
+     */
+    override suspend fun featuredPlaylists(limit: Int): List<FeaturedPlaylist> = supervisorScope {
+        chart().playlists.data.mapNotNull { it.toPlaylistRef() }.take(limit)
+            .map { ref ->
+                async {
+                    val peek = runCatching {
+                        withContext(io) { api.playlistTracks(DeezerIds.rawId(ref.source), index = 0, limit = PREVIEW_TRACKS) }
+                            .data.mapNotNull { it.toTrackOrNull() }
+                    }.getOrDefault(emptyList())
+                    FeaturedPlaylist(playlist = ref, preview = peek)
+                }
+            }
+            .awaitAll()
+            .filter { it.preview.isNotEmpty() }
+    }
+
+    /**
+     * Deezer's curated stations, deduped by title — `/radio/lists` legitimately repeats names across
+     * regional editions ("Hits" twice, verified), and two chips with one label read as a bug.
+     */
+    override suspend fun moodStations(limit: Int): List<MoodStation> =
+        withContext(io) { api.radioLists(RADIO_FETCH) }.data
+            .mapNotNull { it.toMoodStation() }
+            .distinctBy { it.title.lowercase() }
+            .take(limit)
+
+    override suspend fun stationTracks(stationId: String, limit: Int): List<Track> =
+        withContext(io) { api.radioTracks(stationId, limit) }.data.mapNotNull { it.toTrackOrNull() }
+
     companion object {
         const val ID = "deezer-dashboard"
+
+        /** What a featured card actually draws; playing the playlist re-fetches the real list. */
+        private const val PREVIEW_TRACKS = 4
+
+        /** Fetched deeper than shown because the title dedupe eats a few. */
+        private const val RADIO_FETCH = 40
     }
 }

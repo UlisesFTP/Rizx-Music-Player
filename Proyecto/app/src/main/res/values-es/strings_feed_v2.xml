@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_surprise">Azar</string>
+    <string name="home_moods_heading">Estado de ánimo y géneros</string>
+    <string name="home_station_of">Estación · %1$s</string>
+    <string name="home_featured_heading">Playlists destacadas</string>
+</resources>

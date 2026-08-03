@@ -3,6 +3,7 @@ package fm.rizx.player.data.repository
 import fm.rizx.player.data.artwork.TrackArtworkEnricher
 import fm.rizx.player.domain.model.AttributedResult
 import fm.rizx.player.domain.model.HomeFeed
+import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.repository.DashboardRepository
 import fm.rizx.player.domain.usecase.RecsBlender
 import kotlinx.coroutines.CoroutineDispatcher
@@ -40,8 +41,19 @@ class BlendingDashboardRepository(
             topAlbums = blended(feed.topAlbums) { blender.blendAlbums(it) },
             editorialPlaylists = blended(feed.editorialPlaylists) { blender.blendPlaylists(it) },
             newReleases = blended(feed.newReleases) { blender.blendAlbums(it) },
+            // No weighted interleave for these two — with several sources a plain concat deduped by
+            // identity is enough for a two-card shelf and a chip grid; today only Deezer supplies them.
+            featured = blended(feed.featured) { results ->
+                results.flatMap { it.items }.distinctBy { blender.playlistKey(it.playlist) }
+            },
+            stations = blended(feed.stations) { results ->
+                results.flatMap { it.items }.distinctBy { it.title.lowercase() }
+            },
         )
     }
+
+    override suspend fun stationTracks(providerId: String, stationId: String, limit: Int): List<Track> =
+        inner.stationTracks(providerId, stationId, limit)
 
     /** One source needs no blending — skip the normalization work entirely and keep it as it came. */
     private fun <T> blended(

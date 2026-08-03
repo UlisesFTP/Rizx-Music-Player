@@ -59,9 +59,11 @@ import fm.rizx.player.R
 import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.AppMix
 import fm.rizx.player.domain.model.ArtistRef
+import fm.rizx.player.domain.model.FeaturedPlaylist
 import fm.rizx.player.domain.model.ForYouSection
 import fm.rizx.player.domain.model.HomeFeed
 import fm.rizx.player.domain.model.MixKind
+import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Track
@@ -71,7 +73,9 @@ import fm.rizx.player.ui.components.DiscoverMosaic
 import fm.rizx.player.ui.components.DiscoverMosaicSkeleton
 import fm.rizx.player.ui.components.DotMatrixSpinner
 import fm.rizx.player.ui.components.Eyebrow
+import fm.rizx.player.ui.components.FeaturedPlaylistCard
 import fm.rizx.player.ui.components.InkFrame
+import fm.rizx.player.ui.components.MoodGrid
 import fm.rizx.player.ui.components.MosaicTile
 import fm.rizx.player.ui.components.PickMosaic
 import fm.rizx.player.ui.components.RizxChip
@@ -83,6 +87,7 @@ import fm.rizx.player.ui.components.mosaicWall
 import fm.rizx.player.ui.components.tintFor
 import fm.rizx.player.ui.home.HomeUiState
 import fm.rizx.player.ui.home.HomeViewModel
+import fm.rizx.player.ui.home.SpeedDial
 import fm.rizx.player.ui.home.WovenBlock
 import fm.rizx.player.ui.home.weaveHome
 import fm.rizx.player.ui.icons.RizxIcons
@@ -141,8 +146,7 @@ private const val COLLAGE_COVERS = 4
 private fun forYouTitle(section: ForYouSection): String = when (section) {
     is ForYouSection.Mix -> stringResource(R.string.home_mix_of, section.seedTitle)
     is ForYouSection.BecauseYouLike -> stringResource(R.string.home_because_you_like, section.artistName)
-    is ForYouSection.ArtistsForYou -> stringResource(R.string.home_artists_for_you)
-    is ForYouSection.AlbumsForYou -> stringResource(R.string.home_albums_for_you)
+    is ForYouSection.SimilarTo -> stringResource(R.string.home_similar_to, section.anchorName)
 }
 
 /**
@@ -380,13 +384,17 @@ fun HomeScreen(
                             }
                         }
                     }
-                    // "Continue listening" — under the tabs, over everything the feed brings. It sits
-                    // outside `tabContent` so it stays put as you switch tabs, and it is local and
-                    // instant: no load state, nothing to wait for. Empty history draws nothing at all
-                    // rather than an empty shelf.
-                    trackCarousel(continueTitle, continueListening, vm::playTrack)
+                    // "Continue listening" — under the tabs, over everything the feed brings, and only
+                    // on the overview: the category tabs are for browsing one kind of thing, and the
+                    // dial is none of them. It is local and instant, so there is no load state to wait
+                    // for; an empty history draws nothing at all rather than an empty shelf.
+                    if (tab == HomeTab.All) {
+                        speedDialSection(continueTitle, continueListening, vm::playTrack, vm::playSurprise)
+                    }
                     tabContent(
                         s.feed, tab, onOpenAlbum, onOpenArtist, onOpenEditorialPlaylist, vm::playTrack,
+                        onPlayFeatured = vm::playFeatured,
+                        onPlayStation = vm::playStation,
                         onSeeAll = { tabName = it.name },
                         topSongsTitle = topSongsTitle,
                         topAlbumsTitle = topAlbumsTitle,
@@ -418,13 +426,13 @@ fun HomeScreen(
                 // that same history outlive it too.
                 // Retry means "go to the network", not "re-read the cache we just failed to fill".
                 HomeUiState.Offline -> {
-                    trackCarousel(continueTitle, continueListening, vm::playTrack)
+                    speedDialSection(continueTitle, continueListening, vm::playTrack, vm::playSurprise)
                     if (hero != null) item(key = "pick-mosaic") { hero() }
                     mosaicWall(mosaicTiles, layoutSeed)
                     item { HomeMessage(stringResource(R.string.home_offline_message), vm::refresh) }
                 }
                 is HomeUiState.Error -> {
-                    trackCarousel(continueTitle, continueListening, vm::playTrack)
+                    speedDialSection(continueTitle, continueListening, vm::playTrack, vm::playSurprise)
                     if (hero != null) item(key = "pick-mosaic") { hero() }
                     mosaicWall(mosaicTiles, layoutSeed)
                     item { HomeMessage(s.message, vm::refresh) }
@@ -443,6 +451,8 @@ private fun LazyListScope.tabContent(
     onOpenArtist: (ProviderRef) -> Unit,
     onOpenEditorialPlaylist: (PlaylistRef) -> Unit,
     onPlay: (Track) -> Unit,
+    onPlayFeatured: (FeaturedPlaylist) -> Unit,
+    onPlayStation: (providerId: String, station: MoodStation, queueLabel: String) -> Unit,
     onSeeAll: (HomeTab) -> Unit,
     topSongsTitle: String,
     topAlbumsTitle: String,
@@ -472,8 +482,12 @@ private fun LazyListScope.tabContent(
             val artists = feed.topArtists.flatMap { it.items }
             val playlists = feed.editorialPlaylists.flatMap { it.items }
             val newReleases = feed.newReleases.flatMap { it.items }
+            val featuredCards = feed.featured.flatMap { it.items }
+            // Each station rides with the provider that supplied it — the only one able to play it.
+            val stationPairs = feed.stations.flatMap { result -> result.items.map { result.providerId to it } }
             if (tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() &&
-                playlists.isEmpty() && forYouRows.isEmpty() && mosaicTiles.isEmpty() && hero == null
+                playlists.isEmpty() && forYouRows.isEmpty() && mosaicTiles.isEmpty() && hero == null &&
+                featuredCards.isEmpty() && stationPairs.isEmpty()
             ) {
                 item { HomeEmpty(stringResource(R.string.home_empty_charts)) }
             }
@@ -509,6 +523,39 @@ private fun LazyListScope.tabContent(
                 }
                 forYouSkeletons.forEach { title -> add(Strip("fy-$title") { skeletonCarousel(title) }) }
                 if (discover != null) add(Strip("daily-pick") { item(key = "daily-pick") { discover() } })
+                // The featured shelf: whole cards, not covers — each already deduped against the wall
+                // and the playlist carousel (the deduper lets the card claim first).
+                if (featuredCards.isNotEmpty()) {
+                    add(
+                        Strip("featured") {
+                            item(key = "hdr-featured") {
+                                SectionHeader(
+                                    stringResource(R.string.home_featured_heading),
+                                    Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 8.dp),
+                                )
+                            }
+                            item(key = "car-featured") {
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 22.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                ) {
+                                    items(featuredCards, key = { "ft-${it.playlist.source.identityKey}" }) { card ->
+                                        FeaturedPlaylistCard(
+                                            name = card.playlist.name,
+                                            subtitle = playlistSubtitle(card.playlist),
+                                            coverUrl = card.playlist.artwork.tileUrl(),
+                                            tintKey = card.playlist.source.id,
+                                            preview = card.preview,
+                                            playLabel = stringResource(R.string.home_play_now),
+                                            onPlay = { onPlayFeatured(card) },
+                                            onOpen = { onOpenEditorialPlaylist(card.playlist) },
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
                 add(
                     Strip("playlists") {
                         carousel(
@@ -619,6 +666,19 @@ private fun LazyListScope.tabContent(
                 }
             }
 
+            // Moods & genres close the feed, anchored out of the weave's lottery on purpose: this is
+            // a browsing tool, not a recommendation, and browsing tools live where you go looking for
+            // them — the reference feeds keep theirs at the end too.
+            if (stationPairs.isNotEmpty()) {
+                item(key = "mood-grid") {
+                    MoodGrid(
+                        stations = stationPairs,
+                        onPlay = onPlayStation,
+                        modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp),
+                    )
+                }
+            }
+
             // The consent ask sits *after* the music, not before it. It improves the personalised
             // rows, so it belongs next to them — opening a music app on a permission card is the
             // wrong first impression, and this one is easy to miss precisely because it can wait.
@@ -710,7 +770,7 @@ private val CAROUSEL_ART = 152.dp
  */
 private class Strip(val key: String, val emit: LazyListScope.() -> Unit)
 
-/** One personalized row, whichever of the four shapes it happens to be. */
+/** One personalized row, whichever of the three shapes it happens to be. */
 private fun LazyListScope.forYouStrip(
     title: String,
     section: ForYouSection,
@@ -720,25 +780,50 @@ private fun LazyListScope.forYouStrip(
 ) = when (section) {
     is ForYouSection.Mix -> trackCarousel(title, section.items, onPlay)
     is ForYouSection.BecauseYouLike -> trackCarousel(title, section.items, onPlay)
-    is ForYouSection.ArtistsForYou -> carousel(title, section.items, key = { it.source.identityKey }) { artist ->
-        CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
-            HomeCover(
-                artist.source.id, initial = artist.name.take(1),
-                Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
-                initialSize = 38, circle = true, imageUrl = artist.artwork.tileUrl(),
-            )
-            CellTitle(artist.name, centered = true)
+    // The anchor's neighborhood: similar artists as circles, records by them as squares, one mixed
+    // strip — the reference feeds' "Similar to <artist>" shape.
+    is ForYouSection.SimilarTo -> carousel(
+        title,
+        similarCells(section),
+        key = { cell ->
+            when (cell) {
+                is ArtistRef -> "sim-ar-${cell.source.identityKey}"
+                is AlbumRef -> "sim-al-${cell.source.identityKey}"
+                else -> cell.hashCode()
+            }
+        },
+    ) { cell ->
+        when (cell) {
+            is ArtistRef -> CarouselCell(onClick = { onOpenArtist(cell.source) }, centered = true) {
+                HomeCover(
+                    cell.source.id, initial = cell.name.take(1),
+                    Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
+                    initialSize = 38, circle = true, imageUrl = cell.artwork.tileUrl(),
+                )
+                CellTitle(cell.name, centered = true)
+            }
+            is AlbumRef -> CarouselCell(onClick = { onOpenAlbum(cell.source) }) {
+                HomeCover(
+                    cell.source.id, initial = cell.title.take(1),
+                    Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
+                    imageUrl = cell.artwork.tileUrl(),
+                )
+                CellTitle(cell.title)
+                CellSubtitle(cell.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+            }
+            else -> Unit
         }
     }
-    is ForYouSection.AlbumsForYou -> carousel(title, section.items, key = { it.source.identityKey }) { album ->
-        CarouselCell(onClick = { onOpenAlbum(album.source) }) {
-            HomeCover(
-                album.source.id, initial = album.title.take(1),
-                Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
-                imageUrl = album.artwork.tileUrl(),
-            )
-            CellTitle(album.title)
-            CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+}
+
+/** Circle, square, circle, square… — whichever half runs out first, the other simply finishes. */
+private fun similarCells(section: ForYouSection.SimilarTo): List<Any> {
+    val artists = section.artists.iterator()
+    val albums = section.albums.iterator()
+    return buildList(section.size) {
+        while (artists.hasNext() || albums.hasNext()) {
+            if (artists.hasNext()) add(artists.next())
+            if (albums.hasNext()) add(albums.next())
         }
     }
 }
@@ -902,6 +987,28 @@ private fun SkeletonLine(style: TextStyle, widthFraction: Float, top: Dp, alpha:
                 .background(c.line2.copy(alpha = alpha)),
         )
     }
+}
+
+/**
+ * "Continue listening" as the speed-dial wall: the section header (same key as any carousel header,
+ * so the swap from the old strip was free) over the swipeable 3×3 grid. Local data — it outlives the
+ * feed on the Offline/Error screens (which have no tabs) exactly as the carousel it replaced did.
+ * On a loaded feed it belongs to the overview only; the category tabs list one kind of thing.
+ */
+private fun LazyListScope.speedDialSection(
+    title: String,
+    tracks: List<Track>,
+    onPlay: (Track) -> Unit,
+    onSurprise: () -> Unit,
+) {
+    if (tracks.isEmpty()) return
+    item(key = "hdr-$title") {
+        SectionHeader(
+            title,
+            Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 8.dp),
+        )
+    }
+    item(key = "speed-dial") { SpeedDial(tracks, onPlay, onSurprise) }
 }
 
 /** A For-you row of playable tracks (Mix / Because-you-like), in the standard carousel cell. */

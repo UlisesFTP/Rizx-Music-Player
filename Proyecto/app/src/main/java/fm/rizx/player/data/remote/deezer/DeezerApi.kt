@@ -72,4 +72,17 @@ interface DeezerApi {
         @Query("index") index: Int,
         @Query("limit") limit: Int,
     ): DeezerPagedTracksDto
+
+    /**
+     * Deezer's curated "Top radios" — its mood & genre stations ("Chill Out", "¡Fiesta!", Pop, 80's…),
+     * titles localized per detected region by Deezer itself. Preferred over the raw `/radio` list,
+     * which mixes in third-party branded stations; this one is the set Deezer's own apps feature.
+     * Titles repeat across regions ("Hits" twice, verified live) — callers dedupe by title.
+     */
+    @GET("radio/lists")
+    suspend fun radioLists(@Query("limit") limit: Int): DeezerRadiosWrapper
+
+    /** What a station is serving right now — plain track rows, same shape as search results. */
+    @GET("radio/{id}/tracks")
+    suspend fun radioTracks(@Path("id") id: String, @Query("limit") limit: Int): DeezerSearchResponse
 }

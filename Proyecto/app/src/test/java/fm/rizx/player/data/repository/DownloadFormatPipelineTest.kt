@@ -3,6 +3,7 @@ package fm.rizx.player.data.repository
 import fm.rizx.player.FakeSettingsRepository
 import fm.rizx.player.data.download.Mp3Transcoder
 import fm.rizx.player.data.download.NoopDownloadNotifier
+import fm.rizx.player.data.download.OpusRemuxer
 import fm.rizx.player.data.download.TrackDownloader
 import fm.rizx.player.data.local.store.DownloadIndexStore
 import fm.rizx.player.domain.model.DownloadFormat
@@ -57,6 +58,7 @@ class DownloadFormatPipelineTest {
     private val track = Track(title = "Velvet Hours", source = trackRef)
     private val audio = ByteArray(2048) { it.toByte() }
     private val mp3Bytes = ByteArray(512) { (it * 3).toByte() }
+    private val oggBytes = "OggS".toByteArray() + ByteArray(508) { (it * 5).toByte() }
 
     @Before fun start() = server.start()
     @After fun stop() = server.shutdown()
@@ -97,6 +99,19 @@ class DownloadFormatPipelineTest {
         }
     }
 
+    /** A remuxer that "rewraps" by writing [bytes] — same reasoning as [FakeTranscoder]. */
+    private class FakeRemuxer(
+        private val bytes: ByteArray,
+        private val onRun: suspend () -> Unit = {},
+    ) : OpusRemuxer() {
+        var calls = 0
+        override suspend fun remux(source: File, target: File) {
+            calls++
+            onRun()
+            target.writeBytes(bytes)
+        }
+    }
+
     private class FakeCachedAudio(
         private val buckets: Map<String, ByteArray> = emptyMap(),
     ) : CachedAudioReader {
@@ -114,6 +129,7 @@ class DownloadFormatPipelineTest {
         resolver: StreamingResolver,
         settings: FakeSettingsRepository = FakeSettingsRepository(),
         transcoder: Mp3Transcoder? = null,
+        opusRemuxer: OpusRemuxer? = null,
         cachedAudio: CachedAudioReader? = null,
         dispatcher: kotlinx.coroutines.CoroutineDispatcher = UnconfinedTestDispatcher(),
     ) = DownloadRepositoryImpl(
@@ -126,6 +142,7 @@ class DownloadFormatPipelineTest {
         io = dispatcher,
         settings = settings,
         transcoder = transcoder,
+        opusRemuxer = opusRemuxer,
         cachedAudio = cachedAudio,
     )
 
@@ -222,6 +239,69 @@ class DownloadFormatPipelineTest {
         assertEquals(emptyList<String>(), audioDir().list()!!.toList())
     }
 
+    // ---- Opus rewrapping ----
+
+    @Test
+    fun `OPUS is rewrapped as Ogg — the container its tags can be written into`() = runTest {
+        server.enqueue(audioBody(type = "audio/webm"))
+        val remuxer = FakeRemuxer(oggBytes)
+        val repo = subject(resolverYielding(stream(container = "webm")), opusRemuxer = remuxer)
+
+        repo.download(track, DownloadFormat.OPUS)
+
+        val entry = repo.downloads.value.single()
+        assertEquals("opus", entry.container)
+        assertEquals("audio/ogg", entry.mimeType)
+        assertTrue(entry.fileName.endsWith(".opus"))
+        assertTrue(File(audioDir(), entry.fileName).readBytes().contentEquals(oggBytes))
+        // The fetched .webm must not survive as an orphan next to the .opus that replaced it.
+        assertEquals(listOf(entry.fileName), audioDir().list()!!.toList())
+        assertEquals(1, remuxer.calls)
+    }
+
+    @Test
+    fun `a remux the framework refuses leaves the WebM exactly as downloaded`() = runTest {
+        server.enqueue(audioBody(type = "audio/webm"))
+        val remuxer = FakeRemuxer(oggBytes, onRun = { error("no Opus track") })
+        val repo = subject(resolverYielding(stream(container = "webm")), opusRemuxer = remuxer)
+
+        repo.download(track, DownloadFormat.OPUS)
+
+        // Untagged but playable beats failed: this is exactly what every earlier version produced.
+        val entry = repo.downloads.value.single()
+        assertEquals("webm", entry.container)
+        // Suspend rather than sample: the index write behind COMPLETE hops through real Dispatchers.IO.
+        assertEquals(
+            DownloadStatus.COMPLETE,
+            repo.states.first { it["deezer:123"]?.status == DownloadStatus.COMPLETE }
+                .getValue("deezer:123").status,
+        )
+        assertTrue(File(audioDir(), entry.fileName).readBytes().contentEquals(audio))
+        assertEquals(listOf(entry.fileName), audioDir().list()!!.toList())
+    }
+
+    @Test
+    fun `a source already in Ogg is left alone rather than rewrapped twice`() = runTest {
+        server.enqueue(audioBody(type = "audio/ogg"))
+        val remuxer = FakeRemuxer(oggBytes)
+        val repo = subject(resolverYielding(stream(container = "opus")), opusRemuxer = remuxer)
+
+        repo.download(track, DownloadFormat.OPUS)
+
+        assertEquals("opus", repo.downloads.value.single().container)
+        assertEquals(0, remuxer.calls)
+    }
+
+    @Test
+    fun `no remuxer at all still produces a download`() = runTest {
+        server.enqueue(audioBody(type = "audio/webm"))
+        val repo = subject(resolverYielding(stream(container = "webm")))
+
+        repo.download(track, DownloadFormat.OPUS)
+
+        assertEquals("webm", repo.downloads.value.single().container)
+    }
+
     // ---- FLAC fallback ----
 
     @Test
@@ -270,17 +350,19 @@ class DownloadFormatPipelineTest {
     }
 
     @Test
-    fun `OPUS adopts the cached opus bucket as webm`() = runTest {
-        val repo = subject(
-            resolverYielding(stream(container = "webm")),
-            cachedAudio = FakeCachedAudio(mapOf("webm opus" to audio)),
-        )
+    fun `OPUS adopts the cached opus bucket and rewraps that, still without touching the network`() =
+        runTest {
+            val repo = subject(
+                resolverYielding(stream(container = "webm")),
+                cachedAudio = FakeCachedAudio(mapOf("webm opus" to audio)),
+                opusRemuxer = FakeRemuxer(oggBytes),
+            )
 
-        repo.download(track, DownloadFormat.OPUS)
+            repo.download(track, DownloadFormat.OPUS)
 
-        assertEquals(0, server.requestCount)
-        assertEquals("webm", repo.downloads.value.single().container)
-    }
+            assertEquals(0, server.requestCount)
+            assertEquals("opus", repo.downloads.value.single().container)
+        }
 
     @Test
     fun `a cache copy that dies mid-read falls back to the network`() = runTest {

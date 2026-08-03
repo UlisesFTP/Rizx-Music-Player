@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.domain.model.DownloadState
+import fm.rizx.player.domain.model.DownloadStatus
 import fm.rizx.player.domain.model.DownloadedTrack
 import fm.rizx.player.domain.model.PlaylistSummary
 import fm.rizx.player.domain.model.QueueContext
@@ -15,8 +16,10 @@ import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.domain.repository.PlaylistRepository
 import fm.rizx.player.domain.repository.QueueRepository
 import fm.rizx.player.domain.repository.RecentlyPlayedRepository
+import fm.rizx.player.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -34,6 +37,7 @@ class LibraryViewModel @Inject constructor(
     private val queue: QueueRepository,
     private val playback: PlaybackController,
     private val downloads: DownloadRepository,
+    private val settings: SettingsRepository,
 ) : ViewModel() {
 
     val favoriteTracks: StateFlow<List<Track>> =
@@ -153,5 +157,48 @@ class LibraryViewModel @Inject constructor(
     /** Copies a download into the shared `Music/Rizx` folder; [onResult] carries the name or the failure. */
     fun exportDownload(key: String, onResult: (Result<String>) -> Unit = {}) {
         viewModelScope.launch { onResult(downloads.export(key)) }
+    }
+
+    /**
+     * Copies every download that isn't on the phone yet, one at a time, and reports how many made it.
+     *
+     * Sequential rather than parallel: each copy writes the index when it lands, and a dozen concurrent
+     * writers would only take turns on that same lock while making the progress harder to reason about.
+     */
+    fun exportDownloads(entries: List<DownloadedTrack>, onDone: (saved: Int, failed: Int) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            var saved = 0
+            var failed = 0
+            entries.filter { it.exportedUri == null }.forEach { entry ->
+                downloads.export(entry.key).fold(onSuccess = { saved++ }, onFailure = { failed++ })
+            }
+            onDone(saved, failed)
+        }
+    }
+
+    // ---- Saving downloads to the phone ----
+
+    /** Null until the user has been asked — see [SettingsRepository.saveDownloadsToPhone]. */
+    val saveToPhone: StateFlow<Boolean?> =
+        settings.saveDownloadsToPhone.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Whether to put the one-time question on screen: the user has never answered it **and** a download
+     * is actually happening.
+     *
+     * Gated on in-flight work, not on the index: someone who already has downloads would otherwise be
+     * asked the moment they open the app, about nothing they just did.
+     */
+    val askSaveToPhone: StateFlow<Boolean> =
+        combine(settings.saveDownloadsToPhone, downloads.states) { answered, states ->
+            answered == null && states.values.any { it.status in IN_FLIGHT }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setSaveToPhone(enabled: Boolean) {
+        viewModelScope.launch { settings.setSaveDownloadsToPhone(enabled) }
+    }
+
+    private companion object {
+        val IN_FLIGHT = setOf(DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING, DownloadStatus.CONVERTING)
     }
 }

@@ -1,16 +1,23 @@
 package fm.rizx.player.ui.library
 
+import fm.rizx.player.FakeSettingsRepository
 import fm.rizx.player.NoDownloads
 import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.data.repository.InMemoryQueueRepository
 import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.ArtistRef
+import fm.rizx.player.domain.model.DownloadFormat
+import fm.rizx.player.domain.model.DownloadState
+import fm.rizx.player.domain.model.DownloadStatus
+import fm.rizx.player.domain.model.DownloadedTrack
 import fm.rizx.player.domain.model.Playlist
 import fm.rizx.player.domain.model.PlaylistSummary
 import fm.rizx.player.domain.model.ProviderRef
+import fm.rizx.player.domain.model.Stream
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.playback.PlaybackState
+import fm.rizx.player.domain.repository.DownloadRepository
 import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.domain.repository.PlaylistRepository
 import fm.rizx.player.domain.repository.RecentlyPlayedRepository
@@ -102,7 +109,7 @@ class LibraryViewModelTest {
         val playback = FakePlayback()
         val vm = LibraryViewModel(
             FakeFavorites(listOf(track("Velvet"), track("Ruby"))),
-            FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(),
+            FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(), FakeSettingsRepository(),
         )
         backgroundScope.launch { vm.favoriteTracks.collect {} } // keep the WhileSubscribed StateFlow hot
         advanceUntilIdle()
@@ -120,7 +127,7 @@ class LibraryViewModelTest {
         val liked = listOf(track("Velvet"), track("Ruby"), track("Rust"))
         val vm = LibraryViewModel(
             FakeFavorites(liked),
-            FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(),
+            FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(), FakeSettingsRepository(),
         )
         backgroundScope.launch { vm.favoriteTracks.collect {} }
         advanceUntilIdle()
@@ -136,7 +143,7 @@ class LibraryViewModelTest {
     @Test
     fun `playing an empty list does nothing`() = runTest {
         val playback = FakePlayback()
-        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads())
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(), FakeSettingsRepository())
 
         vm.playLiked(0, emptyList())
         vm.playRecent(0, emptyList())
@@ -149,7 +156,7 @@ class LibraryViewModelTest {
     @Test
     fun `createPlaylist delegates a trimmed name`() = runTest {
         val playlists = FakePlaylists()
-        val vm = LibraryViewModel(FakeFavorites(), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads())
+        val vm = LibraryViewModel(FakeFavorites(), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads(), FakeSettingsRepository())
 
         vm.createPlaylist("  My Mix  ")
         advanceUntilIdle()
@@ -160,7 +167,7 @@ class LibraryViewModelTest {
     @Test
     fun `blank playlist name is ignored`() = runTest {
         val playlists = FakePlaylists()
-        val vm = LibraryViewModel(FakeFavorites(), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads())
+        val vm = LibraryViewModel(FakeFavorites(), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads(), FakeSettingsRepository())
 
         vm.createPlaylist("   ")
         advanceUntilIdle()
@@ -171,12 +178,106 @@ class LibraryViewModelTest {
     @Test
     fun `unfavoriteTrack removes by provider ref`() = runTest {
         val favorites = FakeFavorites()
-        val vm = LibraryViewModel(favorites, FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads())
+        val vm = LibraryViewModel(favorites, FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads(), FakeSettingsRepository())
         val song = track("Velvet")
 
         vm.unfavoriteTrack(song)
         advanceUntilIdle()
 
         assertEquals(listOf(song.source), favorites.removed)
+    }
+
+    // ---- saving downloads to the phone ----
+
+    /** A download repository whose state the test drives, and that records what was published. */
+    private class FakeDownloads(
+        entries: List<DownloadedTrack> = emptyList(),
+        states: Map<String, DownloadState> = emptyMap(),
+    ) : DownloadRepository {
+        val exported = mutableListOf<String>()
+        override val downloads = MutableStateFlow(entries)
+        override val states = MutableStateFlow(states)
+        override fun localStream(track: Track): Stream? = null
+        override fun download(track: Track, format: DownloadFormat?) = Unit
+        override fun downloadAll(tracks: List<Track>) = Unit
+        override fun cancel(key: String) = Unit
+        override suspend fun delete(key: String) = Unit
+        override suspend fun deleteAll() = Unit
+        override suspend fun markCorrupt(key: String) = Unit
+        override suspend fun export(key: String): Result<String> {
+            exported += key
+            return Result.success("$key.m4a")
+        }
+    }
+
+    private fun downloaded(title: String, onPhone: Boolean) = DownloadedTrack(
+        track = track(title),
+        fileName = "$title.m4a",
+        sizeBytes = 1_000,
+        container = "m4a",
+        downloadedAtIso = "2026-08-03T10:00:00Z",
+        exportedUri = if (onPhone) "content://media/audio/1" else null,
+    )
+
+    @Test
+    fun `the question is put while a download is running, not before`() = runTest {
+        val downloads = FakeDownloads()
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, FakeSettingsRepository())
+        backgroundScope.launch { vm.askSaveToPhone.collect {} }
+        advanceUntilIdle()
+
+        assertTrue("nothing is downloading yet", !vm.askSaveToPhone.value)
+
+        downloads.states.value = mapOf("deezer:1" to DownloadState(DownloadStatus.DOWNLOADING))
+        advanceUntilIdle()
+
+        assertTrue(vm.askSaveToPhone.value)
+    }
+
+    @Test
+    fun `someone who already has downloads is not asked about them at launch`() = runTest {
+        // A finished download is not a question: the user is asked about work they just started.
+        val downloads = FakeDownloads(
+            entries = listOf(downloaded("Velvet", onPhone = false)),
+            states = mapOf("meta:Velvet" to DownloadState(DownloadStatus.COMPLETE)),
+        )
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, FakeSettingsRepository())
+        backgroundScope.launch { vm.askSaveToPhone.collect {} }
+        advanceUntilIdle()
+
+        assertTrue(!vm.askSaveToPhone.value)
+    }
+
+    @Test
+    fun `once answered the question never comes back`() = runTest {
+        val settings = FakeSettingsRepository()
+        val downloads = FakeDownloads(states = mapOf("deezer:1" to DownloadState(DownloadStatus.DOWNLOADING)))
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, settings)
+        backgroundScope.launch { vm.askSaveToPhone.collect {} }
+        advanceUntilIdle()
+        assertTrue(vm.askSaveToPhone.value)
+
+        vm.setSaveToPhone(true)
+        advanceUntilIdle()
+
+        assertTrue(!vm.askSaveToPhone.value)
+        assertEquals(true, settings.saveDownloadsToPhoneFlow.value)
+    }
+
+    @Test
+    fun `saving everything skips the songs already on the phone`() = runTest {
+        val downloads = FakeDownloads()
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, FakeSettingsRepository())
+        var saved = -1
+        var failed = -1
+
+        vm.exportDownloads(
+            listOf(downloaded("Velvet", onPhone = true), downloaded("Ruby", onPhone = false)),
+        ) { s, f -> saved = s; failed = f }
+        advanceUntilIdle()
+
+        assertEquals(listOf("meta:Ruby"), downloads.exported)
+        assertEquals(1, saved)
+        assertEquals(0, failed)
     }
 }

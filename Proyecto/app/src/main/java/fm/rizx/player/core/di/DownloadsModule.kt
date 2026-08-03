@@ -12,6 +12,7 @@ import fm.rizx.player.data.download.DownloadNotifier
 import fm.rizx.player.data.download.MediaStoreExporter
 import fm.rizx.player.data.download.MediaStoreExporterImpl
 import fm.rizx.player.data.download.Mp3Transcoder
+import fm.rizx.player.data.download.OpusRemuxer
 import fm.rizx.player.data.download.ServiceDownloadNotifier
 import fm.rizx.player.data.download.TrackDownloader
 import fm.rizx.player.data.local.store.DownloadIndexStore
@@ -94,6 +95,11 @@ object DownloadsModule {
     @Singleton
     fun provideMp3Transcoder(): Mp3Transcoder = Mp3Transcoder()
 
+    /** Rewraps YouTube's WebM/Opus as Ogg Opus, the only container Opus tags can be written into. */
+    @Provides
+    @Singleton
+    fun provideOpusRemuxer(): OpusRemuxer = OpusRemuxer()
+
     @Provides
     @Singleton
     fun provideDownloadRepository(
@@ -108,6 +114,7 @@ object DownloadsModule {
         settings: SettingsRepository,
         dataSaver: DataSaverState,
         transcoder: Mp3Transcoder,
+        opusRemuxer: OpusRemuxer,
         cachedAudio: CachedAudioReader,
     ): DownloadRepository = DownloadRepositoryImpl(
         store = store,
@@ -121,6 +128,7 @@ object DownloadsModule {
         settings = settings,
         dataSaver = dataSaver,
         transcoder = transcoder,
+        opusRemuxer = opusRemuxer,
         cachedAudio = cachedAudio,
     )
 }

@@ -12,6 +12,8 @@ import fm.rizx.player.domain.model.AttributedResult
 import fm.rizx.player.domain.model.ForYouSection
 import fm.rizx.player.domain.model.HomeFeed
 import fm.rizx.player.domain.model.MixKind
+import fm.rizx.player.domain.model.Playlist
+import fm.rizx.player.domain.model.PlaylistSummary
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.QueueContext
 import fm.rizx.player.domain.model.QueueSourceKind
@@ -21,6 +23,7 @@ import fm.rizx.player.domain.playback.PlaybackState
 import fm.rizx.player.domain.repository.DashboardRepository
 import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.domain.repository.ForYouRepository
+import fm.rizx.player.domain.repository.PlaylistRepository
 import fm.rizx.player.domain.repository.RecentlyPlayedRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -88,6 +91,24 @@ class HomeViewModelTest {
         override suspend fun clear() {}
     }
 
+    /** The Home only reaches for this on a featured card's PLAY, which these tests don't exercise. */
+    private object NoopPlaylists : PlaylistRepository {
+        override fun playlists(): Flow<List<PlaylistSummary>> = flowOf(emptyList())
+        override fun playlist(id: String): Flow<Playlist?> = flowOf(null)
+        override suspend fun createPlaylist(name: String, description: String?): String = "id"
+        override suspend fun deletePlaylist(id: String) {}
+        override suspend fun rename(id: String, name: String, description: String?) {}
+        override suspend fun addTracks(playlistId: String, tracks: List<Track>) {}
+        override suspend fun removeItem(playlistId: String, itemId: String) {}
+        override suspend fun reorder(playlistId: String, fromIndex: Int, toIndex: Int) {}
+        override suspend fun saveQueueAsPlaylist(name: String, tracks: List<Track>): String = "id"
+        override suspend fun exportPlaylist(id: String): String? = null
+        override suspend fun importPlaylistFile(text: String, fallbackName: String?): String = "id"
+        override suspend fun importFromUrl(url: String): String = "id"
+        override suspend fun previewPlaylist(source: ProviderRef): List<Track> = emptyList()
+        override suspend fun backfillArtwork(id: String) = Unit
+    }
+
     private class FakeFavorites(private val tracks: List<Track> = emptyList()) : FavoritesRepository {
         override fun favoriteTracks(): Flow<List<Track>> = flowOf(tracks)
         override fun favoriteAlbums(): Flow<List<AlbumRef>> = flowOf(emptyList())
@@ -102,7 +123,7 @@ class HomeViewModelTest {
         override suspend fun removeArtist(source: ProviderRef) {}
     }
 
-    /** Three artists — the shape of a real `ArtistsForYou` row. */
+    /** Three artists — enough for a `SimilarTo` row to clear the deduper's minimum. */
     private fun artists() = List(3) { ArtistRef(name = "Artist $it", source = ProviderRef("deezer", "artist:$it")) }
 
     private fun feedWith(title: String) =
@@ -120,7 +141,7 @@ class HomeViewModelTest {
         HomeFeedStore(File(tmp.root, "home_feed.json"), io = mainDispatcherRule.dispatcher)
 
     private fun vm(repo: DashboardRepository, forYou: ForYouRepository = FakeForYou()) =
-        HomeViewModel(repo, InMemoryQueueRepository(), FakePlayback(), forYou, store(), FakeSettingsRepository(), FakeFavorites(), FakeRecents())
+        HomeViewModel(repo, InMemoryQueueRepository(), FakePlayback(), forYou, store(), FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents())
 
     @Test
     fun `loads the feed into Content`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
@@ -148,7 +169,7 @@ class HomeViewModelTest {
             val vm = HomeViewModel(
                 FakeDash { throw AppError.Network("offline") },
                 InMemoryQueueRepository(), FakePlayback(), FakeForYou(), store(), FakeSettingsRepository(), FakeFavorites(),
-                FakeRecents(listOf(recent)),
+                NoopPlaylists, FakeRecents(listOf(recent)),
             )
 
             assertEquals(HomeUiState.Offline, vm.state.first { it !is HomeUiState.Loading })
@@ -166,7 +187,7 @@ class HomeViewModelTest {
     fun `for-you sections alone keep Content alive and carry consent + country`() =
         runTest(mainDispatcherRule.dispatcher.scheduler) {
             val artists = List(3) { ArtistRef(name = "Artist $it", source = ProviderRef("deezer", "artist:$it")) }
-            val forYou = FakeForYou(rows = listOf(ForYouSection.ArtistsForYou(artists)), consent = true)
+            val forYou = FakeForYou(rows = listOf(ForYouSection.SimilarTo("Daft Punk", artists = artists)), consent = true)
             val vm = vm(FakeDash { HomeFeed() }, forYou)
 
             val content = vm.state.first { it is HomeUiState.Content } as HomeUiState.Content
@@ -187,9 +208,9 @@ class HomeViewModelTest {
             val artists = artists()
             val forYou = object : ForYouRepository {
                 override fun sections(): Flow<List<ForYouSection>> = flow {
-                    emit(listOf(ForYouSection.ArtistsForYou(emptyList()))) // the plan
+                    emit(listOf(ForYouSection.SimilarTo("Daft Punk"))) // the plan
                     gate.await()
-                    emit(listOf(ForYouSection.ArtistsForYou(artists)))
+                    emit(listOf(ForYouSection.SimilarTo("Daft Punk", artists = artists)))
                 }
                 override val regionalConsent: Flow<Boolean?> = MutableStateFlow(true)
                 override suspend fun setRegionalConsent(consented: Boolean) {}
@@ -221,9 +242,9 @@ class HomeViewModelTest {
                 var loads = 0
                 override fun sections(): Flow<List<ForYouSection>> = flow {
                     val first = loads++ == 0
-                    emit(listOf(ForYouSection.ArtistsForYou(emptyList())))
+                    emit(listOf(ForYouSection.SimilarTo("Daft Punk")))
                     if (!first) second.await() // the refresh parks after announcing
-                    emit(listOf(ForYouSection.ArtistsForYou(artists())))
+                    emit(listOf(ForYouSection.SimilarTo("Daft Punk", artists = artists())))
                 }
                 override val regionalConsent: Flow<Boolean?> = MutableStateFlow(true)
                 override suspend fun setRegionalConsent(consented: Boolean) {}
@@ -251,7 +272,7 @@ class HomeViewModelTest {
             var networkCalls = 0
             val dash = FakeDash { networkCalls++; HomeFeed() }
 
-            val vm = HomeViewModel(dash, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeFavorites(), FakeRecents())
+            val vm = HomeViewModel(dash, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents())
             val content = vm.state.first { it is HomeUiState.Content } as HomeUiState.Content
 
             assertEquals("From cache", content.feed.topTracks.single().items.single().title)
@@ -269,7 +290,8 @@ class HomeViewModelTest {
             )
             val vm = HomeViewModel(
                 FakeDash { throw AppError.Network("offline") },
-                InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeFavorites(), FakeRecents(),
+                InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeFavorites(),
+                NoopPlaylists, FakeRecents(),
             )
 
             vm.state.first { it is HomeUiState.Content }
@@ -285,7 +307,7 @@ class HomeViewModelTest {
             // setting, resolved in one place (the controller), so every entry point agrees — this
             // screen just says "start a radio from this song".
             val playback = FakePlayback()
-            val vm = HomeViewModel(FakeDash { HomeFeed() }, InMemoryQueueRepository(), playback, FakeForYou(), store(), FakeSettingsRepository(), FakeFavorites(), FakeRecents())
+            val vm = HomeViewModel(FakeDash { HomeFeed() }, InMemoryQueueRepository(), playback, FakeForYou(), store(), FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents())
             val youtube = Track("Mix song", source = ProviderRef("youtube", "abcdefghijk"))
             val deezer = Track("Chart song", source = ProviderRef("deezer", "1"))
 
@@ -302,7 +324,7 @@ class HomeViewModelTest {
             val playback = FakePlayback()
             val vm = HomeViewModel(
                 FakeDash { chartFeed(10) }, InMemoryQueueRepository(), playback, FakeForYou(), store(),
-                FakeSettingsRepository(), FakeFavorites(), FakeRecents(),
+                FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents(),
             )
 
             val mix = vm.mixes.first { it.mixes.isNotEmpty() }.mixes.first()

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarDuration
@@ -135,6 +136,9 @@ fun LibraryScreen(
     var confirmClear by remember { mutableStateOf(false) }
     var confirmDeleteDownload by remember { mutableStateOf<DownloadedTrack?>(null) }
     var confirmDeleteAllDownloads by remember { mutableStateOf(false) }
+    // The rows a "save all" would copy — held rather than recomputed so the dialog states the same
+    // number and the same size the button offered, even if a download lands while it is open.
+    var confirmSaveAll by remember { mutableStateOf<List<DownloadedTrack>?>(null) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -147,6 +151,9 @@ fun LibraryScreen(
     val importFailedMsg = stringResource(R.string.library_import_failed)
     val fileReadErrorMsg = stringResource(R.string.library_import_file_read_error)
     val exportSavedTemplate = stringResource(R.string.library_export_saved)
+    val exportSavedManyTemplate = stringResource(R.string.library_export_saved_many)
+    val exportSavedOneMsg = stringResource(R.string.library_export_saved_one)
+    val nothingToSaveMsg = stringResource(R.string.library_export_none)
     val exportFailedMsg = stringResource(R.string.library_export_failed)
     val removedFromLikedMsg = stringResource(R.string.library_removed_from_liked)
     val undoLabel = stringResource(R.string.action_undo).uppercase()
@@ -175,14 +182,26 @@ fun LibraryScreen(
         }
     }
 
-    // Export writes outside the app, where the user has to go looking for it — so say where it landed.
+    // Saving writes outside the app, where the user has to go looking for it — so say where it landed.
     val exportDownload: (DownloadedTrack) -> Unit = { entry ->
         vm.exportDownload(entry.key) { result ->
             val message = result.fold(
                 onSuccess = { String.format(exportSavedTemplate, it) },
                 onFailure = { exportFailedMsg },
             )
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            scope.launch { snackbars.showSnackbar(message, duration = SnackbarDuration.Short) }
+        }
+    }
+
+    val exportAll: (List<DownloadedTrack>) -> Unit = { entries ->
+        vm.exportDownloads(entries) { saved, failed ->
+            val message = when {
+                saved == 0 && failed == 0 -> nothingToSaveMsg
+                failed > 0 -> exportFailedMsg
+                saved == 1 -> exportSavedOneMsg
+                else -> String.format(exportSavedManyTemplate, saved)
+            }
+            scope.launch { snackbars.showSnackbar(message, duration = SnackbarDuration.Short) }
         }
     }
 
@@ -222,7 +241,14 @@ fun LibraryScreen(
     confirmDeleteDownload?.let { entry ->
         ConfirmDialog(
             title = stringResource(R.string.library_delete_download_title),
-            body = stringResource(R.string.library_delete_download_body),
+            // A copy on the phone belongs to the user like any other file of theirs, so it survives — and
+            // the dialog says so, rather than leaving them to discover it.
+            body = if (entry.exportedUri != null) {
+                stringResource(R.string.library_delete_download_body) + " " +
+                    stringResource(R.string.library_delete_download_keeps_copy)
+            } else {
+                stringResource(R.string.library_delete_download_body)
+            },
             confirmLabel = stringResource(R.string.action_delete),
             onConfirm = { vm.deleteDownload(entry.key) },
             onDismiss = { confirmDeleteDownload = null },
@@ -235,6 +261,22 @@ fun LibraryScreen(
             confirmLabel = stringResource(R.string.library_delete_all_downloads_confirm),
             onConfirm = vm::deleteAllDownloads,
             onDismiss = { confirmDeleteAllDownloads = false },
+        )
+    }
+    // Copying a whole library doubles what it takes up, so the size is on the dialog and the user says go.
+    confirmSaveAll?.let { entries ->
+        val pending = entries.filter { it.exportedUri == null }
+        ConfirmDialog(
+            title = stringResource(R.string.library_save_all_title),
+            body = stringResource(
+                R.string.library_save_all_body,
+                // The count comes pre-worded so one song isn't announced as "1 canciones".
+                countLabel(pending.size, R.string.library_count_song_one, R.string.library_count_song_other),
+                formatBytes(pending.sumOf { it.sizeBytes }),
+            ),
+            confirmLabel = stringResource(R.string.library_save_all_confirm),
+            onConfirm = { exportAll(pending) },
+            onDismiss = { confirmSaveAll = null },
         )
     }
 
@@ -386,24 +428,46 @@ fun LibraryScreen(
                         item { FilterEmpty(filter) }
                     } else {
                         item {
-                            Row(
-                                Modifier.fillMaxWidth().padding(top = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                // Both halves of the readout describe the rows on screen — a filtered count
-                                // over the whole library's byte total would be two different lists in one line.
-                                val bytes = formatBytes(visibleDownloads.sumOf { it.sizeBytes })
-                                TabCount(
-                                    "${countLabel(visibleDownloads.size, R.string.library_count_song_one, R.string.library_count_song_other)} · $bytes",
-                                    Modifier.weight(1f),
-                                )
-                                RizxIconButton(
-                                    Icons.Filled.DeleteOutline,
-                                    stringResource(R.string.library_delete_all_downloads_desc),
-                                    onClick = { confirmDeleteAllDownloads = true },
-                                    iconSize = 20.dp,
-                                    tint = c.text2,
-                                )
+                            // Both halves of the readout describe the rows on screen — a filtered count
+                            // over the whole library's byte total would be two different lists in one line.
+                            val bytes = formatBytes(visibleDownloads.sumOf { it.sizeBytes })
+                            val onPhone = visibleDownloads.count { it.exportedUri != null }
+                            val pending = visibleDownloads.size - onPhone
+                            Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    TabCount(
+                                        buildString {
+                                            append(countLabel(visibleDownloads.size, R.string.library_count_song_one, R.string.library_count_song_other))
+                                            append(" · ").append(bytes)
+                                            if (onPhone > 0) append(" · ").append(stringResource(R.string.library_on_phone_count, onPhone))
+                                        },
+                                        Modifier.weight(1f),
+                                    )
+                                    RizxIconButton(
+                                        Icons.Filled.DeleteOutline,
+                                        stringResource(R.string.library_delete_all_downloads_desc),
+                                        onClick = { confirmDeleteAllDownloads = true },
+                                        iconSize = 20.dp,
+                                        tint = c.text2,
+                                    )
+                                }
+                                // The whole reason this feature was invisible: nothing ever said where a
+                                // download lives, or that it could live anywhere else. One line, and only
+                                // while there is still something to move.
+                                if (pending > 0) {
+                                    Text(
+                                        stringResource(R.string.library_downloads_explainer),
+                                        style = mr(11, FontWeight.Medium),
+                                        color = c.muted,
+                                        modifier = Modifier.padding(top = 6.dp),
+                                    )
+                                    RizxActionButton(
+                                        Icons.Filled.SaveAlt,
+                                        stringResource(R.string.library_save_all_to_phone, pending),
+                                        onClick = { confirmSaveAll = visibleDownloads },
+                                        modifier = Modifier.padding(top = 10.dp),
+                                    )
+                                }
                             }
                         }
                         downloadRows(
@@ -541,16 +605,52 @@ private fun LazyListScope.downloadRows(
     onPlay: (Int) -> Unit,
 ) {
     itemsIndexed(items, key = { _, d -> "dl-${d.key}" }) { index, entry ->
+        val onPhone = entry.exportedUri != null
         Box(Modifier.staggeredReveal(index)) {
-            TrackRow(entry.track, onPlay = { onPlay(index) }) {
-                CodeLabel("${entry.container.uppercase()} · ${formatBytes(entry.sizeBytes)}", size = 10)
-                RizxIconButton(
-                    Icons.Filled.DriveFileMove,
-                    if (entry.exportedUri != null) stringResource(R.string.library_export_again_desc) else stringResource(R.string.library_export_desc),
-                    onClick = { onExport(entry) },
-                    iconSize = 20.dp,
-                    tint = if (entry.exportedUri != null) RizxTheme.colors.accent else RizxTheme.colors.text2,
-                )
+            TrackRow(
+                entry.track,
+                onPlay = { onPlay(index) },
+                // What the file is and where it lives — in words, under the artist. It used to be the
+                // *tint of an icon*, which says nothing to anyone not already told what the icon meant.
+                // The action sits here too rather than in the trailing strip, where a label that long
+                // would have squeezed the song title down to a few characters.
+                meta = {
+                    val format = "${entry.container.uppercase()} · ${formatBytes(entry.sizeBytes)}"
+                    if (onPhone) {
+                        // Its own line, not appended: this column is narrow enough that one long line
+                        // would ellipsize away the very word the row exists to say.
+                        CodeLabel(format, size = 10)
+                        Spacer(Modifier.height(3.dp))
+                        CodeLabel(stringResource(R.string.library_on_phone), size = 10, color = RizxTheme.colors.accent)
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            CodeLabel(format, size = 10)
+                            // Labelled, not a bare glyph: "save this to the phone" is not something an
+                            // icon can say — which is exactly why nobody ever found this feature.
+                            RizxActionButton(
+                                Icons.Filled.SaveAlt,
+                                stringResource(R.string.library_save_to_phone),
+                                onClick = { onExport(entry) },
+                                contentDescription = stringResource(R.string.library_export_desc),
+                            )
+                        }
+                    }
+                },
+            ) {
+                // Already published: the row says so, so this is only the way back from having deleted
+                // the copy on the phone by hand — small, and never the loudest thing in the row.
+                if (onPhone) {
+                    RizxIconButton(
+                        Icons.Filled.DriveFileMove,
+                        stringResource(R.string.library_export_again_desc),
+                        onClick = { onExport(entry) },
+                        iconSize = 20.dp,
+                        tint = RizxTheme.colors.text2,
+                    )
+                }
                 RizxIconButton(
                     Icons.Filled.DeleteOutline,
                     stringResource(R.string.library_delete_download_desc),
@@ -573,9 +673,18 @@ private fun LazyListScope.recentRows(items: List<Track>, onPlay: (Int) -> Unit) 
 
 // ---- rows ---------------------------------------------------------------------------------------
 
-/** The library's one track row. [trailing] is what differs (liked shows duration + heart, recents nothing). */
+/**
+ * The library's one track row. [trailing] is what differs (liked shows duration + heart, recents
+ * nothing); [meta] is a third line under the artist, which downloads use to state what the file is and
+ * where it lives — trailing space is for actions, not for a readout that has to be readable.
+ */
 @Composable
-private fun TrackRow(track: Track, onPlay: () -> Unit, trailing: @Composable (RowScope.() -> Unit)? = null) {
+private fun TrackRow(
+    track: Track,
+    onPlay: () -> Unit,
+    meta: (@Composable () -> Unit)? = null,
+    trailing: @Composable (RowScope.() -> Unit)? = null,
+) {
     val c = RizxTheme.colors
     Row(
         Modifier
@@ -595,6 +704,10 @@ private fun TrackRow(track: Track, onPlay: () -> Unit, trailing: @Composable (Ro
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            meta?.let {
+                Spacer(Modifier.height(3.dp))
+                it()
+            }
         }
         trailing?.invoke(this)
     }

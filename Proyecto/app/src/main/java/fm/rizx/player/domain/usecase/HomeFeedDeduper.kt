@@ -67,24 +67,36 @@ class HomeFeedDeduper(
                     section.items.filter { seen.tracks.add(blender.trackKey(it)) }
                         .takeIf { it.size >= minRowItems }?.let { section.copy(items = it) }
 
-                is ForYouSection.ArtistsForYou ->
-                    section.items.filter { seen.artists.add(blender.artistKey(it)) }
-                        .takeIf { it.size >= minRowItems }?.let { section.copy(items = it) }
-
-                is ForYouSection.AlbumsForYou ->
-                    section.items.filter { seen.albums.add(blender.albumKey(it)) }
-                        .takeIf { it.size >= minRowItems }?.let { section.copy(items = it) }
+                is ForYouSection.SimilarTo -> {
+                    // Two shelves in one row: each half claims its own key set, and the row survives
+                    // on their combined weight — a neighborhood of three artists and no albums is
+                    // still a row worth drawing.
+                    val artists = section.artists.filter { seen.artists.add(blender.artistKey(it)) }
+                    val albums = section.albums.filter { seen.albums.add(blender.albumKey(it)) }
+                    (artists.size + albums.size).takeIf { it >= minRowItems }
+                        ?.let { section.copy(artists = artists, albums = albums) }
+                }
             }
         }
 
     /** Albums and new releases share one set — they're the same shelf twice over when a release charts. */
-    private fun HomeFeed.prunedBy(seen: Seen) = HomeFeed(
-        topTracks = topTracks.filterItems { seen.tracks.add(blender.trackKey(it)) },
-        topArtists = topArtists.filterItems { seen.artists.add(blender.artistKey(it)) },
-        topAlbums = topAlbums.filterItems { seen.albums.add(blender.albumKey(it)) },
-        editorialPlaylists = editorialPlaylists.filterItems { seen.playlists.add(blender.playlistKey(it)) },
-        newReleases = newReleases.filterItems { seen.albums.add(blender.albumKey(it)) },
-    )
+    private fun HomeFeed.prunedBy(seen: Seen): HomeFeed {
+        // The featured cards claim their playlists before the mosaic wall and the carousel see them:
+        // the card is the richest presentation a playlist gets, so it is the one that stays. Its track
+        // *preview* deliberately claims nothing — those songs are part of the playlist's presentation,
+        // not a shelf of their own, and pruning a chart because a card peeked at one would be absurd.
+        val keptFeatured = featured.filterItems { seen.playlists.add(blender.playlistKey(it.playlist)) }
+        return HomeFeed(
+            topTracks = topTracks.filterItems { seen.tracks.add(blender.trackKey(it)) },
+            topArtists = topArtists.filterItems { seen.artists.add(blender.artistKey(it)) },
+            topAlbums = topAlbums.filterItems { seen.albums.add(blender.albumKey(it)) },
+            editorialPlaylists = editorialPlaylists.filterItems { seen.playlists.add(blender.playlistKey(it)) },
+            newReleases = newReleases.filterItems { seen.albums.add(blender.albumKey(it)) },
+            featured = keptFeatured,
+            // Text chips over provider-curated stations — nothing here collides with any shelf.
+            stations = stations,
+        )
+    }
 
     /** Keeps only the items passing [predicate]; a section left with nothing disappears. */
     private fun <T> List<AttributedResult<T>>.filterItems(

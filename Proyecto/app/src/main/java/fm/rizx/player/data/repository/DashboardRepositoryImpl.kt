@@ -7,6 +7,7 @@ import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.provider.PlaylistProvider
 import fm.rizx.player.domain.model.DashboardCapability
 import fm.rizx.player.domain.model.HomeFeed
+import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.DashboardProvider
 import fm.rizx.player.domain.provider.EnabledProviderStore
 import fm.rizx.player.domain.provider.ProviderKind
@@ -65,8 +66,20 @@ class DashboardRepositoryImpl(
             // disabled in Sources. So anything nothing can open is dropped before it is ever drawn.
             editorialPlaylists = contribs.attributed { c -> c.editorialPlaylists.filter(canOpen) },
             newReleases = contribs.attributed { it.newReleases },
+            // Same rule for the featured cards — their body tap opens the playlist detail.
+            featured = contribs.attributed { c -> c.featured.filter { canOpen(it.playlist) } },
+            stations = contribs.attributed { it.stations },
         )
     }
+
+    /** Routed to the provider that supplied the station — its id rode along in the [AttributedResult]. */
+    override suspend fun stationTracks(providerId: String, stationId: String, limit: Int): List<Track> =
+        withContext(io) {
+            val provider = registry.list(ProviderKind.DASHBOARD)
+                .filterIsInstance<DashboardProvider>()
+                .firstOrNull { it.id == providerId }
+            safe(provider != null) { provider!!.stationTracks(stationId, limit) }
+        }
 
     /** A predicate over playlist refs: true when some **enabled** playlist provider can fetch it. */
     private suspend fun playlistOpeners(): (PlaylistRef) -> Boolean {
@@ -91,7 +104,13 @@ class DashboardRepositoryImpl(
         // chart response. The chart sections keep the small limit — those are per-item work.
         val playlists = async { safe(DashboardCapability.EDITORIAL_PLAYLISTS in caps) { p.editorialPlaylists(PLAYLIST_LIMIT) } }
         val releases = async { safe(DashboardCapability.NEW_RELEASES in caps) { p.newReleases(limit) } }
-        Contribution(p.id, p.name, tracks.await(), artists.await(), albums.await(), playlists.await(), releases.await())
+        val featured = async { safe(DashboardCapability.FEATURED_PLAYLISTS in caps) { p.featuredPlaylists(FEATURED_LIMIT) } }
+        val stations = async { safe(DashboardCapability.MOOD_STATIONS in caps) { p.moodStations(STATION_LIMIT) } }
+        Contribution(
+            p.id, p.name,
+            tracks.await(), artists.await(), albums.await(), playlists.await(), releases.await(),
+            featured.await(), stations.await(),
+        )
     }
 
     private suspend fun <T> safe(declared: Boolean, block: suspend () -> List<T>): List<T> =
@@ -113,11 +132,13 @@ class DashboardRepositoryImpl(
     private class Contribution(
         val id: String,
         val name: String,
-        val topTracks: List<fm.rizx.player.domain.model.Track>,
+        val topTracks: List<Track>,
         val topArtists: List<fm.rizx.player.domain.model.ArtistRef>,
         val topAlbums: List<fm.rizx.player.domain.model.AlbumRef>,
-        val editorialPlaylists: List<fm.rizx.player.domain.model.PlaylistRef>,
+        val editorialPlaylists: List<PlaylistRef>,
         val newReleases: List<fm.rizx.player.domain.model.AlbumRef>,
+        val featured: List<fm.rizx.player.domain.model.FeaturedPlaylist>,
+        val stations: List<fm.rizx.player.domain.model.MoodStation>,
     )
 
     companion object {
@@ -125,5 +146,11 @@ class DashboardRepositoryImpl(
 
         /** Enough for every country chart plus a platform's curated rows, per provider. */
         private const val PLAYLIST_LIMIT = 60
+
+        /** Full-width cards — two is a shelf, five would be the whole Home. */
+        private const val FEATURED_LIMIT = 2
+
+        /** A 2-column grid five rows deep — a taste of the stations, not the catalogue. */
+        private const val STATION_LIMIT = 10
     }
 }

@@ -176,6 +176,10 @@ class PreferencesViewModel @Inject constructor(
     /** Only look for a FLAC on an unmetered link. On by default — these files run 25-27 MB. */
     val losslessWifiOnly: StateFlow<Boolean> = settings.losslessWifiOnly.asState(true)
     val downloadFormat: StateFlow<DownloadFormat> = settings.downloadFormat.asState(DownloadFormat.ORIGINAL)
+
+    /** Null = the user has never been asked; the row reads that as off, which is what it means. */
+    val saveToPhone: StateFlow<Boolean?> = settings.saveDownloadsToPhone.asState(null)
+
     val showTechnicalFormat: StateFlow<Boolean> = settings.showTechnicalFormat.asState(true)
 
     private val _cacheSize = MutableStateFlow(cache.diskSizeLabel())
@@ -207,6 +211,10 @@ class PreferencesViewModel @Inject constructor(
 
     fun setDownloadFormat(format: DownloadFormat) {
         viewModelScope.launch { settings.setDownloadFormat(format) }
+    }
+
+    fun setSaveToPhone(enabled: Boolean) {
+        viewModelScope.launch { settings.setSaveDownloadsToPhone(enabled) }
     }
 
     fun setShowTechnicalFormat(enabled: Boolean) {

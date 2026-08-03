@@ -108,14 +108,20 @@ class HomeFeedStore(
 
     // ---- Stripping ----
 
-    private fun HomeFeed.stripped() = copy(topTracks = topTracks.map { it.strippedTracks() })
+    private fun HomeFeed.stripped() = copy(
+        topTracks = topTracks.map { it.strippedTracks() },
+        // The featured cards' previews are tracks too — same contract, no resolved URLs on disk.
+        featured = featured.map { result ->
+            result.copy(items = result.items.map { f -> f.copy(preview = f.preview.map { it.stripResolutionState() }) })
+        },
+    )
 
     private fun AttributedResult<Track>.strippedTracks() = copy(items = items.map { it.stripResolutionState() })
 
     private fun ForYouSection.stripped(): ForYouSection = when (this) {
         is ForYouSection.Mix -> copy(items = items.map { it.stripResolutionState() })
         is ForYouSection.BecauseYouLike -> copy(items = items.map { it.stripResolutionState() })
-        is ForYouSection.ArtistsForYou, is ForYouSection.AlbumsForYou -> this
+        is ForYouSection.SimilarTo -> this
     }
 
     private companion object {
