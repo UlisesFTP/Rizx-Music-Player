@@ -95,6 +95,9 @@ class SoundcloudMetadataProvider(
         throw e
     } catch (e: IOException) {
         throw AppError.Network(e.message ?: "connection failed", e)
+    } catch (e: LinkageError) {
+        // Errors, not Exceptions — a missing platform API in the extractor must not crash the app.
+        throw AppError.ProviderFailure(name, e.message ?: "SoundCloud extractor incompatible", e)
     } catch (e: Exception) {
         throw AppError.ProviderFailure(name, e.message ?: "SoundCloud request failed", e)
     }

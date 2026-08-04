@@ -11,8 +11,9 @@ plugins {
 }
 
 // Release signing is read from a local, uncommitted `keystore.properties` (never from VCS, so no
-// private keys are exposed — spec 014). When absent (local/CI beta builds), the release falls back to
-// the standard debug keystore so `assembleRelease` still produces an installable APK for smoke-testing.
+// private keys are exposed — spec 014). When absent, `assembleRelease` FAILS at the packaging step
+// (see the gate below the android block): a debug-signed release must never be distributed. For a
+// minified debug-signed smoke build use `assembleReleaseTest` instead.
 val keystorePropsFile = rootProject.file("keystore.properties")
 val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
@@ -21,17 +22,19 @@ val keystoreProps = Properties().apply {
 android {
     namespace = "fm.rizx.player"
 
-    // Compiled against Android 16 (API 36). Runs on API 34–37.
-    // To target Android 17 (API 37) once its platform is installed via the SDK Manager,
-    // bump compileSdk and targetSdk to 37 (and a matching AGP if Studio asks).
+    // Compiled against Android 16 (API 36). Runs on API 26+ (Android 8.0): the code was written
+    // against 34+, so every newer platform API is now guarded behind Build.VERSION checks —
+    // docs/BUILD.md lists exactly what degrades on older devices. 26 is a hard floor: variable fonts
+    // (ui/theme/Type.kt), adaptive icons, NotificationChannel and java.time/Base64 (ours, NewPipe's
+    // and jaudiotagger's) all bottom out there.
     compileSdk = 36
 
     defaultConfig {
         applicationId = "fm.rizx.player"
-        minSdk = 34          // supports API 34, 35, 36 and 37
+        minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -59,14 +62,29 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Real release key if configured; otherwise the debug key so beta builds stay installable.
+            // The debug-key fallback exists ONLY so configuration/sync succeeds on machines without
+            // a keystore; actually PACKAGING a release without the real key is blocked further down.
+            // A debug-signed APK that reached users could never be updated with the real signature.
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+        }
+        // What `release` silently was before that gate: minified, non-debuggable, signed with the
+        // debug key. For smoke-testing the real build on a device. Same applicationId on purpose —
+        // it updates an existing debug-signed release install in place.
+        create("releaseTest") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
         }
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Backports newer JDK APIs for API < 33 devices. Not optional at minSdk 26: NewPipe's
+        // Utils.encodeUrlUtf8 calls URLEncoder.encode(String, Charset) — a Java 10 API that only
+        // reached Android in 33 — and NoSuchMethodError-crashed the process on Android 9 the moment
+        // a YouTube stream resolved. Lint can't see inside third-party jars; this is the safety net.
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "17"
@@ -92,10 +110,40 @@ android {
     }
 }
 
+// `assembleRelease`/`bundleRelease` must carry the real signature. Failing at the packaging task —
+// not at configuration — keeps sync, lint and compilation working without a keystore, and (unlike a
+// `taskGraph.whenReady` hook) stays correct if the configuration cache is ever enabled. Exact
+// task-name match on purpose: `packageReleaseTest` must stay exempt.
+val hasReleaseKeystore = keystoreProps.getProperty("storeFile") != null
+val keystoreHint = keystorePropsFile.absolutePath
+tasks.configureEach {
+    if (name == "packageRelease" || name == "packageReleaseBundle") {
+        doFirst {
+            if (!hasReleaseKeystore) throw GradleException(
+                "Release build blocked: no release keystore is configured ($keystoreHint not found) " +
+                    "and a debug-signed release must never be distributed — it could not be updated " +
+                    "with the real key later. Create one following docs/BUILD.md § Release signing, " +
+                    "or run `assembleReleaseTest` for a minified debug-signed smoke build."
+            )
+        }
+    }
+}
+
+// Room writes one schema JSON per database version here; `app/schemas/` is committed so future
+// migrations can be reviewed and tested against the real history (docs/BUILD.md § Room schemas).
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
+
+    // See compileOptions.isCoreLibraryDesugaringEnabled — required by NewPipeExtractor below API 33.
+    // The _nio flavor specifically: the base artifact does NOT retarget URLEncoder.encode(String,
+    // Charset) (verified by crashing on it); _nio is also what the NewPipe app itself ships with.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 
     // Core / lifecycle
     implementation("androidx.core:core-ktx:1.15.0")

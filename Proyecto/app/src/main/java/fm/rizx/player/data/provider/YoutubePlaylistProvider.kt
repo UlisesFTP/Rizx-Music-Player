@@ -67,6 +67,9 @@ class YoutubePlaylistProvider(
         throw e
     } catch (e: IOException) {
         throw AppError.Network(e.message ?: "connection failed", e)
+    } catch (e: LinkageError) {
+        // Errors, not Exceptions — a missing platform API in the extractor must not crash the app.
+        throw AppError.ProviderFailure(name, e.message ?: "youtube extractor incompatible", e)
     } catch (e: Exception) {
         // NewPipe throws ExtractionException/ReCaptchaException/ParsingException — surface as a typed
         // provider failure so a broken import never crashes the app.

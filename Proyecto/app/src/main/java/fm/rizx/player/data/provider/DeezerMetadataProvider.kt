@@ -150,6 +150,9 @@ class DeezerMetadataProvider(
         throw e
     } catch (e: IOException) {
         throw AppError.Network(e.message ?: "connection failed", e)
+    } catch (e: LinkageError) {
+        // Errors, not Exceptions — a missing platform API must fail the provider, not the app.
+        throw AppError.ProviderFailure(name, e.message ?: "deezer client incompatible", e)
     } catch (e: Exception) {
         throw AppError.ProviderFailure(name, e.message ?: "deezer request failed", e)
     }

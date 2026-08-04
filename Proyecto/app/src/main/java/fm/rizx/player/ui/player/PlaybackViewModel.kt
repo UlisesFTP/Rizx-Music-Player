@@ -39,7 +39,10 @@ import javax.inject.Inject
  * currently-playing [currentItem] (from the queue cursor the controller keeps in sync), and forwards
  * transport intents. The mini-player and full player observe this; neither touches ExoPlayer.
  */
-@OptIn(ExperimentalCoroutinesApi::class, UnstableApi::class)
+@OptIn(ExperimentalCoroutinesApi::class)
+// Kotlin's @OptIn doesn't satisfy androidx's experimental checker for media3's Java @UnstableApi —
+// lint requires the androidx variant.
+@androidx.annotation.OptIn(UnstableApi::class)
 @HiltViewModel
 class PlaybackViewModel @Inject constructor(
     private val controller: PlaybackController,

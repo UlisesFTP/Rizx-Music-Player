@@ -1,9 +1,11 @@
 package fm.rizx.player
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -32,12 +34,22 @@ import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.ui.RizxApp
 import fm.rizx.player.ui.player.PlayerViewModel
 import fm.rizx.player.ui.screens.RizxSplash
+import fm.rizx.player.ui.settings.withAppLocale
 import fm.rizx.player.ui.theme.LARGE_SCREEN_SW_DP
 import fm.rizx.player.ui.theme.RizxTheme
 import kotlinx.coroutines.delay
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Below API 33 the app language is applied by hand from its stored preference (see AppLanguage.kt);
+     * on 33+ this wrap is a no-op because LocaleManager already localized the base context.
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase.withAppLocale())
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -147,10 +159,13 @@ private const val SPLASH_HOLD_MS = 250L
  * were silently invisible: the media controls and the download progress. Denial costs nothing — playback
  * and downloads both still run (the services stay foreground either way), you just don't see them.
  *
- * minSdk is 34, so this permission always applies; no version guard needed.
+ * `POST_NOTIFICATIONS` only exists on API 33+; below that, notifications post without asking, so the
+ * whole composable is a no-op there (the SDK check is constant for the life of the process, which is
+ * what makes the early return before `remember` safe).
  */
 @androidx.compose.runtime.Composable
 private fun AskForNotificationsOnce() {
+    if (Build.VERSION.SDK_INT < 33) return
     val context = androidx.compose.ui.platform.LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(Unit) {

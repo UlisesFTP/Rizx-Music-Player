@@ -104,6 +104,12 @@ class YoutubeStreamingProvider(
         throw e
     } catch (e: IOException) {
         throw AppError.Network(e.message ?: "connection failed", e)
+    } catch (e: LinkageError) {
+        // A missing platform API inside the extractor (NoSuchMethodError & friends are Errors, so a
+        // plain `catch Exception` lets them straight through to kill the process — which is exactly
+        // what NewPipe's URLEncoder.encode(String, Charset) did on Android 9 before desugaring covered
+        // it). A provider that can't link on this device is a broken provider, not a broken app.
+        throw AppError.ProviderFailure(name, e.message ?: "youtube extractor incompatible", e)
     } catch (e: Exception) {
         // NewPipe throws ExtractionException/ReCaptchaException/ParsingException — surface as a typed
         // provider failure so the resolver falls back to Audius/iTunes instead of crashing.

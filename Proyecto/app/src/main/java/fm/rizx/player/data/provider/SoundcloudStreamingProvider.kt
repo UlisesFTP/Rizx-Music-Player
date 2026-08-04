@@ -66,6 +66,10 @@ class SoundcloudStreamingProvider(
         throw e
     } catch (e: IOException) {
         throw AppError.Network(e.message ?: "connection failed", e)
+    } catch (e: LinkageError) {
+        // NoSuchMethodError & co are Errors, not Exceptions — a missing platform API inside the
+        // extractor is a broken provider, never a broken app.
+        throw AppError.ProviderFailure(name, e.message ?: "soundcloud extractor incompatible", e)
     } catch (e: Exception) {
         // NewPipe throws ExtractionException/ReCaptchaException/ParsingException — surface as a typed
         // provider failure so a broken SoundCloud call never crashes the app.

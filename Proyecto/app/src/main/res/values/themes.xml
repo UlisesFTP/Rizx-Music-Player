@@ -4,29 +4,25 @@
       Bare NoActionBar framework theme. The real look comes from Compose (RizxTheme);
       this only governs the window before the first frame. Bars are transparent so the
       Activity can draw edge-to-edge (enableEdgeToEdge()).
+
+      Version-specific window attributes layer on top of this base by redeclaring the derived styles
+      in values-v28/ (display cutout, API 28 attr) and values-v31/ (system splash, API 31 attrs).
+      What's below is exactly what an API 26–27 device runs with.
     -->
-    <style name="Theme.Rizx" parent="@android:style/Theme.Material.NoActionBar">
+    <style name="Base.Theme.Rizx" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/rizx_window_bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
+
+    <style name="Theme.Rizx" parent="Base.Theme.Rizx" />
 
     <!--
-      Launch theme. Android 12+ always draws a system splash on cold start, and its icon slot is masked to
-      a circle — it can only ever hold the bare symbol, never the full "logomark + Rizx." lockup. So the
-      launch is staged: this system splash covers the ~2s until Compose's first frame (same dark field,
-      symbol only, nothing clipped), then RizxSplash presents the complete lockup at full size.
-
-      Blanking this icon was tried and reverted: it turned the entire cold start into an empty black
-      screen. windowSplashScreenIconBackgroundColor stays unset so no circle is painted behind the mark.
-
-      Inherits Theme.Rizx, so nothing has to be swapped at runtime once the splash dismisses. Uses the
-      *platform* SplashScreen API (API 31+), not androidx.core:splashscreen — minSdk is 34, so no compat
-      shim and no new dependency is needed.
+      Launch theme. On API 31+ the system draws a splash screen whose attributes live in
+      values-v31/themes.xml (the windowSplashScreen* attributes don't exist before 31). Below 31 a
+      cold start simply shows the themed window background — the same dark field — until Compose's
+      first frame, and RizxSplash then presents the full lockup. Deliberately no
+      androidx.core:core-splashscreen: the pre-31 experience is acceptable without a new dependency.
     -->
-    <style name="Theme.Rizx.Splash" parent="Theme.Rizx">
-        <item name="android:windowSplashScreenBackground">@color/rizx_splash_bg</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
-    </style>
+    <style name="Theme.Rizx.Splash" parent="Theme.Rizx" />
 </resources>

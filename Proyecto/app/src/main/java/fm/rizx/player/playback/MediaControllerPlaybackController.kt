@@ -35,6 +35,7 @@ import javax.inject.Singleton
  * session's player is the source of truth, observed back into [state]. The service owns the ExoPlayer;
  * this class never touches it directly.
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Singleton
 class MediaControllerPlaybackController @Inject constructor(
     @ApplicationContext context: Context,

@@ -80,6 +80,7 @@ import fm.rizx.player.ui.components.SectionHeader
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.components.tintFor
 import fm.rizx.player.ui.util.ListFilter
+import fm.rizx.player.ui.util.rememberSaveToPhonePermission
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.library.ConfirmDialog
 import fm.rizx.player.ui.library.CreatePlaylistDialog
@@ -183,25 +184,34 @@ fun LibraryScreen(
     }
 
     // Saving writes outside the app, where the user has to go looking for it — so say where it landed.
+    // On Android 8–9 (API < 29) the write additionally needs the legacy storage permission first; a
+    // refusal surfaces as the same failure snackbar the export itself would show.
+    val ensureSavePermission = rememberSaveToPhonePermission(
+        onDenied = { scope.launch { snackbars.showSnackbar(exportFailedMsg, duration = SnackbarDuration.Short) } },
+    )
     val exportDownload: (DownloadedTrack) -> Unit = { entry ->
-        vm.exportDownload(entry.key) { result ->
-            val message = result.fold(
-                onSuccess = { String.format(exportSavedTemplate, it) },
-                onFailure = { exportFailedMsg },
-            )
-            scope.launch { snackbars.showSnackbar(message, duration = SnackbarDuration.Short) }
+        ensureSavePermission {
+            vm.exportDownload(entry.key) { result ->
+                val message = result.fold(
+                    onSuccess = { String.format(exportSavedTemplate, it) },
+                    onFailure = { exportFailedMsg },
+                )
+                scope.launch { snackbars.showSnackbar(message, duration = SnackbarDuration.Short) }
+            }
         }
     }
 
     val exportAll: (List<DownloadedTrack>) -> Unit = { entries ->
-        vm.exportDownloads(entries) { saved, failed ->
-            val message = when {
-                saved == 0 && failed == 0 -> nothingToSaveMsg
-                failed > 0 -> exportFailedMsg
-                saved == 1 -> exportSavedOneMsg
-                else -> String.format(exportSavedManyTemplate, saved)
+        ensureSavePermission {
+            vm.exportDownloads(entries) { saved, failed ->
+                val message = when {
+                    saved == 0 && failed == 0 -> nothingToSaveMsg
+                    failed > 0 -> exportFailedMsg
+                    saved == 1 -> exportSavedOneMsg
+                    else -> String.format(exportSavedManyTemplate, saved)
+                }
+                scope.launch { snackbars.showSnackbar(message, duration = SnackbarDuration.Short) }
             }
-            scope.launch { snackbars.showSnackbar(message, duration = SnackbarDuration.Short) }
         }
     }
 

@@ -33,8 +33,19 @@ open class OpusRemuxer(private val io: CoroutineDispatcher = Dispatchers.IO) {
     /**
      * Writes [source]'s Opus track into [target] as an Ogg Opus file. Throws when the source carries no
      * Opus track or the framework refuses the remux — the caller keeps the original file in that case.
+     *
+     * `WrongConstant` is suppressed for the packet loop: feeding `MediaExtractor.sampleFlags` into
+     * `BufferInfo`/`writeSampleData` is the canonical remux pattern (the sync-frame bit is the same),
+     * and it is exactly what `MediaMuxer`'s own documentation shows.
      */
+    @android.annotation.SuppressLint("WrongConstant")
     open suspend fun remux(source: File, target: File): Unit = withContext(io) {
+        if (android.os.Build.VERSION.SDK_INT < 29) {
+            // MUXER_OUTPUT_OGG exists only on API 29+. The pickers never offer Opus there
+            // (availableDownloadFormats), so this can only fire for a preference restored from a newer
+            // device's backup — and the caller's catch keeps the original WebM, losing nothing.
+            throw AppError.ProviderFailure("OpusRemuxer", "Ogg muxing needs Android 10 (API 29)")
+        }
         val extractor = MediaExtractor()
         var muxer: MediaMuxer? = null
         var started = false

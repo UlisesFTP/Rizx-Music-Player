@@ -1,5 +1,6 @@
 package fm.rizx.player.ui.player
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +38,7 @@ import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadStatus
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.mr
+import fm.rizx.player.ui.util.availableDownloadFormats
 
 /**
  * The Now Playing overflow menu — what you can do to *this song* that isn't a transport control.
@@ -81,7 +83,7 @@ fun NowPlayingMenu(
                         tint = c.text2,
                     ) { formatsOpen = !formatsOpen }
                     if (formatsOpen) {
-                        DownloadFormat.entries.forEach { format ->
+                        availableDownloadFormats().forEach { format ->
                             MenuRow(Icons.Filled.FileDownload, "   " + stringResource(downloadFormatMenuLabel(format)), c.text2) {
                                 onDismiss(); onDownloadAs(format)
                             }
@@ -148,13 +150,19 @@ fun android.content.Context.shareTrack(track: fm.rizx.player.domain.model.Track)
  */
 fun android.content.Context.openAudioOutputSwitcher() {
     // Not a public SDK constant, but the stable action string SystemUI/Settings register for the media
-    // output picker on every modern Android (our minSdk is well past its introduction).
-    val panel = android.content.Intent("android.settings.panel.action.MEDIA_OUTPUT").apply {
-        // Scope the picker to our own session where the platform honours it; a version that doesn't just
-        // ignores the extra and shows the active session, which is ours while we're playing.
-        putExtra("android.provider.extra.MEDIA_OUTPUT_PACKAGE_NAME", packageName)
-    }
-    if (runCatching { startActivity(panel) }.isFailure) {
+    // output picker. Settings Panels exist only since API 29 — below that there is no panel to ask for,
+    // so the Bluetooth screen is the direct destination rather than a fallback.
+    val panelOpened = Build.VERSION.SDK_INT >= 29 && runCatching {
+        startActivity(
+            android.content.Intent("android.settings.panel.action.MEDIA_OUTPUT").apply {
+                // Scope the picker to our own session where the platform honours it; a version that
+                // doesn't just ignores the extra and shows the active session, which is ours while
+                // we're playing.
+                putExtra("android.provider.extra.MEDIA_OUTPUT_PACKAGE_NAME", packageName)
+            },
+        )
+    }.isSuccess
+    if (!panelOpened) {
         runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)) }
     }
 }

@@ -60,6 +60,7 @@ import fm.rizx.player.ui.navigation.Routes
 import fm.rizx.player.ui.player.PlaybackViewModel
 import fm.rizx.player.ui.player.PlayerViewModel
 import fm.rizx.player.ui.queue.QueueViewModel
+import fm.rizx.player.ui.util.rememberSaveToPhonePermission
 import fm.rizx.player.ui.screens.AboutScreen
 import fm.rizx.player.ui.screens.EqualizerScreen
 import fm.rizx.player.ui.screens.LicensesScreen
@@ -129,9 +130,16 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     val askSaveToPhone by libraryViewModel.askSaveToPhone.collectAsStateWithLifecycle()
     var saveToPhoneOpen by remember { mutableStateOf(false) }
     LaunchedEffect(askSaveToPhone) { if (askSaveToPhone) saveToPhoneOpen = true }
+    // Android 8–9 (API < 29) additionally need WRITE_EXTERNAL_STORAGE to publish into Music/. A refusal
+    // stores nothing — the next download simply asks again, the same semantics as dismissing the dialog.
+    val ensureSavePermission = rememberSaveToPhonePermission()
     if (saveToPhoneOpen) {
         SaveDownloadsToPhoneDialog(
-            onChoose = { alsoPhone -> libraryViewModel.setSaveToPhone(alsoPhone); saveToPhoneOpen = false },
+            onChoose = { alsoPhone ->
+                saveToPhoneOpen = false
+                if (alsoPhone) ensureSavePermission { libraryViewModel.setSaveToPhone(true) }
+                else libraryViewModel.setSaveToPhone(false)
+            },
             // Dismissing decides nothing, so nothing is stored: the next download asks again rather than
             // quietly settling on an answer the user never gave.
             onDismiss = { saveToPhoneOpen = false },

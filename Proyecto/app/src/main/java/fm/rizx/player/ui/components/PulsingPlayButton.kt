@@ -77,8 +77,9 @@ fun PulsingPlayButton(
     }
 
     Box(modifier.size(size + 18.dp), contentAlignment = Alignment.Center) {
-        if (glow) {
-            // Single soft halo (subtle).
+        if (glow && android.os.Build.VERSION.SDK_INT >= 31) {
+            // Single soft halo (subtle). Only on 31+: Compose blur is RenderEffect-backed and silently
+            // no-ops below, which would leave a hard-edged disc — better no halo at all there.
             Box(
                 Modifier
                     .size(size)

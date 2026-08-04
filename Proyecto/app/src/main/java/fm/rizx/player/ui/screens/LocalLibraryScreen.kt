@@ -7,6 +7,7 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -100,9 +101,13 @@ private enum class LocalView(@StringRes val labelRes: Int) {
     Files(R.string.local_tab_files),
 }
 
-/** True if READ_MEDIA_AUDIO is granted (minSdk 34 — no version guard needed). */
+/** What gates the device's audio library: READ_MEDIA_AUDIO on API 33+, legacy READ_EXTERNAL_STORAGE below. */
+private val audioPermission: String
+    get() = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
+    else Manifest.permission.READ_EXTERNAL_STORAGE
+
 private fun hasAudioPermission(context: Context): Boolean =
-    ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
+    ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED
 
 /**
  * The on-device music player: the MediaStore scan in Songs / Albums / Artists views, the user's own
@@ -137,7 +142,7 @@ fun LocalLibraryScreen(
         granted = ok
         // `shouldShowRequestPermissionRationale` is false both before the first ask and after the
         // permanent denial; checking it here — right after a refusal — separates the two.
-        blocked = !ok && activity?.let { !it.shouldShowRequestPermissionRationale(Manifest.permission.READ_MEDIA_AUDIO) } == true
+        blocked = !ok && activity?.let { !it.shouldShowRequestPermissionRationale(audioPermission) } == true
     }
 
     // Opening this screen *is* the request: the user came here to see their own music, so making them
@@ -145,7 +150,7 @@ fun LocalLibraryScreen(
     LaunchedEffect(Unit) {
         if (!granted && !asked) {
             asked = true
-            launcher.launch(Manifest.permission.READ_MEDIA_AUDIO)
+            launcher.launch(audioPermission)
         }
     }
 
@@ -250,7 +255,7 @@ fun LocalLibraryScreen(
                     onGrant = {
                         // Once Android has stopped showing the dialog, launching it again does nothing at
                         // all — the only route left is the app's settings page.
-                        if (blocked) context.openAppSettings() else launcher.launch(Manifest.permission.READ_MEDIA_AUDIO)
+                        if (blocked) context.openAppSettings() else launcher.launch(audioPermission)
                     },
                 )
             } else {

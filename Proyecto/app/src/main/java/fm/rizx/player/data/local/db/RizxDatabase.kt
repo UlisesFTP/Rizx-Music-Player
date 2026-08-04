@@ -8,11 +8,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 /**
  * The app's Room database: favorites, playlists, and recently-played (§7.3). Cached metadata and an
  * optional persisted queue are later additions. Settings/active-providers live in DataStore, not here.
+ *
+ * Schema JSONs are exported to `app/schemas/` (committed — versions 1–3 predate the export, so the
+ * history starts at 4). Every version bump must ship a `Migration` and its exported schema together.
  */
 @Database(
     entities = [FavoriteEntity::class, PlaylistEntity::class, PlaylistItemEntity::class, RecentlyPlayedEntity::class],
     version = 4,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class RizxDatabase : RoomDatabase() {
     abstract fun favoriteDao(): FavoriteDao

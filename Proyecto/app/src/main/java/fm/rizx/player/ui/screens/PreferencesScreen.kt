@@ -59,6 +59,8 @@ import fm.rizx.player.ui.theme.pagePadding
 import fm.rizx.player.ui.theme.code
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.sg
+import fm.rizx.player.ui.util.availableDownloadFormats
+import fm.rizx.player.ui.util.rememberSaveToPhonePermission
 
 @Composable
 fun PreferencesScreen(
@@ -188,11 +190,17 @@ fun PreferencesScreen(
         )
         // Right under the format, because both answer "what do I end up with?". A download is otherwise
         // app-private: it plays offline but no file manager and no other player can see it.
+        // Turning it ON may first need the legacy storage permission (Android 8–9 only, API < 29);
+        // nothing is stored on refusal, so the switch honestly stays off.
+        val ensureSavePermission = rememberSaveToPhonePermission()
         ToggleRowDetail(
             title = stringResource(R.string.pref_save_to_phone),
             caption = stringResource(R.string.pref_save_to_phone_caption),
             checked = saveToPhone == true,
-        ) { vm.setSaveToPhone(saveToPhone != true) }
+        ) {
+            if (saveToPhone != true) ensureSavePermission { vm.setSaveToPhone(true) }
+            else vm.setSaveToPhone(false)
+        }
 
         SectionLabel(stringResource(R.string.settings_appearance))
         // A three-way picker (System / Light / Dark), like the language row — System (default) follows the
@@ -341,7 +349,8 @@ fun PreferencesScreen(
     if (downloadFormatDialogOpen) {
         CaptionedOptionDialog(
             title = stringResource(R.string.pref_download_format),
-            options = DownloadFormat.entries,
+            // Not `DownloadFormat.entries`: Opus doesn't exist as an option below API 29 (no Ogg muxer).
+            options = availableDownloadFormats(),
             current = downloadFormat,
             label = { stringResource(downloadFormatLabel(it)) },
             caption = { stringResource(downloadFormatCaption(it)) },

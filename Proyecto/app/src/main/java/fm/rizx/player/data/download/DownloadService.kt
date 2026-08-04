@@ -7,8 +7,10 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import dagger.hilt.android.AndroidEntryPoint
 import fm.rizx.player.MainActivity
 import fm.rizx.player.R
@@ -85,10 +87,19 @@ class DownloadService : android.app.Service() {
     /**
      * A rejected foreground start (Android 14 restricts starting one from the background) must never
      * crash the app — the downloads simply run as ordinary background work and may be killed sooner.
+     *
+     * Through `ServiceCompat` because the 3-arg `startForeground(id, notification, type)` only exists
+     * on API 29+ — calling it directly on 26–28 would `NoSuchMethodError`, and this `runCatching`
+     * would silently swallow exactly the failure it exists to survive.
      */
     private fun startForegroundSafely(notification: Notification) {
         runCatching {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                notification,
+                if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
+            )
         }
     }
 

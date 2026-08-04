@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      windowLayoutInDisplayCutoutMode is an API 28 attribute: shortEdges lets the edge-to-edge window
+      draw behind a notch instead of leaving a black band. API 26–27 devices predate cutouts entirely
+      and use the base declaration in values/themes.xml.
+    -->
+    <style name="Theme.Rizx" parent="Base.Theme.Rizx">
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>

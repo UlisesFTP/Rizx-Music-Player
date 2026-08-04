@@ -3,6 +3,7 @@ package fm.rizx.player.data.repository
 import android.content.Context
 import android.database.ContentObserver
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import fm.rizx.player.data.local.media.LocalIds
 import fm.rizx.player.data.local.media.localTrack
@@ -78,22 +79,24 @@ class LocalLibraryRepositoryImpl(
     }
 
     private fun query(): List<LocalSong> {
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ARTIST_ID,
-            MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.TRACK,
+        val projection = buildList {
+            add(MediaStore.Audio.Media._ID)
+            add(MediaStore.Audio.Media.TITLE)
+            add(MediaStore.Audio.Media.ARTIST)
+            add(MediaStore.Audio.Media.ARTIST_ID)
+            add(MediaStore.Audio.Media.ALBUM)
+            add(MediaStore.Audio.Media.ALBUM_ID)
+            add(MediaStore.Audio.Media.DURATION)
+            add(MediaStore.Audio.Media.TRACK)
             // The file's own genre tag. Free here and the automatic equalizer's only offline source of a
-            // genre — a local file has no catalogue to ask.
-            MediaStore.Audio.Media.GENRE,
-            MediaStore.Audio.Media.DATE_ADDED,
-            MediaStore.Audio.Media.SIZE,
-            MediaStore.Audio.Media.MIME_TYPE,
-        )
+            // genre — a local file has no catalogue to ask. The column itself only exists on API 30+:
+            // asking for it below throws IllegalArgumentException, which refresh()'s runCatching would
+            // silently turn into a permanently empty library.
+            if (Build.VERSION.SDK_INT >= 30) add(MediaStore.Audio.Media.GENRE)
+            add(MediaStore.Audio.Media.DATE_ADDED)
+            add(MediaStore.Audio.Media.SIZE)
+            add(MediaStore.Audio.Media.MIME_TYPE)
+        }.toTypedArray()
         // Music only (skips ringtones/notifications/alarms), sorted by title.
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"

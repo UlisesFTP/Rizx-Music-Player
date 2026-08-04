@@ -15,17 +15,26 @@
 
     <!--
       Downloads (offline listening). Keeps a batch alive when the user leaves the app.
-      No storage permission is needed: downloads live in app-private external storage, and Export
-      inserts into MediaStore as an entry this app owns, which needs none on scoped storage (minSdk 34).
+      Downloads themselves live in app-private external storage — no permission at any API level.
+      Publishing a copy to Music/Rizx needs nothing on API 29+ (scoped storage: inserting an entry
+      this app owns is permission-free); on 26–28 the file must be written into the real public
+      Music/ directory, which WRITE_EXTERNAL_STORAGE (requested at the save-to-phone opt-in UI)
+      still guards there. The attribute caps it: from API 29 on it is not even requested.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <!--
-      Local music player: read the device's own audio library (MediaStore.Audio). minSdk 34, so
-      READ_MEDIA_AUDIO is the only relevant permission (no legacy READ_EXTERNAL_STORAGE). Requested at
+      Local music player: read the device's own audio library (MediaStore.Audio). On API 33+ that is
+      READ_MEDIA_AUDIO; below 33 the same gate is the legacy READ_EXTERNAL_STORAGE. Requested at
       runtime, contextually, when the user opens the Local library; denial is non-fatal.
     -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <application
         android:name=".RizxApplication"

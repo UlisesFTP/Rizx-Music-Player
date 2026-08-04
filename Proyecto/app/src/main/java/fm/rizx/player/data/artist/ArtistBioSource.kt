@@ -147,6 +147,9 @@ class WikipediaArtistBioSource(
         block()
     } catch (e: CancellationException) {
         throw e
+    } catch (_: LinkageError) {
+        // Errors, not Exceptions — a missing platform API is still just "no biography".
+        null
     } catch (_: Exception) {
         null
     }

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Android 12+ always draws a system splash on cold start, and its icon slot is masked to a circle —
+      it can only ever hold the bare symbol, never the full "logomark + Rizx." lockup. So the launch is
+      staged: this system splash covers the ~2s until Compose's first frame (same dark field, symbol
+      only, nothing clipped), then RizxSplash presents the complete lockup at full size.
+
+      Blanking this icon was tried and reverted: it turned the entire cold start into an empty black
+      screen. windowSplashScreenIconBackgroundColor stays unset so no circle is painted behind the mark.
+
+      These attributes exist only on API 31+, hence this qualified folder; below 31 the launch theme in
+      values/themes.xml shows the plain themed window background instead.
+    -->
+    <style name="Theme.Rizx.Splash" parent="Theme.Rizx">
+        <item name="android:windowSplashScreenBackground">@color/rizx_splash_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+    </style>
+</resources>

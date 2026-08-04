@@ -47,17 +47,21 @@ class AudioOutputCapabilities @Inject constructor(
     fun describe(): String = query().let { formatOutputLabel(it.nativeSampleRateHz, it.maxSampleRateHz, it.floatCapable) }
 
     private companion object {
-        val RELEVANT_OUTPUTS = setOf(
-            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
-            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-            AudioDeviceInfo.TYPE_WIRED_HEADSET,
-            AudioDeviceInfo.TYPE_USB_DEVICE,
-            AudioDeviceInfo.TYPE_USB_HEADSET,
-            AudioDeviceInfo.TYPE_USB_ACCESSORY,
-            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-            AudioDeviceInfo.TYPE_BLE_HEADSET,
-            AudioDeviceInfo.TYPE_BLE_SPEAKER,
-        )
+        // The BLE Audio types exist only on API 31+ — as inlined ints they would simply never match
+        // below, but adding them conditionally also keeps lint's NewApi sweep clean.
+        val RELEVANT_OUTPUTS = buildSet {
+            add(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
+            add(AudioDeviceInfo.TYPE_WIRED_HEADPHONES)
+            add(AudioDeviceInfo.TYPE_WIRED_HEADSET)
+            add(AudioDeviceInfo.TYPE_USB_DEVICE)
+            add(AudioDeviceInfo.TYPE_USB_HEADSET)
+            add(AudioDeviceInfo.TYPE_USB_ACCESSORY)
+            add(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                add(AudioDeviceInfo.TYPE_BLE_HEADSET)
+                add(AudioDeviceInfo.TYPE_BLE_SPEAKER)
+            }
+        }
     }
 }
 

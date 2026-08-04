@@ -38,6 +38,7 @@ import javax.inject.Inject
  * normalize, to the live audio effect). Also measures/clears the image cache. The theme stays with
  * [fm.rizx.player.ui.player.PlayerViewModel] (it drives the whole app's theme), so it isn't duplicated here.
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @HiltViewModel
 class PreferencesViewModel @Inject constructor(
     private val settings: SettingsRepository,
