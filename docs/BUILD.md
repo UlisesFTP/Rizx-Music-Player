@@ -8,12 +8,17 @@ from that directory.
 | Tool | Version |
 |---|---|
 | JDK | 17+ (the project compiles against Java 17) |
-| Android SDK | API 34–36 installed (`compileSdk 36`, `minSdk 34`) |
+| Android SDK | `compileSdk 36` installed; the app **runs** on API 26+ (`minSdk 26`) |
 | Android Studio | Meerkat 2024.3+ (ships AGP 8.9) — optional if you use the CLI |
 | Gradle | via the committed wrapper (`./gradlew`) |
 
-`minSdk 34` means the app targets Android 14+ and can use modern, guard-free APIs (e.g.
-`READ_MEDIA_AUDIO`, scoped storage) without legacy fallbacks.
+The app was written API-first against modern Android; every platform API newer than 26 sits behind a
+`Build.VERSION` check, so devices from Android 8.0 up run the same build. What degrades where (Opus
+downloads, splash, per-app language, legacy storage permissions…) is listed in
+[FEATURES.md § Device compatibility](FEATURES.md#device-compatibility). **Core library desugaring** is
+enabled and load-bearing: third-party jars can call JDK APIs newer than the device's runtime — lint
+cannot see into compiled dependencies — and NewPipeExtractor in particular requires desugaring below
+API 33 (`URLEncoder.encode(String, Charset)`).
 
 ## Local configuration
 
@@ -30,25 +35,62 @@ sdk.dir=/absolute/path/to/Android/Sdk
 ```bash
 cd Proyecto
 ./gradlew assembleDebug          # debug APK  → app/build/outputs/apk/debug/
-./gradlew assembleRelease        # release APK (minified + shrunk)
+./gradlew assembleReleaseTest    # minified smoke build, signed with the debug key
+./gradlew assembleRelease        # real release — requires a configured keystore (fails without one)
 ```
 
-The **debug** build id is `fm.rizx.player.debug` (suffixed) so it can sit alongside a release install.
+Three build types:
+
+- **`debug`** — debuggable, id `fm.rizx.player.debug` (suffixed) so it can sit alongside a release
+  install.
+- **`releaseTest`** — `initWith(release)`: minified + shrunk + non-debuggable, but signed with the
+  standard **debug key**. For smoke-testing the real R8 build on a device. Never distribute it.
+- **`release`** — the distributable build. Packaging **fails on purpose** when no real keystore is
+  configured: a debug-signed APK that reached users could never be updated with the real signature later.
 
 ### Release signing
 
 Release signing reads from an **uncommitted** `Proyecto/keystore.properties`:
 
 ```properties
-storeFile=/absolute/path/to/release.jks
+storeFile=/absolute/path/to/rizx-release.jks
 storePassword=…
 keyAlias=…
 keyPassword=…
 ```
 
-When it's absent (local/CI beta builds), the release build falls back to the standard debug keystore so
-`assembleRelease` still produces an installable APK. `keystore.properties` and all `*.jks`/`*.keystore`
-files are **git-ignored** — signing keys are never committed.
+When the file is absent, `assembleRelease` / `bundleRelease` stop at the packaging task with a message
+pointing here — use `assembleReleaseTest` for keystore-less local builds. `keystore.properties` and all
+`*.jks`/`*.keystore` files are **git-ignored** — signing keys are never committed.
+
+Creating a release keystore (one-time):
+
+```bash
+keytool -genkeypair -v \
+  -keystore rizx-release.jks -storetype PKCS12 \
+  -alias rizx -keyalg RSA -keysize 4096 -validity 10950
+```
+
+(`keytool` ships with the JDK; on Windows it's `"%JAVA_HOME%\bin\keytool"`.) Point
+`keystore.properties` at the result. **Back up the keystore file and both passwords somewhere safe** —
+losing them means never being able to update the published app under the same identity.
+
+> **Signature continuity:** builds distributed before this policy existed were debug-signed. A properly
+> signed release cannot update those installs — Android blocks cross-signature updates by design, so
+> such devices must uninstall once.
+
+## Room schemas
+
+`RizxDatabase` exports one schema JSON per database version into **`app/schemas/`** (committed). The
+policy: every `version` bump ships its `Migration` **and** the newly exported schema JSON in the same
+commit, so migrations can be reviewed — and eventually tested with `MigrationTestHelper` — against the
+real history. The export starts at version 4; versions 1–3 predate it and are reconstructible only from
+the migrations in `RizxDatabase.kt`.
+
+Two artifacts are generated **into the source tree** by builds — worth knowing if you build from a
+mirror/copy of the checkout (CI caches, synced build dirs): `app/schemas/` (any KSP build) and
+`app/src/release/generated/baselineProfiles/` (only when running `generateReleaseBaselineProfile`).
+Carry them back to the real checkout or they're lost on the next sync.
 
 ## Test
 
@@ -59,13 +101,13 @@ cd Proyecto
 ```
 
 Unit tests use JUnit4 · MockK · Turbine · OkHttp MockWebServer and run on the JVM (no emulator needed).
-Instrumented tests, if/when added, run via `./gradlew connectedDebugAndroidTest` (device/emulator
-required).
+Instrumented UI tests (the karaoke-lyrics timing screen) run via `./gradlew connectedDebugAndroidTest`
+(device/emulator required).
 
 ## Run
 
-Open `Proyecto/` in Android Studio and run the **app** configuration on a device or emulator (API 34+), or
-install a built APK:
+Open `Proyecto/` in Android Studio and run the **app** configuration on a device or emulator (API 26+),
+or install a built APK:
 
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -76,8 +118,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 Proyecto/
 ├─ app/
-│  ├─ build.gradle.kts            # module config, dependencies
+│  ├─ build.gradle.kts            # module config, dependencies, build types, signing gate
 │  ├─ proguard-rules.pro
+│  ├─ schemas/                    # exported Room schema JSONs (committed)
 │  └─ src/
 │     ├─ main/java/fm/rizx/player/
 │     │  ├─ core/                 # error, network, cache, DI modules, formatting
@@ -85,20 +128,32 @@ Proyecto/
 │     │  │  ├─ model/  provider/  repository/  usecase/  playback/
 │     │  ├─ data/                 # providers, remote clients, local stores, mappers, repositories
 │     │  │  ├─ provider/  remote/  repository/  local/  download/  plugin/  search/  canvas/
-│     │  ├─ playback/service/     # PlaybackService (MediaSessionService) + stream resolver
+│     │  │  ├─ lossless/  lyrics/
+│     │  ├─ playback/             # PlaybackService (MediaSessionService), stream resolver, effects
+│     │  │  ├─ service/  cache/  canvas/
 │     │  └─ ui/                   # Compose screens, theme, navigation, components
 │     │     ├─ screens/  components/  theme/  navigation/  player/  home/  library/ …
+│     ├─ main/assets/plugins/     # git-ignored on purpose — see below
 │     └─ test/java/fm/rizx/player/ # JVM unit tests
+├─ baselineprofile/               # com.android.test module that generates the startup profile
 ├─ build.gradle.kts · settings.gradle.kts
 ├─ gradle/ · gradlew · gradlew.bat
 └─ gradle.properties
 ```
+
+**About `assets/plugins/`:** the repository deliberately distributes no plugin archives — a plugin's
+whole content is a pointer to somewhere, and this repo stays a generic plugin host rather than a
+distributor of anybody's index. A fresh clone therefore builds an app with **zero bundled plugins** (and
+no plugin section in the UI); everything else works fully. See
+[PROVIDERS.md](PROVIDERS.md#the-plugin-runtime) for the runtime itself.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the layering rules and why the dependency direction matters.
 
 ## Troubleshooting
 
 - **SDK not found** — check `local.properties` `sdk.dir`.
+- **`assembleRelease` fails with "Release build blocked"** — expected without a keystore; that is the
+  signing gate. Configure `keystore.properties` (above) or build `assembleReleaseTest`.
 - **JitPack dependency (NewPipeExtractor) fails to resolve** — the JitPack repository is scoped in
   `settings.gradle.kts` to `com.github.[Tt]eam[Nn]ew[Pp]ipe*`; a network hiccup on first resolve usually
   fixes itself on retry.

@@ -112,9 +112,12 @@ song changes and seeks near-instant.
 - The UI drives playback through **`PlaybackController`** (a domain abstraction), which talks to the
   service via a `MediaController`. `MediaItem.mediaId` is the `QueueItem.id`.
 - Extras handled in the service: gapless/crossfade (volume-envelope fade), loudness normalization
-  (`LoudnessEnhancer`), adaptive stream quality by network conditions, and **resume-after-process-death**
-  (a filesystem session store, holding identities only — no ephemeral URLs — restores the last track at the
-  exact second).
+  (`LoudnessEnhancer`), adaptive stream quality by network conditions, optional **32-bit float PCM
+  output** (Hi-Res mode), the **automatic equalizer** (a per-song curve over the platform `Equalizer`,
+  from a genre baseline refined by the track's own measured spectrum), a **PCM tap**
+  (`TeeAudioProcessor`) that feeds the Now Playing waveform without any `RECORD_AUDIO` permission, and
+  **resume-after-process-death** (a filesystem session store, holding identities only — no ephemeral
+  URLs — restores the last track at the exact second).
 
 ## Queue
 
@@ -128,9 +131,52 @@ song changes and seeks near-instant.
 - **Shuffle** stores `unshuffledIds` (the pre-shuffle order) so toggling shuffle off restores the original
   order exactly, even with duplicate tracks.
 
+## Downloads & the format pipeline
+
+A download saves the resolved stream's bytes into app-private storage and indexes them by
+`Track.source` — never by the ephemeral URL. On top of that sit optional, isolated steps:
+
+```
+fetch (segmented, multi-connection)
+  → MP3 transcode        (MediaCodec decode → pure-Java LAME encode; only for the MP3 format)
+  → Opus repackage       (WebM → Ogg Opus remux, same bitstream, no re-encode; API 29+)
+  → tag write            (cover/artist/album/year embedded in M4A · MP3 · FLAC · Ogg Opus)
+  → MediaStore export    (a copy into the shared Music/Rizx, only at the user's opt-in)
+```
+
+Every step is best-effort by design: a failed conversion, tag write, or phone-copy never turns a good
+download into a failed one — the original bytes are already indexed and playable offline. FLAC comes
+from the community lossless source when its plugin can serve the song; the Ogg Opus comment header is
+written by an in-repo tagger (`OggOpusTagger`) because no bundled library can write that container.
+
+## Canvas (animated covers)
+
+`data/canvas/` resolves a muted video loop for the current song (the song's own music video via
+NewPipe; Apple motion artwork where it exists) behind a policy gate: network type, quality cap, battery
+saver, per-source toggles, and an **anti-static filter** that rejects uploads that are really still
+images. The player renders it on a `TextureView` beneath the artwork; playback audio never depends on
+the canvas stream.
+
+## Lyrics
+
+A ranked provider chain — word-level beats line-level beats prose: LRCLIB, NetEase (`yrc`), KuGou
+(`krc`), Musixmatch (`richsync`), lyrics.ovh. Results are matched to the playing track (title/artist
+plus a ±2 s duration window) and cached at their achieved tier only, so a degraded fallback never
+shadows a better source later. The karaoke view runs on a smooth interpolating clock rather than
+polling.
+
+## Recommendations
+
+`recently_played` in Room is a real listening log: plays, completions, skips, listened time, and
+time-of-day buckets. From it the app derives taste clusters, three daily mixes (70/30
+familiar/discovery), "Similar to …" rows, and radio seeding — all **on-device**; nothing about
+listening behaviour leaves the phone.
+
 ## Persistence
 
-- **Room** — structured local data.
+- **Room** — favorites, playlists (+ items), and the recently-played listening log. `exportSchema` is
+  **on**: each version's schema JSON is committed under `app/schemas/`, and every version bump ships its
+  `Migration` together with the new JSON (see [BUILD.md](BUILD.md#room-schemas)).
 - **DataStore (Preferences)** — settings and small key/value state (enabled providers, playback resolver
   settings, etc.).
 - **kotlinx.serialization** — `Track`/queue/session serialization (`TrackJson`), always stripped of
@@ -140,5 +186,8 @@ song changes and seeks near-instant.
 
 Unit tests live in `app/src/test/` (JVM, no device) using JUnit4 · MockK · Turbine · OkHttp MockWebServer.
 High-value targets: `ProviderRegistry`, `MetadataRepository`, the streaming resolver, `QueueRepository`,
-`FavoritesRepository`, `PlaylistRepository`, artwork selection, and `ProviderRef` identity. Pure mappers
-(e.g. local-media and DTO mappers) are unit-tested without any Android dependency.
+`FavoritesRepository`, `PlaylistRepository`, artwork selection, `ProviderRef` identity, the download
+format pipeline (transcode / remux / tag writing, including a from-scratch Ogg page-level tagger), and
+the lyrics parsers/matchers. Pure mappers (e.g. local-media and DTO mappers) are unit-tested without any
+Android dependency. Version-gated code keeps `Build.VERSION` checks in Android-only classes and
+composables, so the JVM-tested pipeline never branches on SDK level.

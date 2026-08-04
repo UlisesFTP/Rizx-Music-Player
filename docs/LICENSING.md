@@ -39,7 +39,16 @@ etc.), §13 activates and that component must offer its Corresponding Source to 
 - Provider architecture (separate metadata + streaming providers, a registry, two-phase ephemeral stream
   resolution) re-modeled from upstream `packages/model` and `plugin-sdk`.
 - Native, keyless full-length YouTube audio via NewPipeExtractor; a sandboxed QuickJS plugin runtime for
-  real Nuclear plugins (personal-use capability).
+  real Nuclear plugins.
+- A download **format pipeline** that does not exist upstream: Original/Opus/MP3-320/FLAC, on-device MP3
+  encoding, a WebM→Ogg Opus remux with a from-scratch Ogg comment/picture tagger, embedded tags in every
+  format, and optional MediaStore publishing to the shared `Music/` folder.
+- Word/letter-level **karaoke lyrics** over a ranked multi-provider chain (LRCLIB, NetEase, KuGou,
+  Musixmatch, lyrics.ovh).
+- An animated-cover **canvas** resolved from the song's own music video, behind policy gating.
+- An **on-device recommendations engine** (listening log, taste clusters, daily mixes) and a rebuilt
+  streaming-style Home feed; an **automatic per-song equalizer** (genre baseline + measured spectrum).
+- Full app **localization** (en/es/pt/fr) and an Android 8.0+ compatibility layer (version-gated APIs).
 
 ## Third-party components
 
@@ -51,14 +60,18 @@ licenses**. Highlights:
 - **NewPipeExtractor** is **GPLv3** — combinable with AGPL-3.0; the combined work is distributed under
   AGPL-3.0. Downloaded Nuclear plugins are separate *data* (their own licenses), transpiled and run at
   runtime, not linked into the APK.
+- **jaudiotagger** (embedded tag writing) is **LGPL** and **jump3r** (the pure-Java LAME MP3 encoder) is
+  **LGPL-2.1+** — both used as unmodified library jars, compatible with distributing the combined work
+  under AGPL-3.0.
 - Bundled fonts (Space Grotesk, Manrope, Martian Mono, Doto) are licensed under the **SIL Open Font License
   1.1**.
 
 ## Content
 
-Search results and audio are fetched at runtime from third-party services (Deezer, Audius, Apple's iTunes
-Search API, YouTube, SoundCloud, lyrics.ovh) under **their** terms. **No** third-party API keys, code, or
-assets are bundled in the app. See [PROVIDERS.md](PROVIDERS.md).
+Search results, streams, lyrics, covers and artist pages are fetched at runtime from third-party
+services (Deezer, Audius, Apple's iTunes Search API and editorial RSS, YouTube, SoundCloud, LRCLIB,
+NetEase, KuGou, Musixmatch, lyrics.ovh, Wikipedia) under **their** terms. **No** third-party API keys,
+code, or assets are bundled in the app. See [PROVIDERS.md](PROVIDERS.md).
 
 ## Privacy
 

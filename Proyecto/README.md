@@ -8,10 +8,11 @@ in Android Studio, or build from here with the Gradle wrapper.
 ./gradlew testDebugUnitTest     # run unit tests (JVM, no device)
 ```
 
-- **Requirements:** JDK 17+, Android SDK API 34–36. `minSdk 34`, `compileSdk 36`.
-- **Single module:** one `:app` module, Kotlin DSL build.
+- **Requirements:** JDK 17+, Android SDK with `compileSdk 36`. The app runs on API 26+ (`minSdk 26`).
+- **Modules:** the `:app` module plus `:baselineprofile` (startup-profile generator), Kotlin DSL build.
 - **Local config:** create `local.properties` with `sdk.dir=…` (git-ignored). Release signing reads from an
-  uncommitted `keystore.properties`; without it, release builds fall back to the debug key.
+  uncommitted `keystore.properties`; without it `assembleRelease` **fails on purpose** — build
+  `assembleReleaseTest` for a minified, debug-signed smoke APK. Details: [`../docs/BUILD.md`](../docs/BUILD.md).
 
 ## Documentation
 

@@ -50,21 +50,28 @@ crash the app. Repositories degrade gracefully — if one source is down, the ot
 
 | Source | Kind(s) | Role | How (keyless) |
 |---|---|---|---|
-| **Deezer** | Metadata · Dashboard · Playlists | Catalog search (tracks/artists/albums), charts & editorial home feed, playlist tracks | Public Deezer API |
+| **Deezer** | Metadata · Dashboard · Playlists | Catalog search (tracks/artists/albums/playlists), charts & editorial feed, artist radio & similar artists, full paged discographies | Public Deezer API |
 | **Audius** | Streaming | **Full-length** track streaming | Public Audius API (discovery nodes) |
-| **iTunes** | Metadata · Streaming | Search + **30-second previews** | Public iTunes Search API (Apple) |
-| **YouTube** | Streaming · Playlists | Full-length audio extraction, playlist search/import | NewPipeExtractor (no API key) |
-| **SoundCloud** | Streaming | Independent/underground tracks | NewPipeExtractor |
+| **Apple / iTunes** | Metadata · Dashboard | Search & 30-second previews, editorial playlists and Top-100 charts | Public iTunes Search API + public RSS/browse endpoints |
+| **YouTube / YT Music** | Streaming · Playlists · Discovery | Full-length audio extraction, playlist import/search, music-video canvas, YT Music mixes seeding radio & recommendations | NewPipeExtractor (no API key) |
+| **SoundCloud** | Streaming · Dashboard | Independent/underground tracks, editorial feed | NewPipeExtractor |
 | **Spotify** | Playlists (import only) | Playlist import by URL | Public embed data (no private secret) |
-| **lyrics.ovh** | Lyrics | Song lyrics | Public lyrics.ovh API |
+| **LRCLIB** | Lyrics | Line-synced (timed) lyrics | Public LRCLIB API |
+| **NetEase · KuGou** | Lyrics | Word-level karaoke lyrics (`yrc` / `krc`) | Public endpoints |
+| **Musixmatch** | Lyrics | Word-level `richsync` lyrics | Public web token fetched at runtime — nothing ships in the app |
+| **lyrics.ovh** | Lyrics | Prose fallback when nothing timed exists | Public lyrics.ovh API |
+| **Wikipedia** | Metadata | Artist biographies, validated against the live API so the wrong article never shows | Public MediaWiki API |
+| **Community lossless index** | Streaming (lossless) | True-FLAC sources for downloads and Hi-Res playback | Via **plugin** — the repository bundles no index |
 
 Notes:
 
 - **Native, not a plugin:** full YouTube audio is a **native** provider built on
   [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) — it extracts stream URLs directly,
   with no API key and no browser. (NewPipeExtractor is GPLv3, compatible with this app's AGPL-3.0.)
-- **Spotify is import-only:** keyless Spotify *search* isn't feasible, so Spotify appears as a playlist you
-  can **import by URL**, read from public embed data — never a private/TOTP secret.
+- **Keyless means public, not merely reachable.** A public API or a token published in a page is fine.
+  Defeating an access control is not: Spotify's search endpoint is gated by an obfuscated anti-bot
+  token, so Spotify **search is deliberately absent** — Spotify appears only as a playlist you can
+  **import by URL**, read from public embed data.
 - **Fakes precede reals:** the codebase keeps `Fake*` metadata/streaming providers (`FakeMetadataProvider`,
   `FakeStreamingProvider`, …) used to build and test each vertical slice before wiring the real source.
 
@@ -73,11 +80,19 @@ Notes:
 Beyond the native providers, Rizx includes a **sandboxed QuickJS runtime** (`data/plugin/`) that can
 download and run real Nuclear JavaScript plugins:
 
-- The sandbox exposes only **`fetch`** — no DOM, no filesystem, no Android APIs.
-- Per-call timeouts and **per-plugin crash isolation** keep a misbehaving plugin from affecting the app.
-- Desktop-only Nuclear plugins that genuinely can't run on Android are hidden rather than shown broken.
-
-This is a personal-use capability layered on top of the native providers, not a replacement for them.
+- The sandbox exposes **`fetch`** for I/O plus a pure-JS `DOMParser` for scraper-style plugins — no DOM,
+  no filesystem, no Android APIs.
+- Every provider call goes through **one invoker** carrying a per-call timeout and a per-plugin
+  quarantine counter, so a misbehaving plugin degrades alone and can't take the app down.
+- All six `ProviderKind`s bridge into the registry, so a plugin can serve metadata, streams, lyrics,
+  dashboards, playlists or discovery exactly like a native source.
+- Plugins that expect YouTube tooling get it as a bridge backed by the native NewPipe provider — there
+  is no external binary.
+- **13 of the 14 plugins** in Nuclear's registry run as-is; the desktop-only ones are hidden rather than
+  shown broken. A native Plugins screen shows version, health, and an enable/disable toggle per plugin.
+- The **community lossless (FLAC) source is itself a plugin**, and the repository deliberately bundles
+  **zero** plugin archives: a fresh clone builds a generic plugin host (see
+  [BUILD.md](BUILD.md#project-structure)).
 
 ## Adding a provider (sketch)
 
