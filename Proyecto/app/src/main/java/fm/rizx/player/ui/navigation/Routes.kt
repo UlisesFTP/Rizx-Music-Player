@@ -7,7 +7,15 @@ import fm.rizx.player.domain.model.ProviderRef
 /** All navigation destinations in the Rizx shell. */
 object Routes {
     const val HOME = "home"
+
+    /**
+     * Search, optionally arriving with a query already typed (`?q=…`) — same shape as [LIBRARY].
+     * The bare `search` keeps working, so the bottom nav is unaffected.
+     */
     const val SEARCH = "search"
+    const val SEARCH_ROUTE = "search?q={q}"
+    const val SEARCH_QUERY_ARG = "q"
+    fun search(query: String): String = "$SEARCH?$SEARCH_QUERY_ARG=${Uri.encode(query)}"
 
     /**
      * Library, optionally deep-linked to one of its tabs (`?tab=Liked`). The tab is a query arg so the
@@ -33,6 +41,9 @@ object Routes {
     fun editorialPlaylist(ref: PlaylistRef): String =
         "editorial_playlist/${Uri.encode(ref.source.provider)}/${Uri.encode(ref.source.id)}?name=${Uri.encode(ref.name)}"
 
+    /** Identify what is playing in the room. Reached from the Search header; keeps its own history. */
+    const val RECOGNITION = "recognition"
+
     const val NOW_PLAYING = "now_playing"
     const val QUEUE = "queue"
     const val SOURCES = "sources"
@@ -53,14 +64,14 @@ object Routes {
     const val LOCAL_ARTIST_ROUTE = "local_artist/{artistId}"
     fun localArtist(artistId: String): String = "local_artist/${Uri.encode(artistId)}"
 
-    /** Screens that show the bottom navigation bar. NavHost reports the route *pattern*, hence LIBRARY_ROUTE. */
-    val withBottomNav = setOf(HOME, SEARCH, LIBRARY_ROUTE, SOURCES, SETTINGS)
+    /** Screens that show the bottom navigation bar. NavHost reports the route *pattern*, hence the `_ROUTE`s. */
+    val withBottomNav = setOf(HOME, SEARCH_ROUTE, LIBRARY_ROUTE, SOURCES, SETTINGS)
 
     /** Maps a route to its highlighted bottom-nav tab. */
     fun activeTab(route: String?): String = when (route) {
         LIBRARY_ROUTE -> LIBRARY
         SOURCES, SETTINGS -> SETTINGS
-        SEARCH -> SEARCH
+        SEARCH_ROUTE -> SEARCH
         else -> HOME
     }
 }

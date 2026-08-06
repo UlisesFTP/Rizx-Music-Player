@@ -62,7 +62,19 @@ Major modifications relative to upstream Nuclear
 - Provider architecture (metadata + streaming providers, registry, two-phase
   ephemeral stream resolution) re-modeled from upstream packages/model and
   plugin-sdk; first real provider integration uses the public iTunes Search API.
-- No arbitrary JS/TS plugin runtime, plugin store, or WebView-wrapper in the MVP.
+- Sandboxed QuickJS plugin runtime that downloads and runs real Nuclear plugins
+  (network-only sandbox: no filesystem, no Android APIs, no WebView), with
+  per-plugin timeouts and crash quarantine. This supersedes the earlier decision
+  to ship no plugin runtime at all.
+- Ambient music recognition ("Audio ID"), which upstream Nuclear does not have:
+  on-device acoustic fingerprinting of microphone audio, a keyless lookup against
+  an unofficial Shazam-compatible endpoint, and a multi-provider resolver that
+  locates the identified recording in this app's own catalogue by ISRC or Apple
+  id before falling back to a scored search. The fingerprint algorithm is a
+  Kotlin reimplementation of the format documented by SongRec (GPL-3.0,
+  https://github.com/marin-m/SongRec); no SongRec code is bundled or linked, and
+  no Shazam/ShazamKit SDK is used. Captured audio is processed in memory and
+  discarded — never stored, never transmitted.
 
 ------------------------------------------------------------------------------
 Bundled third-party components

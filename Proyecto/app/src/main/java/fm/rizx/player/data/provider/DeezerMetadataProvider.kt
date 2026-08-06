@@ -73,6 +73,21 @@ class DeezerMetadataProvider(
         }
     }
 
+    /**
+     * The exact row behind a `deezer:<id>` track reference.
+     *
+     * Being the owner of that namespace, this answers without ranking or guessing — which is the whole
+     * point of the "owner-first" path: a search for the same title can return a compilation reissue or
+     * somebody else's cover, and this cannot.
+     *
+     * Album, artist and playlist references carry a `album:`/`artist:`/`playlist:` prefix; only a bare
+     * id names a track, so anything else is somebody else's reference and gets `null`.
+     */
+    override suspend fun trackDetail(source: ProviderRef): Track? {
+        if (!owns(source) || source.id.contains(':')) return null
+        return guarded { api.track(source.id).toTrackOrNull() }
+    }
+
     override suspend fun albumDetail(source: ProviderRef): Album? = guarded {
         api.album(DeezerIds.rawId(source)).toAlbum()
     }

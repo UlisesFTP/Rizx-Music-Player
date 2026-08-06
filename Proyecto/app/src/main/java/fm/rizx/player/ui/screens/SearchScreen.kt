@@ -38,11 +38,13 @@ import androidx.compose.ui.zIndex
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -75,6 +77,7 @@ import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.DotMatrixSpinner
 import fm.rizx.player.ui.components.LocalLosslessCodecs
 import fm.rizx.player.ui.components.LosslessTag
+import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
@@ -98,10 +101,17 @@ fun SearchScreen(
     onOpenAlbum: (fm.rizx.player.domain.model.ProviderRef) -> Unit,
     onOpenArtist: (fm.rizx.player.domain.model.ProviderRef) -> Unit,
     onOpenPlaylist: (PlaylistRef) -> Unit,
+    onOpenRecognition: () -> Unit,
     queueCount: Int,
+    initialQuery: String = "",
     vm: SearchViewModel = hiltViewModel(),
 ) {
     val c = RizxTheme.colors
+
+    // Arriving from a recognition the resolver could not place: the song is already typed in.
+    LaunchedEffect(initialQuery) {
+        if (initialQuery.isNotBlank()) vm.searchFor(initialQuery)
+    }
     val query by vm.query.collectAsStateWithLifecycle()
     val uiState by vm.uiState.collectAsStateWithLifecycle()
     val favoriteSources by vm.favoriteSources.collectAsStateWithLifecycle()
@@ -120,6 +130,14 @@ fun SearchScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(stringResource(R.string.action_search), style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
+            // Identifying what is playing in the room is a kind of searching, and this is the one place
+            // in the app where people already come to answer "what is this song".
+            RizxIconButton(
+                Icons.Filled.Mic,
+                contentDescription = stringResource(R.string.recognition_open),
+                onClick = onOpenRecognition,
+                tint = c.text,
+            )
             if (queueCount > 0) QueueChip(count = queueCount, onClick = onOpenQueue)
         }
 

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recognition_title">Audio ID</string>
+    <string name="recognition_open">Identificar uma música</string>
+    <string name="recognition_cta">OUVIR</string>
+    <string name="recognition_idle_body">Aponte o telemóvel para a música. O Rizx ouve alguns segundos e descobre o que está a tocar.</string>
+    <string name="recognition_playback_paused">A reprodução pausa enquanto ouve.</string>
+
+    <string name="recognition_listening">A OUVIR</string>
+    <string name="recognition_processing">A IDENTIFICAR</string>
+    <string name="recognition_signal">SINAL</string>
+    <string name="recognition_format">FORMATO</string>
+    <string name="recognition_format_value">PCM16 / MONO / 16 kHz</string>
+    <string name="recognition_cancel">CANCELAR</string>
+
+    <string name="recognition_match">CORRESPONDÊNCIA</string>
+    <string name="recognition_isrc">ISRC</string>
+    <string name="recognition_label">EDITORA</string>
+    <string name="recognition_released">LANÇADO</string>
+    <string name="recognition_resolved">NO RIZX</string>
+    <string name="recognition_resolved_none">não encontrada</string>
+    <string name="recognition_play">TOCAR NO RIZX</string>
+    <string name="recognition_search">PROCURAR NO RIZX</string>
+    <string name="recognition_share">PARTILHAR</string>
+    <string name="recognition_try_again">TENTAR DE NOVO</string>
+    <string name="recognition_unresolved_body">Reconhecida, mas sem correspondência fiável no catálogo. Procure-a em vez de tocar a versão errada.</string>
+
+    <string name="recognition_no_match">SEM CORRESPONDÊNCIA</string>
+    <string name="recognition_no_match_body">Nada reconhecido. Aproxime-se da fonte, longe de conversas, e tente de novo.</string>
+
+    <string name="recognition_history">Reconhecidas antes</string>
+    <string name="recognition_history_empty">As músicas que identificar ficam aqui.</string>
+    <string name="recognition_history_clear">Limpar histórico</string>
+    <string name="recognition_history_delete">Remover do histórico</string>
+
+    <string name="recognition_permission_title">Falta o microfone</string>
+    <string name="recognition_permission_body">O Rizx ouve alguns segundos para descobrir o que está a tocar. O áudio é convertido numa impressão acústica no seu telemóvel e depois descartado — nenhuma gravação é guardada ou enviada.</string>
+    <string name="recognition_permission_body_blocked">O acesso ao microfone está desligado. Ligue-o nas Definições para identificar músicas.</string>
+    <string name="recognition_permission_cta">Permitir microfone</string>
+    <string name="recognition_permission_cta_blocked">Abrir definições</string>
+    <string name="recognition_no_microphone">Este dispositivo não tem uma entrada de áudio compatível.</string>
+
+    <string name="recognition_error_network">Não foi possível contactar o serviço de reconhecimento.</string>
+    <string name="recognition_error_rate_limited">Demasiadas tentativas. Aguarde um momento e tente de novo.</string>
+    <string name="recognition_error_unavailable">O serviço de reconhecimento está indisponível de momento.</string>
+    <string name="recognition_error_invalid">O serviço de reconhecimento respondeu de uma forma que o Rizx não esperava.</string>
+    <string name="recognition_error_microphone">Não foi possível abrir o microfone.</string>
+    <string name="recognition_error_recording">A gravação falhou.</string>
+    <string name="recognition_error_permission">É necessária permissão de microfone.</string>
+    <string name="recognition_error_unknown">Algo correu mal.</string>
+</resources>

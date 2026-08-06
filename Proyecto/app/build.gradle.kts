@@ -19,6 +19,13 @@ val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
 }
 
+/**
+ * A value from `keystore.properties`, trimmed. Trailing whitespace is invisible in an editor but is
+ * kept verbatim by `Properties`, and a padded path or password fails with a message that blames the
+ * keystore rather than the space.
+ */
+fun keystoreProp(name: String): String? = keystoreProps.getProperty(name)?.trim()?.takeIf { it.isNotEmpty() }
+
 android {
     namespace = "fm.rizx.player"
 
@@ -41,12 +48,15 @@ android {
     }
 
     signingConfigs {
-        if (keystoreProps.getProperty("storeFile") != null) {
+        if (keystoreProp("storeFile") != null) {
             create("release") {
-                storeFile = file(keystoreProps.getProperty("storeFile"))
-                storePassword = keystoreProps.getProperty("storePassword")
-                keyAlias = keystoreProps.getProperty("keyAlias")
-                keyPassword = keystoreProps.getProperty("keyPassword")
+                // rootProject.file, not file: a relative `storeFile` reads naturally as "next to
+                // keystore.properties" (the Proyecto/ folder), whereas this script's own `file()`
+                // would resolve it inside app/. Absolute paths are unaffected.
+                storeFile = rootProject.file(keystoreProp("storeFile")!!)
+                storePassword = keystoreProp("storePassword")
+                keyAlias = keystoreProp("keyAlias")
+                keyPassword = keystoreProp("keyPassword")
             }
         }
     }
@@ -114,7 +124,7 @@ android {
 // not at configuration — keeps sync, lint and compilation working without a keystore, and (unlike a
 // `taskGraph.whenReady` hook) stays correct if the configuration cache is ever enabled. Exact
 // task-name match on purpose: `packageReleaseTest` must stay exempt.
-val hasReleaseKeystore = keystoreProps.getProperty("storeFile") != null
+val hasReleaseKeystore = keystoreProp("storeFile") != null
 val keystoreHint = keystorePropsFile.absolutePath
 tasks.configureEach {
     if (name == "packageRelease" || name == "packageReleaseBundle") {
@@ -134,6 +144,10 @@ tasks.configureEach {
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
+
+// `MigrationTestHelper` reads the exported schemas off the *device*, so they have to travel with the
+// instrumented APK. Nothing here reaches the app itself.
+android.sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
@@ -229,6 +243,12 @@ dependencies {
     // debugImplementation, above) is what supplies the empty ComponentActivity they compose into.
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+
+    // Migration testing. `MigrationTestHelper` opens a database at an old version from the exported
+    // schema, applies the real `Migration`, and validates the result against the new schema — which is
+    // only possible now that schemas are exported, so 4 → 5 is the first migration this project can
+    // actually prove. Instrumented-only, so it never enters the APK or the JVM suite.
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
 
     // Unit tests
     testImplementation("junit:junit:4.13.2")

@@ -65,6 +65,18 @@ licenses; the combined work is distributed under AGPL-3.0. Downloaded Nuclear pl
 | QuickJS (bundled native, via quickjs-kt) | — | MIT | JS engine core |
 | Sucrase (vendored `assets/plugin-runtime/sucrase.min.js`) | — | MIT | On-device TypeScript→JS transpile |
 
+## Ported algorithms (no dependency added)
+
+Code written from a published description rather than linked as a library. Listed because attribution
+is owed even where no jar ships.
+
+| Source | License | What was used |
+|---|---|---|
+| [SongRec](https://github.com/marin-m/SongRec) | GPL-3.0 | The Shazam-compatible acoustic fingerprint format used by `ShazamSignatureGenerator`: FFT/window parameters, peak spreading and recognition, band split, and the binary framing with its CRC32 header. Reimplemented in Kotlin; no SongRec code is linked or bundled. GPL-3.0 is compatible with this app's AGPL-3.0. |
+
+No official Shazam SDK, ShazamKit or Apple library is used, bundled or linked, and the app is not
+affiliated with or endorsed by Apple.
+
 ## Bundled fonts
 
 Variable TrueType fonts under `app/src/main/res/font/`, all licensed **SIL Open Font License 1.1**.

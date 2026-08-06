@@ -23,6 +23,20 @@ interface DeezerApi {
     @GET("search/playlist")
     suspend fun searchPlaylists(@Query("q") query: String, @Query("limit") limit: Int): DeezerPlaylistsWrapper
 
+    /** One track by its Deezer id — the "owner-first" lookup, exact and unranked. */
+    @GET("track/{id}")
+    suspend fun track(@Path("id") id: String): DeezerTrackDto
+
+    /**
+     * One track by its **ISRC** — the recording's own identifier, so this is an identity lookup rather
+     * than a search: no ranking, no near-misses, no same-titled song by somebody else.
+     *
+     * Deezer answers an unknown ISRC with a `200` carrying an `error` object, which the lenient parser
+     * turns into an all-null DTO and the mapper into `null`. That is the intended path, not a bug.
+     */
+    @GET("track/isrc:{isrc}")
+    suspend fun trackByIsrc(@Path("isrc") isrc: String): DeezerTrackDto
+
     @GET("album/{id}")
     suspend fun album(@Path("id") id: String): DeezerAlbumDto
 

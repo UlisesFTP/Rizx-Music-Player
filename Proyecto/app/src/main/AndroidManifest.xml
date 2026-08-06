@@ -36,6 +36,19 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <!--
+      Music recognition. Requested only when the user starts a recognition — never at launch — and the
+      captured audio is fingerprinted in memory and discarded: nothing is written to storage and no
+      recording is ever sent anywhere. There is no foreground service and no always-on listening; the
+      microphone is open only while the recognition screen is in front of the user.
+      `required="false"` keeps the app installable on the (rare) device with no microphone at all,
+      where the screen says so instead of failing.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
+
     <application
         android:name=".RizxApplication"
         android:allowBackup="true"

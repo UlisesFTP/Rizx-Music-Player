@@ -15,8 +15,10 @@ import fm.rizx.player.data.artwork.TrackArtworkEnricher
 import fm.rizx.player.data.local.db.MIGRATION_1_2
 import fm.rizx.player.data.local.db.MIGRATION_2_3
 import fm.rizx.player.data.local.db.MIGRATION_3_4
+import fm.rizx.player.data.local.db.MIGRATION_4_5
 import fm.rizx.player.data.local.db.PlaylistDao
 import fm.rizx.player.data.local.db.RecentlyPlayedDao
+import fm.rizx.player.data.local.db.RecognitionHistoryDao
 import fm.rizx.player.data.local.db.RizxDatabase
 import fm.rizx.player.data.local.settings.EnabledProviderStoreImpl
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
@@ -56,8 +58,9 @@ object PersistenceModule {
     fun provideDatabase(@ApplicationContext context: Context): RizxDatabase =
         Room.databaseBuilder(context, RizxDatabase::class.java, "rizx.db")
             // v2 adds recently_played; v3 adds playlists.artworkUrl; v4 turns the history into a
-            // listening log (play/skip counts, time of day). All three preserve existing data.
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            // listening log (play/skip counts, time of day); v5 adds recognition_history. All of them
+            // preserve existing data.
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
 
     @Provides
@@ -68,6 +71,9 @@ object PersistenceModule {
 
     @Provides
     fun provideRecentlyPlayedDao(db: RizxDatabase): RecentlyPlayedDao = db.recentlyPlayedDao()
+
+    @Provides
+    fun provideRecognitionHistoryDao(db: RizxDatabase): RecognitionHistoryDao = db.recognitionHistoryDao()
 
     @Provides
     @Singleton

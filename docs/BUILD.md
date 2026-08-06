@@ -53,11 +53,14 @@ Three build types:
 Release signing reads from an **uncommitted** `Proyecto/keystore.properties`:
 
 ```properties
-storeFile=/absolute/path/to/rizx-release.jks
+storeFile=rizx-release.jks
 storePassword=…
 keyAlias=…
 keyPassword=…
 ```
+
+A relative `storeFile` is resolved from the `Proyecto/` folder — i.e. next to `keystore.properties`
+itself; an absolute path works too.
 
 When the file is absent, `assembleRelease` / `bundleRelease` stop at the packaging task with a message
 pointing here — use `assembleReleaseTest` for keystore-less local builds. `keystore.properties` and all
@@ -82,10 +85,10 @@ losing them means never being able to update the published app under the same id
 ## Room schemas
 
 `RizxDatabase` exports one schema JSON per database version into **`app/schemas/`** (committed). The
-policy: every `version` bump ships its `Migration` **and** the newly exported schema JSON in the same
-commit, so migrations can be reviewed — and eventually tested with `MigrationTestHelper` — against the
-real history. The export starts at version 4; versions 1–3 predate it and are reconstructible only from
-the migrations in `RizxDatabase.kt`.
+policy: every `version` bump ships its `Migration`, the newly exported schema JSON, **and** a
+`MigrationTestHelper` case in `RizxMigrationTest` — in the same commit, so migrations are reviewable and
+provable against the real history. The export starts at version 4; versions 1–3 predate it and are
+reconstructible only from the migrations in `RizxDatabase.kt`, so 4 → 5 is the first testable one.
 
 Two artifacts are generated **into the source tree** by builds — worth knowing if you build from a
 mirror/copy of the checkout (CI caches, synced build dirs): `app/schemas/` (any KSP build) and
@@ -101,8 +104,11 @@ cd Proyecto
 ```
 
 Unit tests use JUnit4 · MockK · Turbine · OkHttp MockWebServer and run on the JVM (no emulator needed).
-Instrumented UI tests (the karaoke-lyrics timing screen) run via `./gradlew connectedDebugAndroidTest`
-(device/emulator required).
+Instrumented tests run via `./gradlew connectedDebugAndroidTest` (device/emulator required): the
+karaoke-lyrics timing screen, and the **Room migration tests** (`RizxMigrationTest`), which open a
+database at the previous version from the exported schema, apply the real `Migration`, and check that
+nothing was lost. Those read the schemas off the device, which is why `app/schemas/` is added to the
+`androidTest` assets in `app/build.gradle.kts`.
 
 ## Run
 

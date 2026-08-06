@@ -49,6 +49,11 @@ etc.), §13 activates and that component must offer its Corresponding Source to 
 - An **on-device recommendations engine** (listening log, taste clusters, daily mixes) and a rebuilt
   streaming-style Home feed; an **automatic per-song equalizer** (genre baseline + measured spectrum).
 - Full app **localization** (en/es/pt/fr) and an Android 8.0+ compatibility layer (version-gated APIs).
+- Ambient **music recognition** ("Audio ID"), absent upstream: on-device acoustic fingerprinting of
+  microphone audio (a Kotlin reimplementation of the format documented by
+  [SongRec](https://github.com/marin-m/SongRec), GPL-3.0 — no SongRec code bundled, no Shazam SDK), a
+  keyless lookup, and a resolver that locates the identified recording in this app's own catalogue by
+  ISRC or Apple id before any text search. Captured audio is processed in memory and discarded.
 
 ## Third-party components
 

@@ -62,6 +62,16 @@ crash the app. Repositories degrade gracefully — if one source is down, the ot
 | **lyrics.ovh** | Lyrics | Prose fallback when nothing timed exists | Public lyrics.ovh API |
 | **Wikipedia** | Metadata | Artist biographies, validated against the live API so the wrong article never shows | Public MediaWiki API |
 | **Community lossless index** | Streaming (lossless) | True-FLAC sources for downloads and Hi-Res playback | Via **plugin** — the repository bundles no index |
+| **Shazam-compatible recognition** | *(not a registry provider)* | Identifies ambient audio from a fingerprint computed on the device | Unofficial keyless endpoint — no key, no account, and the app identifies itself honestly rather than imitating a device |
+
+**Recognition is deliberately outside the registry.** `ProviderRegistry` models interchangeable
+catalogues — one active, the rest as fallbacks — and its `ProviderKind` enum is mirrored by the plugin
+bridge. A single fingerprinting service is neither of those, so it sits behind its own injected
+`RecognitionProvider` contract instead (see
+[ARCHITECTURE.md § Music recognition](ARCHITECTURE.md#music-recognition)). It remains just as
+replaceable, without dragging the plugin subsystem into a feature about microphones. The endpoint is
+undocumented and unsupported: when it changes, recognition degrades to an ordinary error and nothing
+else is affected.
 
 Notes:
 

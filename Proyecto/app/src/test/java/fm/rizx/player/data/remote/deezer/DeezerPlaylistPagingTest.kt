@@ -85,6 +85,8 @@ class DeezerPlaylistPagingTest {
         override suspend fun searchArtists(query: String, limit: Int) = throw UnsupportedOperationException()
         override suspend fun searchAlbums(query: String, limit: Int) = throw UnsupportedOperationException()
         override suspend fun searchPlaylists(query: String, limit: Int) = throw UnsupportedOperationException()
+        override suspend fun track(id: String) = throw UnsupportedOperationException()
+        override suspend fun trackByIsrc(isrc: String) = throw UnsupportedOperationException()
         override suspend fun album(id: String) = throw UnsupportedOperationException()
         override suspend fun artist(id: String) = throw UnsupportedOperationException()
         override suspend fun artistTop(id: String, limit: Int) = throw UnsupportedOperationException()

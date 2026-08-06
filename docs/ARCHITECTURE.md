@@ -172,9 +172,43 @@ time-of-day buckets. From it the app derives taste clusters, three daily mixes (
 familiar/discovery), "Similar to …" rows, and radio seeding — all **on-device**; nothing about
 listening behaviour leaves the phone.
 
+## Music recognition
+
+`microphone → PCM → fingerprint → service → RecognitionMatch → resolver → Track → normal playback`
+
+Four seams, all behind `domain/recognition` contracts (`MicrophoneRecorder`, `RecognitionProvider`,
+`RecognitionTrackResolver`, `RecognitionRepository`) so the backend is replaceable without the UI,
+Room or the use case noticing. The recognition backend is deliberately **not** a `ProviderRegistry`
+entry: that registry models interchangeable catalogues with one active and the rest as fallbacks, which
+is not what a single fingerprinting service is, and its `ProviderKind` enum is mirrored by the plugin
+bridge.
+
+- **Capture** — `AndroidMicrophoneRecorder` asks for 16 kHz mono first, which is what the fingerprint
+  wants and what every device supports for voice capture, so the audio HAL does the resampling and
+  `Pcm16Resampler` (windowed-sinc, band-limited) is only needed on devices that refuse. Nothing is
+  written to storage; cancelling releases the microphone immediately.
+- **Fingerprint** — `ShazamSignatureGenerator` is a port of the algorithm documented by
+  [SongRec](https://github.com/marin-m/SongRec): 2048-point FFT every 128 samples, Hann window, peak
+  spreading across time and frequency, four bands, CRC32-framed binary. It has **no Android imports** —
+  `java.util.Base64` rather than `android.util.Base64` — which is what lets the whole wire format be
+  covered by JVM unit tests.
+- **Request** — `ShazamRecognitionClient` derives from the shared `OkHttpClient` (same connection pool)
+  minus the catalogue caches, and holds no policy; `ShazamRecognitionProvider` holds the policy: one
+  request at a time, a floor between calls, bounded retries for transient failures only, and a
+  five-minute memo keyed by the **SHA-256** of the fingerprint.
+- **Resolution** — `DefaultRecognitionTrackResolver` tries ISRC (Deezer identity lookup), then Apple's
+  `adamid` (iTunes lookup, verified), then a scored search via `RecognitionMatcher` — which reuses
+  `RecordingIdentity` and `ArtistNameMatching`, the same primitives the artwork enricher and the lossless
+  matcher use. Below threshold it returns `null` rather than a guess.
+- **Session** — `RecognitionRepositoryImpl` is a singleton with its own supervised scope, so a rotation
+  or a trip to the permission settings rejoins a capture in progress. Each session carries a generation
+  number and may only publish state while it is still the current one, which is what stops a late answer
+  from an abandoned attempt overwriting a newer one.
+
 ## Persistence
 
-- **Room** — favorites, playlists (+ items), and the recently-played listening log. `exportSchema` is
+- **Room** — favorites, playlists (+ items), the recently-played listening log, and the recognition
+  history (v5; audio and fingerprints are never stored). `exportSchema` is
   **on**: each version's schema JSON is committed under `app/schemas/`, and every version bump ships its
   `Migration` together with the new JSON (see [BUILD.md](BUILD.md#room-schemas)).
 - **DataStore (Preferences)** — settings and small key/value state (enabled providers, playback resolver
@@ -185,9 +219,18 @@ listening behaviour leaves the phone.
 ## Testing
 
 Unit tests live in `app/src/test/` (JVM, no device) using JUnit4 · MockK · Turbine · OkHttp MockWebServer.
+Recognition is covered end to end there — fingerprint wire format, HTTP client against every status code
+the service can return, the resolver ladder, and the session state machine — which is possible only
+because the fingerprint and resampler carry no Android imports.
 High-value targets: `ProviderRegistry`, `MetadataRepository`, the streaming resolver, `QueueRepository`,
 `FavoritesRepository`, `PlaylistRepository`, artwork selection, `ProviderRef` identity, the download
 format pipeline (transcode / remux / tag writing, including a from-scratch Ogg page-level tagger), and
 the lyrics parsers/matchers. Pure mappers (e.g. local-media and DTO mappers) are unit-tested without any
 Android dependency. Version-gated code keeps `Build.VERSION` checks in Android-only classes and
 composables, so the JVM-tested pipeline never branches on SDK level.
+
+Instrumented tests (`app/src/androidTest/`, device required) cover what the JVM cannot: the karaoke
+lyrics timing screen, and **Room migrations** — `RizxMigrationTest` opens a database at the previous
+version from its exported schema, runs the real `Migration`, and asserts that favorites, playlists and
+the listening log survive it. A migration bug is unrecoverable by the time a user notices, so from v5
+onward every version bump ships its migration, its schema JSON and its test together.

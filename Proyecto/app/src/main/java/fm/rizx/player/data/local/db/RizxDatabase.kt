@@ -13,14 +13,21 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * history starts at 4). Every version bump must ship a `Migration` and its exported schema together.
  */
 @Database(
-    entities = [FavoriteEntity::class, PlaylistEntity::class, PlaylistItemEntity::class, RecentlyPlayedEntity::class],
-    version = 4,
+    entities = [
+        FavoriteEntity::class,
+        PlaylistEntity::class,
+        PlaylistItemEntity::class,
+        RecentlyPlayedEntity::class,
+        RecognitionHistoryEntity::class,
+    ],
+    version = 5,
     exportSchema = true,
 )
 abstract class RizxDatabase : RoomDatabase() {
     abstract fun favoriteDao(): FavoriteDao
     abstract fun playlistDao(): PlaylistDao
     abstract fun recentlyPlayedDao(): RecentlyPlayedDao
+    abstract fun recognitionHistoryDao(): RecognitionHistoryDao
 }
 
 /** v1 → v2: adds the `recently_played` table (Phase 15). Preserves favorites/playlists. */
@@ -67,5 +74,38 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `partAfternoon` INTEGER NOT NULL DEFAULT 0")
         db.execSQL("ALTER TABLE `recently_played` ADD COLUMN `partEvening` INTEGER NOT NULL DEFAULT 0")
         db.execSQL("UPDATE `recently_played` SET `firstPlayedAtIso` = `playedAtIso`")
+    }
+}
+
+/**
+ * v4 → v5: adds `recognition_history` for songs identified from the microphone.
+ *
+ * Purely additive — a new table and its indices, nothing touched — so favorites, playlists and the
+ * listening log come through byte for byte. That is asserted rather than assumed: `RizxMigrationTest`
+ * writes rows into a v4 database, migrates, and reads them back.
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `recognition_history` (" +
+                "`id` TEXT NOT NULL, `provider` TEXT NOT NULL, `providerTrackId` TEXT NOT NULL, " +
+                "`title` TEXT NOT NULL, `artist` TEXT NOT NULL, `album` TEXT, `isrc` TEXT, " +
+                "`artworkUrl` TEXT, `genre` TEXT, `releaseDate` TEXT, `label` TEXT, " +
+                "`externalUrl` TEXT, `appleTrackId` TEXT, `resolvedProvider` TEXT, " +
+                "`resolvedSourceId` TEXT, `resolvedTrackJson` TEXT, `recognizedAtIso` TEXT NOT NULL, " +
+                "PRIMARY KEY(`id`))",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_recognition_history_recognizedAtIso` " +
+                "ON `recognition_history` (`recognizedAtIso`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_recognition_history_provider_providerTrackId` " +
+                "ON `recognition_history` (`provider`, `providerTrackId`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_recognition_history_resolvedProvider_resolvedSourceId` " +
+                "ON `recognition_history` (`resolvedProvider`, `resolvedSourceId`)",
+        )
     }
 }

@@ -53,6 +53,48 @@ Tabbed search across sources:
 - **History & suggestion pills** — recent searches and artists you actually played come back as one-tap
   pills, computed entirely on-device (zero network, only deliberate searches are recorded).
 
+## Music recognition (Audio ID)
+
+Identify a song playing near you. Reached from the microphone button in the Search header — one entry
+point, no extra navigation.
+
+**What happens, in order.** The microphone is requested only when you start a recognition, never at
+launch. Rizx's own playback pauses first (a phone next to the speaker it is driving would otherwise
+recognise Rizx). About ten seconds of mono 16-bit audio is captured — at 16 kHz directly where the
+device allows it, otherwise resampled through a band-limited filter — and turned into a **Shazam-
+compatible acoustic fingerprint on the device**. Only that fingerprint, the sample duration, the device
+timezone and a neutral all-zero location are sent. **The audio itself never leaves memory** and is never
+written to storage.
+
+**Finding it in Rizx.** A match is not simply searched for by name — that is how a recognition turns
+into a lyric video or a karaoke backing track. Three rungs, exact first:
+
+1. **ISRC** — the recording's own identifier, resolved against Deezer's identity endpoint.
+2. **Apple `adamid`** — the other exact identifier the service publishes, resolved through iTunes and
+   then verified against what was heard.
+3. **Scored search** — title and lead artist, with candidates scored on title, artist billing, album and
+   ISRC. Version words (`live`, `remix`, `karaoke`, `sped up`…) must match on both sides, so a live take
+   never answers for a studio recording.
+
+Below the confidence threshold nothing is played: the match is shown with a **Search in Rizx** action
+that opens Search with the song already typed in. Everything the service's links point at other than
+those two identifiers — its Spotify, YouTube Music and Deezer links — are *search* deeplinks built from
+the title, so Rizx does not pretend they are identifiers.
+
+**While you are elsewhere, nothing listens.** The microphone closes the moment you cancel, navigate
+away, or send the app to the background — and a screen rotation deliberately does *not* count, so
+turning the phone mid-capture does not throw the recording away.
+
+**History.** Each recognition is kept locally (Room, capped at 200 and prunable) as an *occasion*: the
+same song identified twice is two entries. Stored are the title, artist, album, ISRC, cover URL and the
+resolved track — **never** audio, never the fingerprint, never the service's response body. Tapping an
+entry plays it, or searches for it when it was never resolved.
+
+> The recognition backend is an **unofficial, undocumented** endpoint. It takes no key and no account,
+> and Rizx identifies itself honestly to it rather than imitating another device. It can change or stop
+> answering at any time; when it does, recognition reports an ordinary error and the rest of the app is
+> unaffected.
+
 ## Home
 
 A streaming-grade feed, rendered progressively from a disk cache so a warm start paints instantly:
@@ -169,6 +211,7 @@ newer-API nicety degrades gracefully behind a version check:
 
 | Capability | Needs | On older devices |
 |---|---|---|
+| Music recognition | a microphone | The Audio ID screen says the device has no compatible input |
 | Opus download format | Android 10 (API 29) | Option hidden; downloads keep their original container |
 | Save-to-phone without a permission | Android 10 (API 29) | Android 8–9 ask the legacy write permission at opt-in |
 | System output-switcher panel | Android 10 (API 29) | Bluetooth settings open directly |

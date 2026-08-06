@@ -39,6 +39,11 @@ native Android architecture. It streams full-length tracks from free, **keyless*
   your listening leaves the phone.
 - 🔎 **Rich search** — Songs, Artists, Albums, Playlists, an *Underground* tab of YouTube/SoundCloud
   exclusives, plus on-device search history and suggestion pills.
+- 🎙️ **Music recognition (Audio ID)** — identify what is playing in the room. The microphone is opened
+  only for the few seconds you ask for; the audio becomes an acoustic fingerprint **on the phone** and is
+  then discarded — no recording is stored or transmitted. A match is located in Rizx's own catalogue by
+  ISRC or Apple id first, and by a *scored* search after that, so it plays the recording you heard
+  rather than the first same-titled karaoke version.
 - 📥 **Playlist import** — by URL (Spotify, YouTube / YT Music, Deezer — fully paginated where the
   source allows) or from Nuclear-JSON / Exportify-CSV files; imports become normal editable playlists.
 - ❤️ **Library** — favorites, user playlists, recently played, per-tab filter bars, and contextual

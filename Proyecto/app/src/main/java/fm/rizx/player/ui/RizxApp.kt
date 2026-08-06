@@ -57,6 +57,7 @@ import fm.rizx.player.ui.components.SaveDownloadsToPhoneDialog
 import fm.rizx.player.ui.library.AddToPlaylistDialog
 import fm.rizx.player.ui.library.LibraryViewModel
 import fm.rizx.player.ui.navigation.Routes
+import fm.rizx.player.ui.recognition.RecognitionScreen
 import fm.rizx.player.ui.player.PlaybackViewModel
 import fm.rizx.player.ui.player.PlayerViewModel
 import fm.rizx.player.ui.queue.QueueViewModel
@@ -191,7 +192,15 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     onOpenEditorialPlaylist = { nav.navigate(Routes.editorialPlaylist(it)) },
                 )
             }
-            composable(Routes.SEARCH) {
+            composable(
+                Routes.SEARCH_ROUTE,
+                arguments = listOf(
+                    navArgument(Routes.SEARCH_QUERY_ARG) {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                ),
+            ) { entry ->
                 SearchScreen(
                     onOpenQueue = { nav.navigate(Routes.QUEUE) },
                     // Which engine keeps "next" going is the user's choice (Settings → Recommendations);
@@ -202,7 +211,17 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     onOpenAlbum = { nav.navigate(Routes.albumDetail(it)) },
                     onOpenArtist = { nav.navigate(Routes.artistDetail(it)) },
                     onOpenPlaylist = { nav.navigate(Routes.editorialPlaylist(it)) },
+                    onOpenRecognition = { nav.navigate(Routes.RECOGNITION) },
+                    initialQuery = entry.arguments?.getString(Routes.SEARCH_QUERY_ARG).orEmpty(),
                     queueCount = queue.items.size,
+                )
+            }
+            composable(Routes.RECOGNITION) {
+                RecognitionScreen(
+                    onBack = { nav.popBackStack() },
+                    // Arrives at Search with the query already typed — the resolver could not place the
+                    // song confidently, so the user gets to decide instead of being played a guess.
+                    onSearch = { nav.navigate(Routes.search(it)) },
                 )
             }
             composable(

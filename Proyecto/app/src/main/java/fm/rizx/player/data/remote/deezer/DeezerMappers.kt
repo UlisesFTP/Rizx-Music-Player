@@ -115,6 +115,10 @@ fun DeezerTrackDto.toTrackOrNull(): Track? {
         durationMs = duration?.let { it.toLong() * 1000 },
         trackNumber = trackPosition,
         artwork = album?.let { coverSet(it.coverXl, it.coverBig, it.coverMedium) },
+        // `isrc=…` is the convention the lossless matcher already reads, so carrying it here lights up
+        // an exact-identity comparison that until now could never fire. Search rows carry no ISRC, so
+        // for every existing caller this list stays empty and nothing changes.
+        tags = listOfNotNull(isrc?.takeIf { it.isNotBlank() }?.let { "isrc=${it.uppercase()}" }),
         source = DeezerIds.track(trackId),
     )
 }

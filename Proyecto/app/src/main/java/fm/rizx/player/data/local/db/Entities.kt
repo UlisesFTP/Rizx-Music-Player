@@ -101,6 +101,50 @@ data class RecentlyPlayedEntity(
     val partEvening: Int = 0,
 )
 
+/**
+ * One song identified from the room through the microphone (v5).
+ *
+ * **The history records occasions, not a catalogue.** Recognising the same song twice writes two rows,
+ * because "I heard this in a bar on Tuesday" and "I heard it again on Friday" are two different
+ * things to remember — which is why [id] is the event's own identity and not the track's.
+ *
+ * What is deliberately *not* here: the captured audio, the fingerprint, and the service's response
+ * body. The audio never leaves memory, the fingerprint is derived from it and equally private, and the
+ * response is a snapshot of a third party's catalogue with no reason to outlive the moment.
+ * [resolvedTrackJson] goes through the same encoder as playlists and favorites, so no resolved stream
+ * URL is ever written down.
+ */
+@Entity(
+    tableName = "recognition_history",
+    indices = [
+        Index("recognizedAtIso"),
+        Index(value = ["provider", "providerTrackId"]),
+        Index(value = ["resolvedProvider", "resolvedSourceId"]),
+    ],
+)
+data class RecognitionHistoryEntity(
+    @PrimaryKey val id: String,
+    /** Which recognition service answered — the row survives swapping it out later. */
+    val provider: String,
+    val providerTrackId: String,
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val isrc: String? = null,
+    val artworkUrl: String? = null,
+    val genre: String? = null,
+    val releaseDate: String? = null,
+    val label: String? = null,
+    /** The service's own page for the track, kept for sharing. */
+    val externalUrl: String? = null,
+    val appleTrackId: String? = null,
+    /** The catalogue match, when one was confident enough to play. Null is a normal outcome. */
+    val resolvedProvider: String? = null,
+    val resolvedSourceId: String? = null,
+    val resolvedTrackJson: String? = null,
+    val recognizedAtIso: String,
+)
+
 /** Lightweight list projection (§7.2 two-tier): playlist meta + item count, no items loaded. */
 data class PlaylistSummaryRow(
     val id: String,

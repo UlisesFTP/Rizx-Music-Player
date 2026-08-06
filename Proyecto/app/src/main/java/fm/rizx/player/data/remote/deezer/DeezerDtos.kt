@@ -25,6 +25,11 @@ data class DeezerTrackDto(
     val album: DeezerAlbumShortDto? = null,
     val preview: String? = null,
     @SerialName("track_position") val trackPosition: Int? = null,
+    /**
+     * The recording's identifier. Only the single-track endpoints publish it — search rows don't — so
+     * it is the thing that makes `/track/isrc:` an identity lookup rather than another search.
+     */
+    val isrc: String? = null,
 )
 
 @Serializable
