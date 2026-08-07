@@ -54,7 +54,14 @@ class PlaybackViewModel @Inject constructor(
     nowPlayingFormat: NowPlayingFormat,
     settings: SettingsRepository,
     dataSaver: DataSaverState,
+    private val spatial: fm.rizx.player.domain.playback.SpatialAudioController,
 ) : ViewModel() {
+
+    /** Adaptive stereo spatialization, for the overflow menu's row. */
+    val spatialState = spatial.state
+
+    /** Applies to the song already playing — the engine fades between dry and wet rather than jumping. */
+    fun toggleSpatialAudio() = spatial.setEnabled(!spatial.state.value.enabled)
 
     val state: StateFlow<PlaybackState> = controller.state
 

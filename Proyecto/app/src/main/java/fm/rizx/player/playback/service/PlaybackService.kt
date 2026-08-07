@@ -84,6 +84,10 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var visualizer: fm.rizx.player.playback.AudioVisualizer
     @Inject lateinit var trackSpectrum: fm.rizx.player.playback.TrackSpectrum
     @Inject lateinit var autoEqualizer: fm.rizx.player.playback.AutoEqualizer
+    @Inject lateinit var spatialEngine: fm.rizx.player.playback.spatial.StereoPcmTransform
+    @Inject lateinit var spatialSinkState: fm.rizx.player.playback.spatial.SpatialSinkState
+    @Inject lateinit var spatialAnalyzer: fm.rizx.player.playback.spatial.SpatialTrackAnalyzer
+    @Inject lateinit var spatialController: fm.rizx.player.playback.spatial.SmartSpatialController
     @Inject lateinit var sessionStore: PlaybackSessionStore
     @Inject lateinit var radioTracks: fm.rizx.player.domain.usecase.GetRadioTracksUseCase
     @Inject lateinit var youtubeMixTracks: fm.rizx.player.domain.usecase.GetYoutubeMixTracksUseCase
@@ -175,26 +179,34 @@ class PlaybackService : MediaSessionService() {
         // tiny startup read, like AudioEffects reads normalizeVolume; a no-op for 16-bit/lossy sources.
         val hiResOutput = runBlocking { dataSaver.effectiveQualityMode().prefersBestCompressed }
         val savingData = dataSaver.savingNow()
-        // Two listeners read the decoded PCM: one drives the Now Playing waveform, the other measures the
-        // song's average spectrum for the automatic equalizer. Neither modifies the audio, and neither
-        // needs RECORD_AUDIO (it's our own).
+        // Three listeners read the decoded PCM: one drives the Now Playing waveform, one measures the
+        // song's average spectrum for the automatic equalizer, and one measures the stereo image for the
+        // spatializer. None of them modifies the audio, and none needs RECORD_AUDIO (it's our own).
         //
         // They wrap the sink rather than sitting in its processor chain, because a chain processor is
         // dropped on the float output path — which is the path "prefer lossless" turns on. See
         // [PcmTappingAudioSink]. Wrapping keeps the property the automatic equalizer depends on: the tap
         // is upstream of the session's Equalizer effect, so the measurement describes the original
         // recording rather than the app's own output, which would be a feedback loop.
+        //
+        // The order of the two wrappers is the whole point: the taps sit OUTSIDE the spatializer, so
+        // what is measured is still the recording. Inside it, the waveform would be drawing our own
+        // effect and the automatic equalizer would be equalising it.
         val renderersFactory = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
             ): AudioSink = fm.rizx.player.playback.PcmTappingAudioSink(
-                DefaultAudioSink.Builder(context)
-                    .setEnableFloatOutput(enableFloatOutput || hiResOutput)
-                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                    .build(),
-                listOf(visualizer.sink, trackSpectrum.sink),
+                fm.rizx.player.playback.spatial.SpatializingAudioSink(
+                    DefaultAudioSink.Builder(context)
+                        .setEnableFloatOutput(enableFloatOutput || hiResOutput)
+                        .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                        .build(),
+                    spatialEngine,
+                    spatialSinkState,
+                ),
+                listOf(visualizer.sink, trackSpectrum.sink, spatialAnalyzer.sink),
             )
         }
         // Tuned buffering for near-instant response: start audio after a short pre-roll (not the 2.5 s
@@ -247,6 +259,7 @@ class PlaybackService : MediaSessionService() {
         // …then let the automatic equalizer take it over, if the user asked for that. It reads the setting
         // itself, so this is unconditional: attaching only starts the watching.
         autoEqualizer.attach()
+        spatialController.attach()
 
         startCacheCompletion()
 
@@ -317,6 +330,7 @@ class PlaybackService : MediaSessionService() {
         scope.cancel()
         streamResolver.release()
         autoEqualizer.release() // hands the user's manual curve back before the effect goes away
+        spatialController.release() // stops measuring and drops the DSP to bypass before the sink dies
         audioEffects.release()
         session.release()
         player.release()

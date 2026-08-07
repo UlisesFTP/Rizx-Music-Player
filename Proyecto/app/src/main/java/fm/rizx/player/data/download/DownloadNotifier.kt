@@ -8,15 +8,18 @@ package fm.rizx.player.data.download
  * rejected foreground start degrades to a plain background download instead of crashing.
  */
 interface DownloadNotifier {
-    /** Called when the queue becomes non-empty. Must be idempotent. */
+    /**
+     * Called when there is work to keep alive. Must be idempotent.
+     *
+     * **There is deliberately no `stop`.** More than one thing now needs the process kept alive —
+     * downloads and 8D renders — and a caller that stopped the service when *its own* queue drained
+     * would kill the other one's work halfway through. The service watches every queue and stops
+     * itself, which is the only place that can see all of them at once.
+     */
     fun start()
-
-    /** Called when the queue drains. Must be idempotent. */
-    fun stop()
 }
 
 /** For tests and any build where downloads run without a service. */
 object NoopDownloadNotifier : DownloadNotifier {
     override fun start() = Unit
-    override fun stop() = Unit
 }

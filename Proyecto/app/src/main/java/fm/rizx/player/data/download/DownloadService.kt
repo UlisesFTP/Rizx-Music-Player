@@ -14,13 +14,18 @@ import androidx.core.app.ServiceCompat
 import dagger.hilt.android.AndroidEntryPoint
 import fm.rizx.player.MainActivity
 import fm.rizx.player.R
+import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadStatus
+import fm.rizx.player.domain.model.SpatialRenderState
+import fm.rizx.player.domain.model.SpatialRenderStatus
 import fm.rizx.player.domain.repository.DownloadRepository
+import fm.rizx.player.domain.repository.SpatialRenderRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -43,6 +48,8 @@ class DownloadService : android.app.Service() {
 
     @Inject lateinit var downloads: DownloadRepository
 
+    @Inject lateinit var renders: SpatialRenderRepository
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var watcher: Job? = null
 
@@ -53,26 +60,46 @@ class DownloadService : android.app.Service() {
         createChannel()
         // Post a notification immediately: Android requires startForeground() within a few seconds of
         // startForegroundService(), well before the first progress tick arrives.
-        startForegroundSafely(buildNotification(done = 0, total = 0, percent = 0))
+        startForegroundSafely(buildNotification(done = 0, total = 0, percent = 0, rendering = false))
         watcher = scope.launch {
-            downloads.states.sample(SAMPLE_MS).collect { states ->
-                val active = states.values.filter {
-                    it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.DOWNLOADING
+            // **Both queues, and this is the only place that sees both.** Stopping when downloads drain
+            // would kill an 8D render mid-encode, which is the longest-running thing the app does.
+            combine(downloads.states, renders.states) { d, r -> d to r }
+                .sample(SAMPLE_MS)
+                .collect { (states, renderStates) ->
+                    // CONVERTING counts. It did not, and that was a real hole: an MP3 download's decode
+                    // and re-encode is the slow half, and the service used to shut down the moment the
+                    // bytes finished arriving — exactly when the process most needed keeping alive.
+                    val active = states.values.filter {
+                        it.status == DownloadStatus.QUEUED ||
+                            it.status == DownloadStatus.DOWNLOADING ||
+                            it.status == DownloadStatus.CONVERTING
+                    }
+                    val activeRenders = renderStates.values.filter {
+                        it.status == SpatialRenderStatus.FETCHING || it.status == SpatialRenderStatus.RENDERING
+                    }
+                    if (active.isEmpty() && activeRenders.isEmpty()) {
+                        stopSelf()
+                        return@collect
+                    }
+                    val current = active.firstOrNull { it.status == DownloadStatus.DOWNLOADING }
+                        ?: activeRenders.firstOrNull()
+                    notificationManager()?.notify(
+                        NOTIFICATION_ID,
+                        buildNotification(
+                            done = states.values.count { it.status == DownloadStatus.COMPLETE },
+                            total = active.size + activeRenders.size,
+                            percent = when (current) {
+                                is DownloadState -> current.progressPercent
+                                is SpatialRenderState -> current.progressPercent
+                                else -> 0
+                            },
+                            // A render has no percentage worth showing once the encoder starts, so the
+                            // bar goes indeterminate rather than sitting at whatever the fetch reached.
+                            rendering = activeRenders.any { it.status == SpatialRenderStatus.RENDERING },
+                        ),
+                    )
                 }
-                if (active.isEmpty()) {
-                    stopSelf()
-                    return@collect
-                }
-                val current = active.firstOrNull { it.status == DownloadStatus.DOWNLOADING }
-                notificationManager()?.notify(
-                    NOTIFICATION_ID,
-                    buildNotification(
-                        done = states.values.count { it.status == DownloadStatus.COMPLETE },
-                        total = active.size,
-                        percent = current?.progressPercent ?: 0,
-                    ),
-                )
-            }
         }
     }
 
@@ -103,8 +130,9 @@ class DownloadService : android.app.Service() {
         }
     }
 
-    private fun buildNotification(done: Int, total: Int, percent: Int): Notification {
+    private fun buildNotification(done: Int, total: Int, percent: Int, rendering: Boolean): Notification {
         val text = when {
+            rendering -> "Rendering in 8D"
             total == 0 -> "Preparing…"
             total == 1 -> "1 song"
             else -> "$done of ${done + total} songs"
@@ -119,7 +147,7 @@ class DownloadService : android.app.Service() {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Downloading")
             .setContentText(text)
-            .setProgress(100, percent, total == 0)
+            .setProgress(100, percent, total == 0 || rendering)
             .setContentIntent(open)
             .setOngoing(true)
             .setSilent(true)
@@ -144,18 +172,14 @@ class DownloadService : android.app.Service() {
 }
 
 /**
- * Starts and stops [DownloadService] as the queue fills and drains.
+ * Starts [DownloadService] when there is work to keep alive. It stops itself once every queue it
+ * watches has drained — see [DownloadNotifier] for why stopping is not offered here.
  *
- * Every call is guarded: a foreground start that Android refuses must leave the download running, not
- * take the app down with it.
+ * Guarded: a foreground start that Android refuses must leave the work running, not take the app down.
  */
 class ServiceDownloadNotifier(private val context: Context) : DownloadNotifier {
 
     override fun start() {
         runCatching { context.startForegroundService(Intent(context, DownloadService::class.java)) }
-    }
-
-    override fun stop() {
-        runCatching { context.stopService(Intent(context, DownloadService::class.java)) }
     }
 }

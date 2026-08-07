@@ -7,6 +7,7 @@ import fm.rizx.player.domain.model.CanvasNetworkPolicy
 import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
+import fm.rizx.player.domain.model.SpatialAudioMode
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
@@ -58,6 +59,16 @@ class FakeSettingsRepository : SettingsRepository {
     val autoEqualizerFlow = MutableStateFlow(false)
     override val autoEqualizer: Flow<Boolean> = autoEqualizerFlow
     override suspend fun setAutoEqualizer(enabled: Boolean) { autoEqualizerFlow.value = enabled }
+
+    val spatialAudioModeFlow = MutableStateFlow(SpatialAudioMode.OFF)
+    override val spatialAudioMode: Flow<SpatialAudioMode> = spatialAudioModeFlow
+    override suspend fun setSpatialAudioMode(mode: SpatialAudioMode) { spatialAudioModeFlow.value = mode }
+
+    val avoidDoubleSpatializationFlow = MutableStateFlow(true)
+    override val avoidDoubleSpatialization: Flow<Boolean> = avoidDoubleSpatializationFlow
+    override suspend fun setAvoidDoubleSpatialization(enabled: Boolean) {
+        avoidDoubleSpatializationFlow.value = enabled
+    }
 
     val dataSaverFlow = MutableStateFlow(false)
     override val dataSaver: Flow<Boolean> = dataSaverFlow

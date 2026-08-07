@@ -187,7 +187,6 @@ class DownloadRepositoryImpl(
                 setTransient(key, DownloadState(DownloadStatus.FAILED, error = e.toSafeMessage("Download failed")))
             } finally {
                 jobs.remove(key)
-                if (jobs.isEmpty()) notifier.stop()
             }
         }
     }
@@ -197,7 +196,6 @@ class DownloadRepositoryImpl(
     override fun cancel(key: String) {
         jobs.remove(key)?.cancel()
         clearTransient(key)
-        if (jobs.isEmpty()) notifier.stop()
     }
 
     override suspend fun delete(key: String) {

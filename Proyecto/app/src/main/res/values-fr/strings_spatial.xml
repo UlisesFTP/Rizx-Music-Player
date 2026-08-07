@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="spatial_title">Audio 8D intelligent</string>
+    <string name="spatial_waiting_system">En attente : Android spatialise déjà</string>
+    <string name="spatial_waiting_speaker">En attente : nécessite un casque</string>
+    <string name="spatial_waiting_format">En attente : indisponible sur ce morceau</string>
+
+    <string name="pref_spatial_caption">Mouvement et espace adaptés au genre et à l\'enregistrement lui-même. Conçu pour le casque.</string>
+    <string name="pref_spatial_avoid_double">Éviter la double spatialisation</string>
+    <string name="pref_spatial_avoid_double_caption">Met l\'effet en pause quand Android traite déjà l\'audio spatial.</string>
+
+    <string name="spatial_render">Télécharger en 8D · MP3 320</string>
+    <string name="spatial_render_fetching">Récupération de l\'audio… %1$d%%</string>
+    <string name="spatial_render_working">Traitement en 8D…</string>
+    <string name="spatial_render_done">Fichier 8D enregistré</string>
+    <string name="spatial_render_remove">Supprimer le fichier 8D</string>
+    <string name="spatial_render_failed_retry">Échec du traitement 8D · réessayer</string>
+</resources>

@@ -11,6 +11,7 @@ import fm.rizx.player.data.local.settings.SettingsRepositoryImpl.Companion.DEFAU
 import fm.rizx.player.domain.lossless.LosslessIndexSource
 import fm.rizx.player.domain.model.AudioQualityMode
 import fm.rizx.player.domain.model.DownloadFormat
+import fm.rizx.player.domain.model.SpatialAudioMode
 import fm.rizx.player.domain.model.CanvasDiagnostics
 import fm.rizx.player.domain.model.CanvasNetworkPolicy
 import fm.rizx.player.domain.model.CanvasQuality
@@ -50,6 +51,7 @@ class PreferencesViewModel @Inject constructor(
     private val canvas: CanvasRepository,
     private val losslessIndex: LosslessIndexSource,
     private val dataSaverState: DataSaverState,
+    private val spatial: fm.rizx.player.domain.playback.SpatialAudioController,
 ) : ViewModel() {
 
     /** A selectable Home-feed source: a registered dashboard provider. */
@@ -143,6 +145,12 @@ class PreferencesViewModel @Inject constructor(
     /** The automatic equalizer (a curve per song, from its genre + its own spectrum). Off by default. */
     val autoEq: StateFlow<Boolean> = settings.autoEqualizer.asState(false)
 
+    /** Adaptive stereo spatialization. Off by default; applies live to whatever is playing. */
+    val spatialAudioOn: StateFlow<Boolean> =
+        settings.spatialAudioMode.map { it != SpatialAudioMode.OFF }.asState(false)
+    val avoidDoubleSpatialization: StateFlow<Boolean> =
+        settings.avoidDoubleSpatialization.asState(true)
+
     /**
      * Standard / best compressed / prefer lossless — **as stored**, not as in force.
      *
@@ -231,6 +239,14 @@ class PreferencesViewModel @Inject constructor(
      * one door keeps "who took the effect over" answerable in one place.
      */
     fun setAutoEq(enabled: Boolean) = audioEffects.setAutoEqualizer(enabled)
+
+    // Through the controller rather than straight to the settings repository, so that turning it on
+    // here and turning it on from the player's menu are the same code path and cannot drift apart.
+    fun setSpatialAudio(enabled: Boolean) = spatial.setEnabled(enabled)
+
+    fun setAvoidDoubleSpatialization(enabled: Boolean) {
+        viewModelScope.launch { settings.setAvoidDoubleSpatialization(enabled) }
+    }
 
     fun clearCache() {
         viewModelScope.launch {

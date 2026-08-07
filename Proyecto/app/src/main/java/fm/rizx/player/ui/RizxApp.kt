@@ -109,6 +109,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     // Held as a State (not read here) so the ~25fps spectrum only invalidates the waveform's draw.
     val levelsState = playbackViewModel.levels.collectAsStateWithLifecycle()
     val losslessCodecs by playbackViewModel.losslessCodecs.collectAsStateWithLifecycle()
+    val spatialState by playbackViewModel.spatialState.collectAsStateWithLifecycle()
     // Library (favorites + playlists) shared for the app-wide "add to playlist" picker.
     val libraryViewModel: LibraryViewModel = hiltViewModel()
     val playlists by libraryViewModel.playlistSummaries.collectAsStateWithLifecycle()
@@ -332,6 +333,8 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                 val canvasState by canvasViewModel.state.collectAsStateWithLifecycle()
                 val canvasOn by canvasViewModel.enabled.collectAsStateWithLifecycle()
                 val downloadStates by libraryViewModel.downloadStates.collectAsStateWithLifecycle()
+                val spatialRenderStates by libraryViewModel.spatialRenderStates.collectAsStateWithLifecycle()
+                val spatialRenderedKeys by libraryViewModel.spatialRenderedKeys.collectAsStateWithLifecycle()
                 val context = LocalContext.current
                 LaunchedEffect(np?.track?.source, canvasOn) { canvasViewModel.show(np?.track) }
                 // The canvas only decodes while Now Playing is genuinely in front. This covers pressing
@@ -409,6 +412,14 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                             onDeleteDownload = { track?.let { libraryViewModel.deleteDownload(it.source.identityKey) } },
                             onToggleCanvas = canvasViewModel::toggle,
                             onShare = { track?.let { context.shareTrack(it) } },
+                            spatialState = spatialState,
+                            onToggleSpatialAudio = playbackViewModel::toggleSpatialAudio,
+                            spatialRender = track?.let { spatialRenderStates[it.source.identityKey] },
+                            hasSpatialRender = track?.source?.identityKey in spatialRenderedKeys,
+                            onRenderSpatial = { track?.let(libraryViewModel::renderSpatial) },
+                            onDeleteSpatialRender = {
+                                track?.let { libraryViewModel.deleteSpatialRender(it.source.identityKey) }
+                            },
                         )
                     },
                     loading = playbackState.isLoading,

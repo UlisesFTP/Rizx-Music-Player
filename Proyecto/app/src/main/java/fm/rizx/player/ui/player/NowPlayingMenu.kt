@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.HeadsetOff
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
@@ -36,6 +38,10 @@ import fm.rizx.player.R
 import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadStatus
+import fm.rizx.player.domain.model.SpatialAudioState
+import fm.rizx.player.domain.model.SpatialInactiveReason
+import fm.rizx.player.domain.model.SpatialRenderState
+import fm.rizx.player.domain.model.SpatialRenderStatus
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.util.availableDownloadFormats
@@ -58,6 +64,14 @@ fun NowPlayingMenu(
     onShare: () -> Unit,
     /** Present = the menu also offers "Download as…" with an explicit format for this one song. */
     onDownloadAs: ((DownloadFormat) -> Unit)? = null,
+    spatialState: SpatialAudioState = SpatialAudioState(),
+    onToggleSpatialAudio: () -> Unit = {},
+    /** In-flight 8D render for this song, or null when none is running. */
+    spatialRender: SpatialRenderState? = null,
+    /** Whether a finished 8D file already exists for it. */
+    hasSpatialRender: Boolean = false,
+    onRenderSpatial: () -> Unit = {},
+    onDeleteSpatialRender: () -> Unit = {},
 ) {
     val c = RizxTheme.colors
     // Flat second level rather than a nested popup: a DropdownMenu inside a DropdownMenu anchors to the
@@ -118,6 +132,69 @@ fun NowPlayingMenu(
             },
             tint = if (canvasOn) c.accent else c.text,
         ) { onDismiss(); onToggleCanvas() }
+
+        // Adaptive stereo spatialization. Three visual states rather than two, because "on but waiting"
+        // is a real and common one — over the phone's speaker, or under Android's own spatializer — and
+        // showing it as simply "on" would leave the listener wondering why nothing changed.
+        MenuRow(
+            icon = if (spatialState.enabled) Icons.Filled.Headphones else Icons.Filled.HeadsetOff,
+            label = when {
+                !spatialState.waiting -> stringResource(R.string.spatial_title)
+                spatialState.inactiveReason == SpatialInactiveReason.SYSTEM_SPATIALIZER_ACTIVE ->
+                    stringResource(R.string.spatial_waiting_system)
+                spatialState.inactiveReason == SpatialInactiveReason.SPEAKER_OUTPUT ->
+                    stringResource(R.string.spatial_waiting_speaker)
+                else -> stringResource(R.string.spatial_waiting_format)
+            },
+            tint = when {
+                spatialState.active -> c.accent
+                spatialState.waiting -> c.muted
+                else -> c.text
+            },
+        ) { onDismiss(); onToggleSpatialAudio() }
+
+        // A file, not a setting — and a *second* file, separate from this song's ordinary download, so
+        // it sits on its own row rather than inside "Download as…". Choosing it there would have implied
+        // it replaces the download, which is exactly what it does not do.
+        when (spatialRender?.status) {
+            null ->
+                if (hasSpatialRender) {
+                    MenuRow(Icons.Filled.DownloadDone, stringResource(R.string.spatial_render_remove), c.text) {
+                        onDismiss(); onDeleteSpatialRender()
+                    }
+                } else {
+                    MenuRow(Icons.Filled.FileDownload, stringResource(R.string.spatial_render), c.text) {
+                        onDismiss(); onRenderSpatial()
+                    }
+                }
+
+            SpatialRenderStatus.FETCHING -> MenuRow(
+                Icons.Filled.FileDownload,
+                stringResource(R.string.spatial_render_fetching, spatialRender.progressPercent),
+                c.muted,
+                enabled = false,
+            ) {}
+
+            SpatialRenderStatus.RENDERING -> MenuRow(
+                Icons.Filled.Headphones,
+                stringResource(R.string.spatial_render_working),
+                c.muted,
+                enabled = false,
+            ) {}
+
+            SpatialRenderStatus.COMPLETE -> MenuRow(
+                Icons.Filled.DownloadDone,
+                stringResource(R.string.spatial_render_done),
+                c.accent,
+                enabled = false,
+            ) {}
+
+            SpatialRenderStatus.FAILED -> MenuRow(
+                Icons.Filled.ErrorOutline,
+                stringResource(R.string.spatial_render_failed_retry),
+                c.redAccent,
+            ) { onDismiss(); onRenderSpatial() }
+        }
 
         MenuRow(Icons.Filled.Share, stringResource(R.string.action_share), c.text) { onDismiss(); onShare() }
     }

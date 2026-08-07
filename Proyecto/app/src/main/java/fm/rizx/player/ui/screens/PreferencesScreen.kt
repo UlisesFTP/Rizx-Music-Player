@@ -77,6 +77,8 @@ fun PreferencesScreen(
     val gapless by vm.gapless.collectAsStateWithLifecycle()
     val normalize by vm.normalize.collectAsStateWithLifecycle()
     val autoEq by vm.autoEq.collectAsStateWithLifecycle()
+    val spatialOn by vm.spatialAudioOn.collectAsStateWithLifecycle()
+    val avoidDoubleSpatial by vm.avoidDoubleSpatialization.collectAsStateWithLifecycle()
     val audioQuality by vm.audioQuality.collectAsStateWithLifecycle()
     val losslessAvailable by vm.losslessAvailable.collectAsStateWithLifecycle()
     // In force right now, from either switch — separate from `dataSaver`, which is only Rizx's own.
@@ -150,6 +152,22 @@ fun PreferencesScreen(
             caption = stringResource(R.string.pref_auto_eq_caption),
             checked = autoEq,
         ) { vm.setAutoEq(!autoEq) }
+        // Adaptive spatialization sits under the equalizer rows because it is the other thing that
+        // changes how a song sounds without the listener asking per-track. The caption says "made for
+        // headphones" rather than promising anything: over a speaker the effect stands down by itself.
+        ToggleRowDetail(
+            title = stringResource(R.string.spatial_title),
+            caption = stringResource(R.string.pref_spatial_caption),
+            checked = spatialOn,
+        ) { vm.setSpatialAudio(!spatialOn) }
+        // Only shown while the effect is on: a control that does nothing is worse than a shorter screen.
+        if (spatialOn) {
+            ToggleRowDetail(
+                title = stringResource(R.string.pref_spatial_avoid_double),
+                caption = stringResource(R.string.pref_spatial_avoid_double_caption),
+                checked = avoidDoubleSpatial,
+            ) { vm.setAvoidDoubleSpatialization(!avoidDoubleSpatial) }
+        }
         // Audio quality is now automatic (max by default; lower only on data saver + cellular or a weak
         // signal), so it's no longer a manual row. Crossfade/Gapless/Normalize persist and take effect.
         ToggleRow(stringResource(R.string.pref_crossfade), crossfade) { vm.setCrossfade(!crossfade) }

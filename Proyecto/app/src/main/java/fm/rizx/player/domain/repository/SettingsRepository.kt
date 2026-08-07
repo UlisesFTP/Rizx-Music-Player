@@ -6,6 +6,7 @@ import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
+import fm.rizx.player.domain.model.SpatialAudioMode
 import fm.rizx.player.domain.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -54,6 +55,22 @@ interface SettingsRepository {
      */
     val autoEqualizer: Flow<Boolean>
     suspend fun setAutoEqualizer(enabled: Boolean)
+
+    /**
+     * Adaptive stereo spatialization — "Audio 8D" in the UI. **Off by default**: it is a deliberate
+     * alteration of somebody's mix, so it is asked for rather than assumed. Unlike Hi-Res output, this
+     * applies to the song already playing — the DSP lives inside a sink that is built once, so flipping
+     * the setting only moves a target the engine fades towards.
+     */
+    val spatialAudioMode: Flow<SpatialAudioMode>
+    suspend fun setSpatialAudioMode(mode: SpatialAudioMode)
+
+    /**
+     * Stand down while Android is already applying spatial audio of its own (API 32+). **On by
+     * default**: two spatializers in series smear the image rather than doubling it.
+     */
+    val avoidDoubleSpatialization: Flow<Boolean>
+    suspend fun setAvoidDoubleSpatialization(enabled: Boolean)
 
     /**
      * Data saver: when on **and the device is on cellular**, the streaming provider prefers a lower

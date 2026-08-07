@@ -50,8 +50,14 @@ class PreferencesViewModelTest {
 
     private fun vm() = PreferencesViewModel(
         settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }), DefaultProviderRegistry(),
-        FakeCanvasRepository(), FakeLosslessIndexSource(), dataSaverState(settings),
+        FakeCanvasRepository(), FakeLosslessIndexSource(), dataSaverState(settings), spatialController(),
     )
+
+    /** The spatial controller is only a pass-through to the settings here; the real one needs a service. */
+    private fun spatialController() = object : fm.rizx.player.domain.playback.SpatialAudioController {
+        override val state = MutableStateFlow(fm.rizx.player.domain.model.SpatialAudioState())
+        override fun setEnabled(enabled: Boolean) = Unit
+    }
 
     @Test
     fun `feed provider defaults to Deezer and persists a pick`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
@@ -68,7 +74,7 @@ class PreferencesViewModelTest {
         val registry = DefaultProviderRegistry().apply { register(FakeDash()) }
         val vm = PreferencesViewModel(
             settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }), registry,
-            FakeCanvasRepository(), FakeLosslessIndexSource(), dataSaverState(settings),
+            FakeCanvasRepository(), FakeLosslessIndexSource(), dataSaverState(settings), spatialController(),
         )
         assertEquals(listOf("dash" to "Dash"), vm.feedSources.value.map { it.id to it.name })
     }
@@ -79,7 +85,7 @@ class PreferencesViewModelTest {
         val registry = DefaultProviderRegistry()
         val vm = PreferencesViewModel(
             settings, effects, cache, audioOutput, RegionResolver(listOf { "mx" }), registry,
-            FakeCanvasRepository(), FakeLosslessIndexSource(), dataSaverState(settings),
+            FakeCanvasRepository(), FakeLosslessIndexSource(), dataSaverState(settings), spatialController(),
         )
         assertEquals(emptyList<String>(), vm.feedSources.value.map { it.id })
 

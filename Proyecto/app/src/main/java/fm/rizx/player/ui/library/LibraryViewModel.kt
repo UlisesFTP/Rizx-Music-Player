@@ -17,9 +17,11 @@ import fm.rizx.player.domain.repository.PlaylistRepository
 import fm.rizx.player.domain.repository.QueueRepository
 import fm.rizx.player.domain.repository.RecentlyPlayedRepository
 import fm.rizx.player.domain.repository.SettingsRepository
+import fm.rizx.player.domain.repository.SpatialRenderRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -38,6 +40,7 @@ class LibraryViewModel @Inject constructor(
     private val playback: PlaybackController,
     private val downloads: DownloadRepository,
     private val settings: SettingsRepository,
+    private val spatialRenders: SpatialRenderRepository,
 ) : ViewModel() {
 
     val favoriteTracks: StateFlow<List<Track>> =
@@ -48,6 +51,17 @@ class LibraryViewModel @Inject constructor(
 
     /** Per-track download state, keyed by `ProviderRef.identityKey` — backs every download button. */
     val downloadStates: StateFlow<Map<String, DownloadState>> = downloads.states
+
+    /**
+     * 8D renders, kept separate from [downloadStates] on purpose: a render is a *second* file for the
+     * same song, so one key can legitimately have both a download and a render at once.
+     */
+    val spatialRenderStates: StateFlow<Map<String, fm.rizx.player.domain.model.SpatialRenderState>> =
+        spatialRenders.states
+
+    val spatialRenderedKeys: StateFlow<Set<String>> = spatialRenders.renders
+        .map { it.keys }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     val recentTracks: StateFlow<List<Track>> =
         recentlyPlayed.recent(25).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -148,6 +162,13 @@ class LibraryViewModel @Inject constructor(
 
     fun deleteDownload(key: String) {
         viewModelScope.launch { downloads.delete(key) }
+    }
+
+    /** Renders this song as a standalone 8D MP3. Its ordinary download, if any, is left alone. */
+    fun renderSpatial(track: Track) = spatialRenders.render(track)
+
+    fun deleteSpatialRender(key: String) {
+        viewModelScope.launch { spatialRenders.delete(key) }
     }
 
     fun deleteAllDownloads() {

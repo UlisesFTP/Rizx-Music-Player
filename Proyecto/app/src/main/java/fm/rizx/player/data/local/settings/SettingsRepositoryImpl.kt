@@ -14,6 +14,7 @@ import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.PlaybackResolverSettings
 import fm.rizx.player.domain.model.RadioMode
+import fm.rizx.player.domain.model.SpatialAudioMode
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
@@ -109,6 +110,24 @@ class SettingsRepositoryImpl(
 
     override suspend fun setAutoEqualizer(enabled: Boolean) {
         dataStore.edit { it[Keys.AUTO_EQ] = enabled }
+    }
+
+    // Off by default: it deliberately alters the mix, so it is asked for rather than assumed. An
+    // unknown stored name (a downgrade, a renamed value) degrades to OFF rather than to something the
+    // listener never chose.
+    override val spatialAudioMode: Flow<SpatialAudioMode> = pref { prefs ->
+        prefs[Keys.SPATIAL_MODE]?.let { name -> SpatialAudioMode.entries.firstOrNull { it.name == name } }
+            ?: SpatialAudioMode.OFF
+    }
+
+    override suspend fun setSpatialAudioMode(mode: SpatialAudioMode) {
+        dataStore.edit { it[Keys.SPATIAL_MODE] = mode.name }
+    }
+
+    override val avoidDoubleSpatialization: Flow<Boolean> = pref { it[Keys.SPATIAL_AVOID_DOUBLE] ?: true }
+
+    override suspend fun setAvoidDoubleSpatialization(enabled: Boolean) {
+        dataStore.edit { it[Keys.SPATIAL_AVOID_DOUBLE] = enabled }
     }
 
     override val dataSaver: Flow<Boolean> = pref { it[Keys.DATA_SAVER] ?: false }
@@ -301,6 +320,8 @@ class SettingsRepositoryImpl(
         val EQ_ENABLED = booleanPreferencesKey("core.audio.eq.enabled")
         val EQ_BANDS = stringPreferencesKey("core.audio.eq.bands")
         val AUTO_EQ = booleanPreferencesKey("core.audio.autoEq")
+        val SPATIAL_MODE = stringPreferencesKey("playback.spatialAudio.mode")
+        val SPATIAL_AVOID_DOUBLE = booleanPreferencesKey("playback.spatialAudio.avoidDouble")
         val DATA_SAVER = booleanPreferencesKey("core.data.dataSaver")
         val CROSSFADE = booleanPreferencesKey("core.audio.crossfade")
         val GAPLESS = booleanPreferencesKey("core.audio.gapless")

@@ -2,6 +2,7 @@ package fm.rizx.player.ui.library
 
 import fm.rizx.player.FakeSettingsRepository
 import fm.rizx.player.NoDownloads
+import fm.rizx.player.NoSpatialRenders
 import fm.rizx.player.MainDispatcherRule
 import fm.rizx.player.data.repository.InMemoryQueueRepository
 import fm.rizx.player.domain.model.AlbumRef
@@ -109,7 +110,7 @@ class LibraryViewModelTest {
         val playback = FakePlayback()
         val vm = LibraryViewModel(
             FakeFavorites(listOf(track("Velvet"), track("Ruby"))),
-            FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(), FakeSettingsRepository(),
+            FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(), FakeSettingsRepository(), NoSpatialRenders(),
         )
         backgroundScope.launch { vm.favoriteTracks.collect {} } // keep the WhileSubscribed StateFlow hot
         advanceUntilIdle()
@@ -127,7 +128,7 @@ class LibraryViewModelTest {
         val liked = listOf(track("Velvet"), track("Ruby"), track("Rust"))
         val vm = LibraryViewModel(
             FakeFavorites(liked),
-            FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(), FakeSettingsRepository(),
+            FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(), FakeSettingsRepository(), NoSpatialRenders(),
         )
         backgroundScope.launch { vm.favoriteTracks.collect {} }
         advanceUntilIdle()
@@ -143,7 +144,7 @@ class LibraryViewModelTest {
     @Test
     fun `playing an empty list does nothing`() = runTest {
         val playback = FakePlayback()
-        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(), FakeSettingsRepository())
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), playback, NoDownloads(), FakeSettingsRepository(), NoSpatialRenders())
 
         vm.playLiked(0, emptyList())
         vm.playRecent(0, emptyList())
@@ -156,7 +157,7 @@ class LibraryViewModelTest {
     @Test
     fun `createPlaylist delegates a trimmed name`() = runTest {
         val playlists = FakePlaylists()
-        val vm = LibraryViewModel(FakeFavorites(), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads(), FakeSettingsRepository())
+        val vm = LibraryViewModel(FakeFavorites(), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads(), FakeSettingsRepository(), NoSpatialRenders())
 
         vm.createPlaylist("  My Mix  ")
         advanceUntilIdle()
@@ -167,7 +168,7 @@ class LibraryViewModelTest {
     @Test
     fun `blank playlist name is ignored`() = runTest {
         val playlists = FakePlaylists()
-        val vm = LibraryViewModel(FakeFavorites(), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads(), FakeSettingsRepository())
+        val vm = LibraryViewModel(FakeFavorites(), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads(), FakeSettingsRepository(), NoSpatialRenders())
 
         vm.createPlaylist("   ")
         advanceUntilIdle()
@@ -178,7 +179,7 @@ class LibraryViewModelTest {
     @Test
     fun `unfavoriteTrack removes by provider ref`() = runTest {
         val favorites = FakeFavorites()
-        val vm = LibraryViewModel(favorites, FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads(), FakeSettingsRepository())
+        val vm = LibraryViewModel(favorites, FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads(), FakeSettingsRepository(), NoSpatialRenders())
         val song = track("Velvet")
 
         vm.unfavoriteTrack(song)
@@ -222,7 +223,7 @@ class LibraryViewModelTest {
     @Test
     fun `the question is put while a download is running, not before`() = runTest {
         val downloads = FakeDownloads()
-        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, FakeSettingsRepository())
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, FakeSettingsRepository(), NoSpatialRenders())
         backgroundScope.launch { vm.askSaveToPhone.collect {} }
         advanceUntilIdle()
 
@@ -241,7 +242,7 @@ class LibraryViewModelTest {
             entries = listOf(downloaded("Velvet", onPhone = false)),
             states = mapOf("meta:Velvet" to DownloadState(DownloadStatus.COMPLETE)),
         )
-        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, FakeSettingsRepository())
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, FakeSettingsRepository(), NoSpatialRenders())
         backgroundScope.launch { vm.askSaveToPhone.collect {} }
         advanceUntilIdle()
 
@@ -252,7 +253,7 @@ class LibraryViewModelTest {
     fun `once answered the question never comes back`() = runTest {
         val settings = FakeSettingsRepository()
         val downloads = FakeDownloads(states = mapOf("deezer:1" to DownloadState(DownloadStatus.DOWNLOADING)))
-        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, settings)
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, settings, NoSpatialRenders())
         backgroundScope.launch { vm.askSaveToPhone.collect {} }
         advanceUntilIdle()
         assertTrue(vm.askSaveToPhone.value)
@@ -267,7 +268,7 @@ class LibraryViewModelTest {
     @Test
     fun `saving everything skips the songs already on the phone`() = runTest {
         val downloads = FakeDownloads()
-        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, FakeSettingsRepository())
+        val vm = LibraryViewModel(FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), downloads, FakeSettingsRepository(), NoSpatialRenders())
         var saved = -1
         var failed = -1
 

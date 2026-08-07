@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Smart 8D audio. Wording is deliberately modest: this is adaptive stereo spatialization for
+  headphones, and it must never be described as eight dimensions, Atmos, multichannel, HRTF or a
+  quality improvement.
+-->
+<resources>
+    <string name="spatial_title">Smart 8D audio</string>
+    <string name="spatial_waiting_system">On hold — Android is already spatializing</string>
+    <string name="spatial_waiting_speaker">On hold — needs headphones</string>
+    <string name="spatial_waiting_format">On hold — not available for this track</string>
+
+    <string name="pref_spatial_caption">Movement and space adapted to the genre and to the recording itself. Made for headphones.</string>
+    <string name="pref_spatial_avoid_double">Avoid double spatialization</string>
+    <string name="pref_spatial_avoid_double_caption">Pause the effect when Android is already processing spatial audio.</string>
+
+    <string name="spatial_render">Download as 8D · MP3 320</string>
+    <string name="spatial_render_fetching">Getting the audio… %1$d%%</string>
+    <string name="spatial_render_working">Rendering in 8D…</string>
+    <string name="spatial_render_done">8D file saved</string>
+    <string name="spatial_render_remove">Delete the 8D file</string>
+    <string name="spatial_render_failed_retry">8D render failed · retry</string>
+</resources>
