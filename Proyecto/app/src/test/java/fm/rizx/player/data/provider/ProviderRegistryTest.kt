@@ -28,6 +28,26 @@ class ProviderRegistryTest {
     private fun meta(id: String) = TestProvider(id, ProviderKind.METADATA)
     private fun stream(id: String) = TestProvider(id, ProviderKind.STREAMING)
 
+    /**
+     * Both of the registry's "pick one for me" moments read registration order, which is why the
+     * streaming block in `ProviderModule` now registers the demo providers **last**.
+     *
+     * Registered first, as they used to be, `FakeStreamingProvider` was what first-wins activation
+     * chose and what this fallback landed on: turning off a streaming plugin that was active silently
+     * made every song play a placeholder tone, with nothing in the UI to explain it.
+     */
+    @Test
+    fun `unregistering the active provider falls back in registration order`() {
+        registry.register(stream("real-first"))
+        registry.register(stream("real-second"))
+        registry.register(stream("plugin:chosen"))
+        registry.setActive(ProviderKind.STREAMING, "plugin:chosen")
+
+        registry.unregister("plugin:chosen")
+
+        assertEquals("real-first", registry.getActive(ProviderKind.STREAMING))
+    }
+
     @Test
     fun `register returns the provider id`() {
         assertEquals("m1", registry.register(meta("m1")))

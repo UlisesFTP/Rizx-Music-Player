@@ -48,7 +48,43 @@ data class RegistryPlugin(
             // Rizx imports YouTube playlists by URL natively, and paginates them (NewPipe 0.26.4).
             "nuclear-plugin-youtube-playlists",
         )
+
+        /**
+         * Registry plugins that cannot do anything here — a different reason from
+         * [REPLACED_BY_NATIVE], and deliberately a different list, because "you already have this" and
+         * "this could never work" are not the same fact and one may stop being true without the other.
+         *
+         * A scrobbling plugin has two ways to reach the host and neither exists: `JsPluginRuntime`'s
+         * `buildProvider` maps six `ProviderKind`s and `scrobbling` is not one of them, so the
+         * descriptor is logged and dropped; and while `bootstrap.js` offers `api.Events.on`, nothing on
+         * the Kotlin side ever calls `rizx.emit`, so no playback event is ever delivered. It would
+         * install, report success, and silently scrobble nothing.
+         *
+         * Removing an id from here needs the missing half built first, not just the line deleted.
+         */
+        val NOT_RUNNABLE = setOf(
+            "nuclear-plugin-lastfm",
+        )
+
+        /** Everything kept out of the store by id, whatever the reason. */
+        val HIDDEN = REPLACED_BY_NATIVE + NOT_RUNNABLE
+
+        /**
+         * Categories `JsPluginRuntime.buildProvider` has no dispatcher for. A plugin in one of these
+         * registers nothing and is never called, exactly like the ids in [NOT_RUNNABLE] — so this is
+         * the same rule expressed generally, and a *future* scrobbling or discovery plugin is kept out
+         * without anyone having to notice and add its id.
+         *
+         * `discovery` is here even though the runtime does build a provider for it: nothing in the app
+         * ever calls one. The up-next engine is a closed set, so a discovery plugin installs, looks
+         * healthy, and does nothing.
+         */
+        val UNDISPATCHABLE_CATEGORIES = setOf("scrobbling", "discovery")
     }
+
+    /** Whether the store should list this entry at all. */
+    val isHidden: Boolean
+        get() = id in HIDDEN || category.trim().lowercase() in UNDISPATCHABLE_CATEGORIES
 }
 
 /**
@@ -63,6 +99,8 @@ data class BundledPlugin(
     val name: String,
     val description: String = "",
     val category: String = "other",
+    /** The archive's own version, so a build shipping a newer one can replace what is installed. */
+    val version: String = "",
 )
 
 /** A plugin that has been downloaded, transpiled and (optionally) enabled on this device. */

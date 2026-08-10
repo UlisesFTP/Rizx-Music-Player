@@ -21,13 +21,14 @@
     <string name="plugins_tap_to_use">Tap to use</string>
     <string name="plugins_install">Install</string>
     <string name="plugins_installing">Installing…</string>
-    <string name="plugins_installed">Installed</string>
     <string name="plugins_uninstall">Uninstall</string>
     <string name="plugins_plugin_category">Plugin · %1$s</string>
     <string name="plugins_health_down">Down</string>
     <string name="plugins_quarantined">Auto-disabled after repeated failures</string>
     <string name="plugins_update">Update</string>
     <string name="plugins_section_open">Open ecosystem</string>
+    <string name="plugins_restart_runtime">Restart the plugin engine</string>
+    <string name="plugins_restart_runtime_subtitle">If plugins stop responding. Reloads them; nothing is uninstalled.</string>
     <string name="plugins_sideload_title">Install from URL</string>
     <string name="plugins_sideload_subtitle">A plugin.zip release or GitHub zipball link</string>
     <string name="plugins_sideload_hint">Paste a plugin zip URL…</string>

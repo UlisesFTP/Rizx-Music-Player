@@ -118,6 +118,14 @@ fun PluginsScreen(vm: PluginsViewModel = hiltViewModel()) {
                         onUpdate = { vm.update(p.id) },
                     )
                 }
+                // Every plugin shares one engine and the sandbox cannot interrupt running JS, so one
+                // stuck in a loop takes the rest with it. Offered here rather than hidden, because the
+                // alternative the user would otherwise find is force-stopping the app.
+                ActionRow(
+                    title = stringResource(R.string.plugins_restart_runtime),
+                    subtitle = stringResource(R.string.plugins_restart_runtime_subtitle),
+                    busy = state.restarting,
+                ) { vm.restartRuntime() }
             }
             ProviderKind.entries.forEach { kind ->
                 val rows = state.rows.filter { it.kind == kind }
@@ -306,7 +314,6 @@ private fun StoreRow(row: StoreRow, onInstall: () -> Unit) {
         val (label, actionable) = when (row.status) {
             StoreStatus.AVAILABLE -> stringResource(R.string.plugins_install) to true
             StoreStatus.INSTALLING -> stringResource(R.string.plugins_installing) to false
-            StoreStatus.INSTALLED -> stringResource(R.string.plugins_installed) to false
             StoreStatus.ERROR -> stringResource(R.string.action_retry) to true
         }
         Text(

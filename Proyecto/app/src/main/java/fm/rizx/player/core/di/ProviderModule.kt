@@ -103,9 +103,10 @@ object ProviderModule {
             // registered, and each carried an artificial `delay()`. Since `TrackArtworkEnricher` walks
             // every metadata provider in turn, every cover Deezer could not match paid 430 ms of pure
             // simulated latency — ~60 times per Home load. They also cluttered Sources and Search.
-            // (The streaming fakes below still back the no-network dev path.)
-            register(FakeStreamingProvider())
-            register(FakeStreamingProviderB())
+            // (The streaming fakes still back the no-network dev path — registered at the end of the
+            // streaming block, not here. Registered first, they were what first-wins activation picked
+            // and what `unregister` fell back to when the active streaming provider went away: turning
+            // off a streaming plugin silently made every song play a placeholder tone.)
             // Real metadata providers (Phase 13/17): selectable in Sources; require network.
             register(ItunesMetadataProvider(itunes))
             // Deezer (Phase 17): keyless metadata — unified search + album/artist detail (track lists).
@@ -142,6 +143,10 @@ object ProviderModule {
             register(SoundcloudStreamingProvider(soundcloud, networkMonitor, dataSaver))
             register(AudiusStreamingProvider(audius, audiusHosts))
             register(ItunesStreamingProvider(itunes))
+            // Last, so neither first-wins activation nor the unregister fallback can ever land on one.
+            // The chain still reaches them when every real source misses, which is the no-network path.
+            register(FakeStreamingProvider())
+            register(FakeStreamingProviderB())
             // Lyrics providers, in fallback order — and order is priority, because activation is
             // first-wins and `LyricsRepositoryImpl` walks the chain from the active one.
             // The three karaoke sources come first (word-by-word timings, which the screen can light up

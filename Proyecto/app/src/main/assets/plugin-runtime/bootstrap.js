@@ -265,6 +265,7 @@
     plugins: {},     // pluginId -> plugin object
     events: {},      // pluginId -> { eventName -> [handlers] }
     widgets: {},     // pluginId -> [widget names] (recorded; nothing renders)
+    timers: {},      // pluginId -> { next, live } — per plugin so unloading can stop them
     __last: null,    // last captured async result (JSON string) — read by Kotlin
     __err: null,     // last captured error message — read by Kotlin
   };
@@ -292,11 +293,39 @@
     return undefined;
   };
 
+  // ---- per-plugin timers ----------------------------------------------------
+  // The module graph shadows setTimeout/setInterval with these, so a timer belongs to the plugin that
+  // started it. The global versions above are unowned and stay for the runtime's own use.
+  rizx.timer = function (pluginId, repeat, fn, ms) {
+    const own = (rizx.timers[pluginId] = rizx.timers[pluginId] || { next: 1, live: {} });
+    const id = own.next++;
+    own.live[id] = true;
+    const fire = function () {
+      __rizx_sleep(ms | 0).then(function () {
+        // Unloading drops the whole table, so a tick that outlives its plugin stops here. Without this
+        // a setInterval survived disable *and* uninstall, kept its module graph alive, and could still
+        // call Providers.register — putting a zombie provider back into the app.
+        const still = rizx.timers[pluginId];
+        if (!still || !still.live[id]) return;
+        if (!repeat) delete still.live[id];
+        try { fn(); } catch (e) { console.error('timer', e); }
+        if (repeat) fire();
+      });
+    };
+    fire();
+    return id;
+  };
+  rizx.clearTimer = function (pluginId, id) {
+    const own = rizx.timers[pluginId];
+    if (own) delete own.live[id];
+  };
+
   // Drop every descriptor a plugin registered (unload path) so its closures can be collected.
   rizx.dropProviders = function (pluginId) {
     for (const uid in rizx.providers) if (uid.indexOf(pluginId + ':') === 0) delete rizx.providers[uid];
     delete rizx.events[pluginId];
     delete rizx.widgets[pluginId];
+    delete rizx.timers[pluginId];
   };
 
   // Dispatch a host event (trackStarted/trackFinished/…) to every subscribed plugin, isolated.

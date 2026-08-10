@@ -21,10 +21,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -72,6 +70,14 @@ class JsPluginRuntime(
     private val failureCounts = ConcurrentHashMap<String, AtomicInteger>()
     private val quarantined = Collections.synchronizedSet(mutableSetOf<String>())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * Admission to the single engine thread. It adds no serialization — QuickJS was already
+     * one-at-a-time — it makes the queueing explicit so a call's timeout starts when it actually
+     * begins. Without it, a Home load fanning out 35 provider calls had 35 budgets running at once
+     * against work that could only happen one at a time.
+     */
+    private val gate = PluginCallGate()
 
     /** Set by the repository: persists the quarantine (health + lastError) and disables the plugin. */
     var onQuarantine: (suspend (pluginId: String, lastError: String) -> Unit)? = null
@@ -142,16 +148,25 @@ class JsPluginRuntime(
 
     // ---- JsProviderInvoker ------------------------------------------------
 
+    /**
+     * The one chokepoint every plugin call passes through. [PluginCallGate] holds the policy — queue
+     * first, then measure execution — and this decides who is to blame for the result.
+     *
+     * A busy engine is nobody's failure: it means somebody else held the one thread, and counting it
+     * against whoever happened to be waiting is how healthy plugins used to quarantine themselves.
+     */
     override suspend fun invoke(uid: String, method: String, argsJson: String, timeoutMs: Long): String? {
         val pluginId = uid.substringBefore(':')
         if (pluginId in quarantined) throw PluginException("plugin '$pluginId' is quarantined")
         val statement = "globalThis.__rizx.invokeAndCapture(${enc(uid)}, ${enc(method)}, ${enc(argsJson)})"
         return try {
-            val result = withTimeout(timeoutMs) { engine.evalCaptured(statement) }
+            val result = gate.run(timeoutMs) { engine.evalCaptured(statement) }
             failureCounts[pluginId]?.set(0)
             result
-        } catch (e: TimeoutCancellationException) {
-            recordFailure(pluginId, "'$method' timed out after ${timeoutMs} ms")
+        } catch (e: PluginBusyException) {
+            throw PluginException("plugin runtime busy")
+        } catch (e: PluginCallTimeoutException) {
+            recordFailure(pluginId, "'$method' timed out after $timeoutMs ms")
             throw PluginException("$uid.$method timed out")
         } catch (e: PluginException) {
             recordFailure(pluginId, e.message ?: "plugin error")
@@ -209,6 +224,14 @@ class JsPluginRuntime(
             globalThis.__rizx.plugins[${enc(pluginId)}] = (function () {
               var __defs = {};
               var __cache = {};
+              // Timers scoped to this plugin, shadowing the globals for every module below. The global
+              // ones are shared, so a setInterval used to outlive disable and uninstall — still ticking,
+              // still holding this whole graph in memory.
+              var __pid = ${enc(pluginId)};
+              var setTimeout = function (fn, ms) { return globalThis.__rizx.timer(__pid, false, fn, ms); };
+              var setInterval = function (fn, ms) { return globalThis.__rizx.timer(__pid, true, fn, ms); };
+              var clearTimeout = function (id) { globalThis.__rizx.clearTimer(__pid, id); };
+              var clearInterval = clearTimeout;
               function __dirname(p) { var i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i); }
               function __norm(p) {
                 var parts = p.split('/'); var out = [];
@@ -322,6 +345,7 @@ class JsPluginRuntime(
         runCatching { engine.evalCaptured("globalThis.__rizx.runHook(${enc(pluginId)}, 'onDisable')") }
         runCatching { engine.evalCaptured("globalThis.__rizx.runHook(${enc(pluginId)}, 'onUnload')") }
         val uids = synchronized(registeredUids) { registeredUids.remove(pluginId).orEmpty() }
+        pluginVersions.remove(pluginId)
         for (uid in uids) withContext(mainDispatcher) { runCatching { registry.unregister(uid) } }
         runCatching {
             engine.eval(

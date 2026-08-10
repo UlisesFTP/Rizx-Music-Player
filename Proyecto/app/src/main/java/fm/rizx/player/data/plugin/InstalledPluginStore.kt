@@ -23,6 +23,7 @@ class InstalledPluginStore(
 ) {
     private val key = stringPreferencesKey("installed")
     private val registriesKey = stringPreferencesKey("registries")
+    private val seededKey = stringPreferencesKey("bundled_seeded")
 
     val installed: Flow<List<InstalledPlugin>> = context.pluginDataStore.data.map { decode(it[key]) }
 
@@ -42,6 +43,21 @@ class InstalledPluginStore(
 
     private fun decodeRegistries(raw: String?): List<String> =
         raw?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() } ?: emptyList()
+
+    /**
+     * Bundled archives that have already been auto-installed once, by asset name.
+     *
+     * Separate from [installed] because it has to outlive it: uninstalling a bundled plugin removes it
+     * from that list, and without this marker the next launch would install it straight back and there
+     * would be no way to be rid of it.
+     */
+    suspend fun seededBundled(): List<String> =
+        context.pluginDataStore.data.map { decodeRegistries(it[seededKey]) }.first()
+
+    suspend fun markBundledSeeded(assetName: String) = context.pluginDataStore.edit { prefs ->
+        val current = decodeRegistries(prefs[seededKey])
+        if (assetName !in current) prefs[seededKey] = json.encodeToString<List<String>>(current + assetName)
+    }
 
     suspend fun snapshot(): List<InstalledPlugin> = installed.first()
 

@@ -32,6 +32,17 @@ interface PluginRepository {
     /** Installs one of [bundled] straight from the APK — no network, no URL to paste. */
     suspend fun installBundled(assetName: String): InstalledPlugin
 
+    /**
+     * Installs the bundled archives that ship with this build, once each (call at app start, before
+     * [reloadInstalled]). Shipping a plugin inside the APK and then asking the user to go and find it
+     * in a store is a step that carries no decision.
+     *
+     * Installs an archive the first time it is seen and re-installs one whose bundled version differs
+     * from what is on disk. **Never resurrects one the user uninstalled** — that is remembered
+     * separately from the installed list, which uninstalling empties.
+     */
+    suspend fun seedBundled()
+
     /** Enables (loads) or disables (unregisters) an installed plugin, persisting the choice. */
     suspend fun setEnabled(id: String, enabled: Boolean)
 
@@ -40,6 +51,15 @@ interface PluginRepository {
 
     /** Loads every enabled installed plugin (call once at app start). Each is isolated. */
     suspend fun reloadInstalled()
+
+    /**
+     * Tears the JS runtime down and reloads the enabled plugins.
+     *
+     * Every plugin shares one engine thread and the sandbox has no way to interrupt running JS, so a
+     * plugin stuck in a loop takes the whole subsystem with it. This is the way out that does not
+     * involve force-stopping the app. Quarantined plugins stay off — they are disabled on disk.
+     */
+    suspend fun restartRuntime()
 
     /** User-added registry URLs (reactive). The official registry is implicit. */
     val registries: Flow<List<String>>

@@ -82,11 +82,17 @@ class RizxApplication : Application(), ImageLoaderFactory {
         // on the main thread before the first frame.
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             runCatching {
-                EntryPointAccessors
+                val plugins = EntryPointAccessors
                     .fromApplication(this@RizxApplication, PluginBootstrapEntryPoint::class.java)
                     .pluginRepository()
-                    .reloadInstalled()
+                // Before the reload: seeding installs *and* loads, so the reload loop then skips it by
+                // `runtime.isLoaded` and the active-provider reconcile at the end still sees it.
+                plugins.seedBundled()
+                plugins.reloadInstalled()
             }
+                // Swallowing this silently made a startup failure indistinguishable from "no plugins
+                // installed" — the screen simply shows nothing and there is no thread to pull.
+                .onFailure { android.util.Log.w("JsPlugin", "plugin bootstrap failed", it) }
         }
     }
 }

@@ -56,6 +56,7 @@ class BundledPlugins @Inject constructor(
             name = json.stringField("displayName") ?: json.stringField("name") ?: assetName,
             description = json.stringField("description").orEmpty(),
             category = json.stringField("category") ?: "other",
+            version = json.stringField("version").orEmpty(),
         )
     }.getOrNull()
 

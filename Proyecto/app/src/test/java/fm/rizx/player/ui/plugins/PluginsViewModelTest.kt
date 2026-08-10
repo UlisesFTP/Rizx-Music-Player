@@ -58,9 +58,11 @@ class PluginsViewModelTest {
         override suspend fun installFromUrl(url: String): InstalledPlugin = error("not installable in test")
         override fun bundled(): List<fm.rizx.player.domain.plugin.BundledPlugin> = emptyList()
         override suspend fun installBundled(assetName: String): InstalledPlugin = error("not installable in test")
+        override suspend fun seedBundled() {}
         override suspend fun setEnabled(id: String, enabled: Boolean) {}
         override suspend fun uninstall(id: String) {}
         override suspend fun reloadInstalled() {}
+        override suspend fun restartRuntime() {}
         override val registries: Flow<List<String>> = flowOf(emptyList())
         override suspend fun addRegistry(url: String) {}
         override suspend fun removeRegistry(url: String) {}

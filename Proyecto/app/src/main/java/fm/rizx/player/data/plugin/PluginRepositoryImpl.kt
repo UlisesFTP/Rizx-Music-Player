@@ -5,6 +5,7 @@ import fm.rizx.player.data.plugin.install.PluginInstaller
 import fm.rizx.player.data.plugin.install.PluginRegistryClient
 import fm.rizx.player.domain.plugin.BundledPlugin
 import fm.rizx.player.domain.plugin.InstalledPlugin
+import fm.rizx.player.domain.plugin.bundledToSeed
 import fm.rizx.player.domain.plugin.PluginRepository
 import fm.rizx.player.domain.plugin.RegistryPlugin
 import fm.rizx.player.domain.provider.ProviderKind
@@ -87,6 +88,24 @@ class PluginRepositoryImpl(
         return loadAndPersist(pluginId, extracted)
     }
 
+    override suspend fun seedBundled() {
+        val plugins = bundledPlugins ?: return
+        val targets = bundledToSeed(
+            bundled = plugins.list(),
+            installedVersions = store.snapshot().associate { it.id to it.version },
+            seeded = store.seededBundled().toSet(),
+        )
+        for (entry in targets) {
+            // Isolated per archive, and on the startup path: a corrupt zip degrades to "no plugin",
+            // never to an app that will not start.
+            runCatching { installBundled(entry.assetName) }
+                // Marked only on success, so a one-off failure (no space, half-written store) is retried
+                // next launch instead of silently costing the user the plugin for good.
+                .onSuccess { runCatching { store.markBundledSeeded(entry.assetName) } }
+                .onFailure { Log.w("JsPlugin", "bundled '${entry.assetName}' failed: ${it.message}") }
+        }
+    }
+
     override suspend fun installFromUrl(url: String): InstalledPlugin {
         val extracted = installer.installFromUrl(url)
         val pluginId = extracted.dir.name
@@ -147,6 +166,12 @@ class PluginRepositoryImpl(
                 .onFailure { Log.w("JsPlugin", "reload of '${plugin.id}' failed: ${it.message}") }
         }
         reapplyPersistedActive()
+    }
+
+    override suspend fun restartRuntime() {
+        runtime.restart()
+        // registeredUids was cleared, so the reload's isLoaded check lets every enabled plugin back in.
+        reloadInstalled()
     }
 
     /**

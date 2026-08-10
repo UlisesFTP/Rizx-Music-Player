@@ -48,7 +48,8 @@ data class StoreRow(
     val status: StoreStatus,
 )
 
-enum class StoreStatus { AVAILABLE, INSTALLING, INSTALLED, ERROR }
+/** No `INSTALLED`: an installed plugin leaves the store entirely rather than sitting there inert. */
+enum class StoreStatus { AVAILABLE, INSTALLING, ERROR }
 
 /** A downloaded plugin in the "Installed plugins" section. */
 data class InstalledPluginRow(
@@ -73,14 +74,16 @@ data class PluginsUiState(
     val registries: List<String> = emptyList(),
     val storeError: String? = null,
     val sideloadBusy: Boolean = false,
+    val restarting: Boolean = false,
 )
 
 /**
  * Backs the Plugins screen (ADR 0014/0019). Installed tab: built-in + plugin-backed providers (active
  * radio / enable toggle) plus the downloaded plugins with health, update and uninstall. Store tab: the
- * Nuclear registry merged with any user-added registries — every entry visible, the non-runnable ones
- * labeled with their reason instead of hidden — plus sideload (install from URL) and registry
- * management.
+ * Nuclear registry merged with any user-added registries, narrowed to what there is still something to
+ * do about: entries Rizx does natively or that could not run here are filtered upstream in
+ * `PluginRegistryClient`, and installed ones are dropped here. Plus sideload (install from URL) and
+ * registry management.
  */
 @HiltViewModel
 class PluginsViewModel @Inject constructor(
@@ -231,6 +234,17 @@ class PluginsViewModel @Inject constructor(
         }
     }
 
+    /** Tears the JS engine down and reloads the enabled plugins — the way out of a wedged runtime. */
+    fun restartRuntime() {
+        if (_state.value.restarting) return
+        _state.update { it.copy(restarting = true) }
+        viewModelScope.launch {
+            runCatching { plugins.restartRuntime() }
+            _state.update { it.copy(restarting = false) }
+            snapshot()
+        }
+    }
+
     fun addRegistry(url: String) {
         val trimmed = url.trim()
         if (!trimmed.startsWith("http")) return
@@ -304,35 +318,34 @@ class PluginsViewModel @Inject constructor(
         val installedIds = installedCache.map { it.id }.toSet()
         _state.update {
             it.copy(
-                // The registry, minus the entries Rizx already does natively — those are filtered out
-                // upstream in PluginRegistryClient and never reach here.
-                store = registryCache.map { entry ->
+                // **The store lists what you can still install.** Anything already installed is dropped:
+                // its row could only say "Installed", which is not something you can act on, and the
+                // Installed tab is where it can be enabled, updated or removed. Uninstalling something
+                // brings its row back here, which is exactly where you would look for it again.
+                //
+                // Entries Rizx already does natively — or that could not run at all — never arrive:
+                // PluginRegistryClient filters those upstream.
+                store = registryCache.filterNot { it.id in installedIds }.map { entry ->
                     StoreRow(
                         id = entry.id,
                         displayName = entry.name.ifBlank { entry.id.removePrefix("nuclear-plugin-").replaceFirstChar { c -> c.uppercase() } },
                         category = entry.category,
                         description = entry.description,
                         author = entry.author,
-                        status = when {
-                            entry.id in installing -> StoreStatus.INSTALLING
-                            entry.id in installedIds -> StoreStatus.INSTALLED
-                            else -> StoreStatus.AVAILABLE
-                        },
+                        status = if (entry.id in installing) StoreStatus.INSTALLING else StoreStatus.AVAILABLE,
                     )
                 },
                 // Keyed by asset name, since the archive's own manifest settles the real id on install.
-                bundled = plugins.bundled().map { entry ->
+                // Normally empty: bundled archives install themselves at startup, so a row appears only
+                // for one the user removed.
+                bundled = plugins.bundled().filterNot { it.id in installedIds }.map { entry ->
                     StoreRow(
                         id = entry.assetName,
                         displayName = entry.name,
                         category = entry.category,
                         description = entry.description,
                         author = "",
-                        status = when {
-                            entry.assetName in installing -> StoreStatus.INSTALLING
-                            entry.id in installedIds -> StoreStatus.INSTALLED
-                            else -> StoreStatus.AVAILABLE
-                        },
+                        status = if (entry.assetName in installing) StoreStatus.INSTALLING else StoreStatus.AVAILABLE,
                     )
                 },
             )

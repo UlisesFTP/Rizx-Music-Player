@@ -87,9 +87,11 @@ class PluginInstallReportingTest {
         }
 
         override fun bundled(): List<BundledPlugin> = bundledEntries
+        override suspend fun seedBundled() = Unit
         override suspend fun setEnabled(id: String, enabled: Boolean) = Unit
         override suspend fun uninstall(id: String) = Unit
         override suspend fun reloadInstalled() = Unit
+        override suspend fun restartRuntime() = Unit
         override suspend fun addRegistry(url: String) = Unit
         override suspend fun removeRegistry(url: String) = Unit
     }
@@ -152,7 +154,8 @@ class PluginInstallReportingTest {
             advanceUntilIdle()
 
             assertNull(vm.state.value.storeError)
-            assertEquals(StoreStatus.INSTALLED, vm.state.value.store.single().status)
+            // Installed, so it leaves the store rather than sitting there labelled "Installed".
+            assertEquals(emptyList<StoreRow>(), vm.state.value.store)
         }
 
     @Test
@@ -175,6 +178,8 @@ class PluginInstallReportingTest {
             advanceUntilIdle()
 
             assertNull(vm.state.value.storeError)
-            assertEquals(StoreStatus.INSTALLED, vm.state.value.bundled.single().status)
+            // The row is gone, which is only possible if the installed id was compared against the
+            // manifest id — the asset name it is keyed by never matches anything in the installed list.
+            assertEquals(emptyList<StoreRow>(), vm.state.value.bundled)
         }
 }

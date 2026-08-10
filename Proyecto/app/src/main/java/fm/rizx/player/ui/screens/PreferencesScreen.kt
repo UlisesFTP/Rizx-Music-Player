@@ -564,8 +564,8 @@ private fun AudioQualityDialog(
 
             AudioQualityMode.entries.forEach { option ->
                 // Lossless is shown but not selectable with no index plugin installed. Greyed with the
-                // reason rather than hidden, because unlike the desktop-only plugins this is one step
-                // away from working — and an option that silently isn't there can't be looked for.
+                // reason rather than hidden, because unlike a plugin kept out of the store this is one
+                // step away from working — and an option that silently isn't there can't be looked for.
                 val selectable = option != AudioQualityMode.LOSSLESS_PREFERRED || losslessAvailable
                 DialogOptionRow(
                     label = stringResource(audioQualityLabel(option)),

@@ -15,11 +15,17 @@ import org.junit.Test
  * and then compete with it in the streaming chain, and a row captioned "you already have this" is
  * clutter rather than information. So [RegistryPlugin.REPLACED_BY_NATIVE] hides exactly those.
  *
+ * A second list, [RegistryPlugin.NOT_RUNNABLE], hides the other kind: a plugin with no way to reach
+ * the host at all. Kept apart because the two stop being true for different reasons — one when Rizx
+ * drops a native provider, the other when the missing half of the runtime gets built.
+ *
  * These assert the *list*, not a label, because that is now where the decision lives.
  */
 class PluginStoreVisibilityTest {
 
-    private fun hidden(id: String) = id in RegistryPlugin.REPLACED_BY_NATIVE
+    /** Through the production predicate, not the raw set — the store now hides by category too. */
+    private fun hidden(id: String, category: String = "metadata") =
+        RegistryPlugin(id = id, repo = "nukeop/x", category = category).isHidden
 
     @Test
     fun `plugins Rizx already does natively are not listed`() {
@@ -34,16 +40,50 @@ class PluginStoreVisibilityTest {
     @Test
     fun `plugins that add something Rizx lacks stay listed`() {
         // The list has to stop somewhere, and this is where: no native equivalent, so no reason to hide.
+        //
+        // SoundCloud Dashboard is the close call and it stays: the native provider declares TOP_TRACKS
+        // and nothing else, while the plugin also brings editorial picks and a signed-in user's likes,
+        // follows and recommendations. Hiding a superset would cost capability, not remove duplication.
         listOf(
             "nuclear-plugin-discogs",
             "nuclear-plugin-musicbrainz",
             "nuclear-plugin-bandcamp",
             "nuclear-plugin-bandcamp-dashboard",
             "nuclear-plugin-listenbrainz-dashboard",
+            "nuclear-plugin-soundcloud-dashboard",
             "nuclear-plugin-khinsider",
-            "nuclear-plugin-lastfm",
             "nuclear-plugin-youtube-liked-songs-sync",
         ).forEach { assertFalse(it, hidden(it)) }
+    }
+
+    @Test
+    fun `a plugin that could not run here is hidden for that reason, not the native one`() {
+        // Last.fm registers a `scrobbling` descriptor, which buildProvider does not map, and the host
+        // never calls `rizx.emit`, so its api.Events subscription would never fire either. It installs
+        // and does nothing.
+        assertTrue(hidden("nuclear-plugin-lastfm"))
+        assertTrue("nuclear-plugin-lastfm" in RegistryPlugin.NOT_RUNNABLE)
+        // The two reasons stay apart: this one becomes listable by building the missing half, whereas
+        // the native six become listable only by removing something Rizx already does.
+        assertFalse("Rizx has no native scrobbling", "nuclear-plugin-lastfm" in RegistryPlugin.REPLACED_BY_NATIVE)
+    }
+
+    @Test
+    fun `a category the runtime cannot dispatch is hidden, whatever the id`() {
+        // The same rule as NOT_RUNNABLE, stated generally: `buildProvider` maps six kinds, and a plugin
+        // outside them registers nothing. Expressed as a category so a *future* scrobbling or discovery
+        // plugin is kept out without anyone noticing it and adding its id by hand.
+        assertTrue(hidden("some-new-scrobbler", category = "scrobbling"))
+        assertTrue(hidden("some-new-recommender", category = "discovery"))
+        // Discovery is the subtler one: the runtime does build a provider, but nothing in the app ever
+        // calls it — the up-next engine is a closed set. It would install and look perfectly healthy.
+        assertTrue(hidden("x", category = "Discovery"))
+    }
+
+    @Test
+    fun `the categories the app does dispatch stay listed`() {
+        listOf("metadata", "streaming", "lyrics", "dashboard", "playlists", "other")
+            .forEach { assertFalse(it, hidden("some-third-party-plugin", category = it)) }
     }
 
     @Test

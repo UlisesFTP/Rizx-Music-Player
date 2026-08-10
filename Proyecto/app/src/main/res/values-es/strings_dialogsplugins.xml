@@ -21,13 +21,14 @@
     <string name="plugins_tap_to_use">Toca para usar</string>
     <string name="plugins_install">Instalar</string>
     <string name="plugins_installing">Instalando…</string>
-    <string name="plugins_installed">Instalado</string>
     <string name="plugins_uninstall">Desinstalar</string>
     <string name="plugins_plugin_category">Plugin · %1$s</string>
     <string name="plugins_health_down">Caído</string>
     <string name="plugins_quarantined">Desactivado solo tras fallar varias veces</string>
     <string name="plugins_update">Actualizar</string>
     <string name="plugins_section_open">Ecosistema abierto</string>
+    <string name="plugins_restart_runtime">Reiniciar el motor de plugins</string>
+    <string name="plugins_restart_runtime_subtitle">Si los plugins dejan de responder. Se recargan; no se desinstala nada.</string>
     <string name="plugins_sideload_title">Instalar desde URL</string>
     <string name="plugins_sideload_subtitle">Un plugin.zip de release o un enlace zipball de GitHub</string>
     <string name="plugins_sideload_hint">Pega la URL de un zip de plugin…</string>
