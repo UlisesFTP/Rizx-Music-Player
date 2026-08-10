@@ -76,7 +76,14 @@ class PluginKvStore(
         }
     }
 
+    /**
+     * The plugin id arrives from the JS side and becomes a path segment, so it is checked here rather
+     * than assumed. Nothing in the sandbox should be able to name a directory this store writes into —
+     * `settings.json` under a directory of the caller's choosing is a file-write primitive, and the
+     * obvious target is another plugin's stored credentials.
+     */
     private fun fileFor(pluginId: String, scope: String): File {
+        require(PluginInstaller.isSafePluginId(pluginId)) { "unsafe plugin id" }
         val name = if (scope == SCOPE_SETTINGS) PluginInstaller.SETTINGS_FILE else PluginInstaller.STORAGE_FILE
         return File(File(pluginsRoot, pluginId), name)
     }

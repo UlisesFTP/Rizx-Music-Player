@@ -41,6 +41,16 @@ object Routes {
     fun editorialPlaylist(ref: PlaylistRef): String =
         "editorial_playlist/${Uri.encode(ref.source.provider)}/${Uri.encode(ref.source.id)}?name=${Uri.encode(ref.name)}"
 
+    /**
+     * A genre hub, reached from Search's browse wall. Carries the **provider's** genre id (not a query)
+     * plus the already-localized label, so the header names the genre without a second lookup — the
+     * same shape as [EDITORIAL_PLAYLIST].
+     */
+    const val GENRE = "genre"
+    const val GENRE_ROUTE = "genre/{id}?name={name}"
+    fun genre(genreId: String, name: String): String =
+        "$GENRE/${Uri.encode(genreId)}?name=${Uri.encode(name)}"
+
     /** Identify what is playing in the room. Reached from the Search header; keeps its own history. */
     const val RECOGNITION = "recognition"
 

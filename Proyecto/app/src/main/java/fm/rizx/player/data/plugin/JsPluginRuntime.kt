@@ -136,8 +136,8 @@ class JsPluginRuntime(
         // installed. A failed load now leaves the app exactly as it found it.
         try {
             engine.eval(buildModuleGraph(pluginId, compiled, entry))
-            engine.evalCaptured("globalThis.__rizx.runHook(${enc(pluginId)}, 'onLoad')")
-            engine.evalCaptured("globalThis.__rizx.runHook(${enc(pluginId)}, 'onEnable')")
+            engine.evalCaptured("globalThis.__rizx.runHook(${enc(engine.hostToken)}, ${enc(pluginId)}, 'onLoad')")
+            engine.evalCaptured("globalThis.__rizx.runHook(${enc(engine.hostToken)}, ${enc(pluginId)}, 'onEnable')")
             flushRegistrations()
         } catch (e: Throwable) {
             synchronized(pending) { pending.removeAll { (id, _) -> id == pluginId } }
@@ -158,7 +158,7 @@ class JsPluginRuntime(
     override suspend fun invoke(uid: String, method: String, argsJson: String, timeoutMs: Long): String? {
         val pluginId = uid.substringBefore(':')
         if (pluginId in quarantined) throw PluginException("plugin '$pluginId' is quarantined")
-        val statement = "globalThis.__rizx.invokeAndCapture(${enc(uid)}, ${enc(method)}, ${enc(argsJson)})"
+        val statement = "globalThis.__rizx.invokeAndCapture(${enc(engine.hostToken)}, ${enc(uid)}, ${enc(method)}, ${enc(argsJson)})"
         return try {
             val result = gate.run(timeoutMs) { engine.evalCaptured(statement) }
             failureCounts[pluginId]?.set(0)
@@ -221,17 +221,17 @@ class JsPluginRuntime(
             }
         }
         return """
-            globalThis.__rizx.plugins[${enc(pluginId)}] = (function () {
+            globalThis.__rizx.definePlugin(${enc(engine.hostToken)}, ${enc(pluginId)}, (function (__scope) {
               var __defs = {};
               var __cache = {};
-              // Timers scoped to this plugin, shadowing the globals for every module below. The global
-              // ones are shared, so a setInterval used to outlive disable and uninstall — still ticking,
-              // still holding this whole graph in memory.
-              var __pid = ${enc(pluginId)};
-              var setTimeout = function (fn, ms) { return globalThis.__rizx.timer(__pid, false, fn, ms); };
-              var setInterval = function (fn, ms) { return globalThis.__rizx.timer(__pid, true, fn, ms); };
-              var clearTimeout = function (id) { globalThis.__rizx.clearTimer(__pid, id); };
-              var clearInterval = clearTimeout;
+              // The plugin's own timers, shadowing the (deliberately absent) globals for every module
+              // below, so they stop when it is disabled. `__scope` is all this wrapper closes over that
+              // came from the host — the token that produced it was consumed in the call expression
+              // outside this function, where plugin code has no way to look.
+              var setTimeout = __scope.setTimeout;
+              var setInterval = __scope.setInterval;
+              var clearTimeout = __scope.clearTimeout;
+              var clearInterval = __scope.clearInterval;
               function __dirname(p) { var i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i); }
               function __norm(p) {
                 var parts = p.split('/'); var out = [];
@@ -271,7 +271,7 @@ class JsPluginRuntime(
             $defines
               var entry = __require('', ${enc(entryPath)});
               return (entry && entry.default) || entry;
-            })();
+            })(globalThis.__rizx.pluginScope(${enc(engine.hostToken)}, ${enc(pluginId)})));
         """.trimIndent()
     }
 
@@ -285,6 +285,13 @@ class JsPluginRuntime(
     private suspend fun flushRegistrations() {
         val snapshot = synchronized(pending) { pending.toList().also { pending.clear() } }
         for ((pluginId, metaJson) in snapshot) {
+            // Only from a plugin that is currently loading or loaded. A closure that outlives unloading
+            // — a timer, a pending fetch callback — still holds a working `api`, and without this its
+            // `register` call would put a provider back into the app that nothing can remove.
+            if (pluginId !in pluginVersions) {
+                Log.w(TAG, "ignoring registration from '$pluginId', which is not loaded")
+                continue
+            }
             val provider = buildProvider(pluginId, metaJson) ?: continue
             withContext(mainDispatcher) { runCatching { registry.register(provider) } }
             synchronized(registeredUids) {
@@ -295,10 +302,14 @@ class JsPluginRuntime(
 
     private fun buildProvider(pluginId: String, metaJson: String): ProviderDescriptor? {
         val meta = runCatching { json.parseToJsonElement(metaJson).jsonObject }.getOrNull() ?: return null
-        val uid = meta["uid"]?.jsonPrimitive?.contentOrNull ?: return null
+        val descriptorId = meta["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
+        // **Derived here, never taken from the plugin.** The registry indexes by id and a later
+        // `register` overwrites an earlier one, so a descriptor that arrived claiming to be `deezer`
+        // used to replace the native Deezer provider — quietly seeing every search and choosing the
+        // audio URL that plays. Native ids carry no colon, so this shape cannot collide with one.
+        val uid = "$pluginId:$descriptorId"
         val kind = meta["kind"]?.jsonPrimitive?.contentOrNull
         val name = meta["name"]?.jsonPrimitive?.contentOrNull ?: uid
-        val descriptorId = meta["id"]?.jsonPrimitive?.contentOrNull ?: uid
         val version = pluginVersions[pluginId] ?: "1.0"
         val methods = meta.strings("methods")
         val caps = meta.strings("searchCapabilities").mapNotNull { mapCap(it) }.toSet()
@@ -342,15 +353,14 @@ class JsPluginRuntime(
 
     /** Runs `onDisable`+`onUnload` and unregisters every provider the plugin contributed. */
     suspend fun unregisterPlugin(pluginId: String) {
-        runCatching { engine.evalCaptured("globalThis.__rizx.runHook(${enc(pluginId)}, 'onDisable')") }
-        runCatching { engine.evalCaptured("globalThis.__rizx.runHook(${enc(pluginId)}, 'onUnload')") }
+        runCatching { engine.evalCaptured("globalThis.__rizx.runHook(${enc(engine.hostToken)}, ${enc(pluginId)}, 'onDisable')") }
+        runCatching { engine.evalCaptured("globalThis.__rizx.runHook(${enc(engine.hostToken)}, ${enc(pluginId)}, 'onUnload')") }
         val uids = synchronized(registeredUids) { registeredUids.remove(pluginId).orEmpty() }
         pluginVersions.remove(pluginId)
         for (uid in uids) withContext(mainDispatcher) { runCatching { registry.unregister(uid) } }
         runCatching {
             engine.eval(
-                "delete globalThis.__rizx.plugins[${enc(pluginId)}];" +
-                    "globalThis.__rizx.dropProviders(${enc(pluginId)});",
+                "globalThis.__rizx.dropProviders(${enc(engine.hostToken)}, ${enc(pluginId)});",
             )
         }
     }

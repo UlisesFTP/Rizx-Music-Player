@@ -130,6 +130,16 @@ data class InstalledPlugin(
     }
 }
 
+/**
+ * The plugin API this build implements, declared by a plugin as `"rizx": { "apiVersion": 1 }`.
+ *
+ * Additive on purpose: a plugin written for Nuclear declares nothing and keeps working exactly as
+ * before. Declaring it is how a third-party plugin says which host contract it was written against, and
+ * the only way the host can refuse one written for a *newer* Rizx instead of failing later in some
+ * unrelated place. Bump this when the contract changes in a way an existing plugin could notice.
+ */
+const val RIZX_PLUGIN_API_VERSION = 1
+
 /** Parsed `package.json` for a plugin. */
 @Serializable
 data class PluginManifest(
@@ -140,4 +150,6 @@ data class PluginManifest(
     val main: String = "src/index.ts",
     val category: String = "other",
     val displayName: String = "",
+    /** `rizx.apiVersion`, or null for a plugin that predates it (treated as legacy Nuclear). */
+    val apiVersion: Int? = null,
 )

@@ -3,7 +3,7 @@ package fm.rizx.player.domain.model
 import kotlinx.serialization.Serializable
 
 /** Which dashboard sections a provider can supply (Phase 19). */
-enum class DashboardCapability { TOP_TRACKS, TOP_ARTISTS, TOP_ALBUMS, EDITORIAL_PLAYLISTS, NEW_RELEASES, MOOD_STATIONS, FEATURED_PLAYLISTS }
+enum class DashboardCapability { TOP_TRACKS, TOP_ARTISTS, TOP_ALBUMS, EDITORIAL_PLAYLISTS, NEW_RELEASES, MOOD_STATIONS, FEATURED_PLAYLISTS, GENRE_FEED }
 
 /**
  * A mood/genre station ("Chill Out", "¡Fiesta!", Pop…) as the provider curates it — the provider also

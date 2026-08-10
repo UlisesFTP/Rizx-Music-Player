@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -58,6 +59,16 @@ class QuickJsEngine(
 ) {
     private val engineDispatcher: CoroutineDispatcher =
         Executors.newSingleThreadExecutor { r -> Thread(r, "rizx-quickjs") }.asCoroutineDispatcher()
+
+    /**
+     * Proves to the bootstrap that a call is the host's, not a plugin's.
+     *
+     * Every plugin shares one JS context, so `globalThis.__rizx` is reachable by all of them and the
+     * entry points that unload a plugin or run its hooks had no way to tell who was calling. The token
+     * is only ever written into statements this class evaluates at global scope — never inside a
+     * plugin's module wrapper — so it never enters a scope chain plugin code can walk.
+     */
+    val hostToken: String = ByteArray(24).also { secureRandom.nextBytes(it) }.toHex()
 
     /** Fetches get a hard call timeout so a stalled server can't wedge a plugin invocation forever. */
     private val fetchClient by lazy {
@@ -116,6 +127,8 @@ class QuickJsEngine(
             val facade = ytdlp ?: throw PluginException("yt-dlp is not available on Android")
             facade.handle(args[0] as String, args[1] as String)
         }
+        // Before the bootstrap, which captures it and removes it from the global object.
+        qjs.evaluate<Any?>("globalThis.__RIZX_HOST_TOKEN = ${json.encodeToString(String.serializer(), hostToken)};")
         qjs.evaluate<Any?>(bootstrapJs)
         for (script in extraJs) runCatching { qjs.evaluate<Any?>(script) }
             .onFailure { Log.w(TAG, "extra runtime script failed to evaluate: ${it.message}") }

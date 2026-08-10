@@ -6,6 +6,7 @@ import fm.rizx.player.domain.model.AttributedResult
 import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.provider.PlaylistProvider
 import fm.rizx.player.domain.model.DashboardCapability
+import fm.rizx.player.domain.model.GenreFeed
 import fm.rizx.player.domain.model.HomeFeed
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.DashboardProvider
@@ -80,6 +81,30 @@ class DashboardRepositoryImpl(
                 .firstOrNull { it.id == providerId }
             safe(provider != null) { provider!!.stationTracks(stationId, limit) }
         }
+
+    /**
+     * The first **enabled** genre-capable provider with something to say about [genreId]. A provider
+     * that doesn't own the id space answers empty, so "first non-empty" is also "first that recognises
+     * it" — and a failure is just another empty answer, never the user's problem.
+     */
+    override suspend fun genreFeed(genreId: String, limit: Int): GenreFeed = withContext(io) {
+        val all = registry.list(ProviderKind.DASHBOARD).filterIsInstance<DashboardProvider>()
+        val enabledMap = enabled.snapshot(all.map { it.id })
+        val capable = all.filter {
+            enabledMap[it.id] != false && DashboardCapability.GENRE_FEED in it.dashboardCapabilities
+        }
+        for (provider in capable) {
+            val feed = try {
+                provider.genreFeed(genreId, limit)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                continue
+            }
+            if (!feed.isEmpty) return@withContext feed
+        }
+        GenreFeed()
+    }
 
     /** A predicate over playlist refs: true when some **enabled** playlist provider can fetch it. */
     private suspend fun playlistOpeners(): (PlaylistRef) -> Boolean {

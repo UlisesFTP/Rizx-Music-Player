@@ -173,6 +173,81 @@ class PluginInstallerTest {
     }
 
     @Test
+    fun `a manifest named for the parent directory cannot be installed`() = runBlocking {
+        // `File(pluginsRoot, "..")` is the app's whole files directory, and the installer deletes the
+        // directory it is about to extract into. This archive used to take the database, the downloads
+        // and every other plugin with it — from a pasted URL.
+        val zip = zipOf(
+            "package.json" to """{"name":"..","version":"1.0.0","main":"src/index.ts"}""",
+            "src/index.ts" to "export default {}",
+        )
+        val root = tmp.newFolder("plugins")
+        val sibling = java.io.File(root.parentFile, "precious.db").apply { writeText("data") }
+
+        val failure = runCatching { PluginInstaller(OkHttpClient(), json, root).installFromZip(zip.inputStream()) }
+
+        assertTrue(failure.exceptionOrNull() is AppError.ProviderFailure)
+        assertTrue("the parent directory must be untouched", sibling.exists())
+    }
+
+    @Test
+    fun `a zip entry escaping into a sibling plugin is refused`() = runBlocking {
+        // The guard compared canonical paths with `startsWith` and no separator, so `…/plugins/acme`
+        // was a prefix of `…/plugins/acme-victim` and this entry landed in the victim's source tree —
+        // arbitrary code injected into a plugin the user already trusts.
+        val zip = zipOf(
+            "package.json" to pkg(),
+            "src/index.ts" to "export default {}",
+            "../acme-plugin-victim/src/index.ts" to "module.exports = { evil: true }",
+        )
+
+        val failure = runCatching { installer().installFromZip(zip.inputStream()) }
+
+        assertTrue(failure.exceptionOrNull() is AppError.ProviderFailure)
+        assertTrue(failure.exceptionOrNull()!!.message!!.contains("unsafe zip entry"))
+    }
+
+    @Test
+    fun `a different plugin reusing an id does not inherit the stored credentials`() = runBlocking {
+        val installer = installer()
+        installer.installFromZip(
+            zipOf("package.json" to """{"name":"Acme Plugin","version":"1.0.0","main":"src/index.ts"}""",
+                "src/index.ts" to "export default {}").inputStream(),
+        ).also { java.io.File(it.dir, PluginInstaller.SETTINGS_FILE).writeText("""{"token":"secret"}""") }
+
+        // Normalizes to the same id, `acme-plugin`, but it is a different plugin. Carrying the settings
+        // across would hand it the first one's API token with nothing exploited at all.
+        val impostor = installer.installFromZip(
+            zipOf("package.json" to """{"name":"acme/plugin","version":"1.0.0","main":"src/index.ts"}""",
+                "src/index.ts" to "export default {}").inputStream(),
+        )
+
+        assertEquals("acme-plugin", impostor.dir.name)
+        assertTrue(!java.io.File(impostor.dir, PluginInstaller.SETTINGS_FILE).exists())
+    }
+
+    @Test
+    fun `a plugin written for a newer host is refused, and one that says nothing installs`() = runBlocking {
+        val installer = installer()
+        val tooNew = runCatching {
+            installer.installFromZip(
+                zipOf(
+                    "package.json" to """{"name":"acme-plugin","version":"1.0.0","main":"src/index.ts","rizx":{"apiVersion":99}}""",
+                    "src/index.ts" to "export default {}",
+                ).inputStream(),
+            )
+        }
+        assertTrue(tooNew.exceptionOrNull() is AppError.ProviderFailure)
+        assertTrue(tooNew.exceptionOrNull()!!.message!!.contains("v99"))
+
+        // Every Nuclear plugin declares nothing, and must keep working exactly as before.
+        val legacy = installer.installFromZip(
+            zipOf("package.json" to pkg(), "src/index.ts" to "export default {}").inputStream(),
+        )
+        assertNull(legacy.manifest.apiVersion)
+    }
+
+    @Test
     fun `entry resolution tolerates the legacy src-stripped key`() {
         val sources = mapOf("src/index" to PluginSourceFile("", PluginSourceKind.TS))
 

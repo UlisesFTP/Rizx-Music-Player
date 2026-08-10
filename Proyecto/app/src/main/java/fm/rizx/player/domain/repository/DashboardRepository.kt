@@ -1,5 +1,6 @@
 package fm.rizx.player.domain.repository
 
+import fm.rizx.player.domain.model.GenreFeed
 import fm.rizx.player.domain.model.HomeFeed
 import fm.rizx.player.domain.model.Track
 
@@ -18,4 +19,11 @@ interface DashboardRepository {
      * care about the feed need not implement it.
      */
     suspend fun stationTracks(providerId: String, stationId: String, limit: Int): List<Track> = emptyList()
+
+    /**
+     * One genre's songs, playlists, artists and albums, from the first enabled provider that knows the
+     * id. Unlike [homeFeed] this does **not** blend: genre ids belong to a single catalogue, so merging
+     * two providers' answers would mean merging two unrelated groupings.
+     */
+    suspend fun genreFeed(genreId: String, limit: Int): GenreFeed = GenreFeed()
 }

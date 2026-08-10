@@ -2,11 +2,13 @@ package fm.rizx.player.data.plugin.install
 
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.domain.plugin.PluginManifest
+import fm.rizx.player.domain.plugin.RIZX_PLUGIN_API_VERSION
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -46,9 +48,13 @@ class PluginInstaller(
     private val pluginsRoot: File,
 ) {
     suspend fun install(pluginId: String, repo: String, downloadUrl: String? = null): ExtractedPlugin = withContext(Dispatchers.IO) {
+        // A registry entry's id is a remote string that becomes a directory name. Sideloads have always
+        // been normalized through `pluginIdFor`; this path was not — and the user can add any registry.
+        val safeId = pluginIdFor(pluginId)
+        if (safeId.isBlank()) throw AppError.ProviderFailure("PluginInstaller", "unsafe plugin id '$pluginId'")
         val assetUrl = downloadUrl ?: resolveAssetUrl(repo)
         val zipBytes = download(assetUrl)
-        installFromZipBytes(pluginId, zipBytes, origin = repo)
+        installFromZipBytes(safeId, zipBytes, origin = repo)
     }
 
     /** Sideload: download a plugin zip from a pasted [url]; the id comes from its own manifest. */
@@ -59,9 +65,7 @@ class PluginInstaller(
     /** Sideload from a picked file/stream; the id comes from the zip's own manifest. */
     suspend fun installFromZip(zip: InputStream, origin: String = "sideload"): ExtractedPlugin =
         withContext(Dispatchers.IO) {
-            val bytes = zip.readBytes()
-            if (bytes.size > MAX_ZIP_BYTES) throw AppError.ProviderFailure("PluginInstaller", "plugin archive too large")
-            installAutoId(bytes, origin)
+            installAutoId(readBounded(zip, MAX_ZIP_BYTES, "plugin archive too large"), origin)
         }
 
     /**
@@ -70,7 +74,7 @@ class PluginInstaller(
      * manifest-derived id.
      */
     private fun installAutoId(zipBytes: ByteArray, origin: String): ExtractedPlugin {
-        val tmp = File(pluginsRoot, ".tmp-sideload")
+        val tmp = File(pluginsRoot, TMP_DIR)
         try {
             tmp.deleteRecursively(); tmp.mkdirs()
             extract(zipBytes, tmp)
@@ -85,7 +89,10 @@ class PluginInstaller(
     }
 
     private fun installFromZipBytes(pluginId: String, zipBytes: ByteArray, origin: String): ExtractedPlugin {
+        if (!isSafePluginId(pluginId)) throw AppError.ProviderFailure("PluginInstaller", "unsafe plugin id '$pluginId'")
         val dir = File(pluginsRoot, pluginId)
+        // Read before deleting: per-plugin state is only carried over when this is *the same plugin*.
+        val previousName = runCatching { readManifest(dir).name }.getOrNull()
         val keepDirs = listOf(File(dir, SETTINGS_FILE), File(dir, STORAGE_FILE))
         val kept = keepDirs.mapNotNull { f -> f.takeIf { it.exists() }?.let { it.name to it.readBytes() } }
         dir.deleteRecursively(); dir.mkdirs()
@@ -93,13 +100,23 @@ class PluginInstaller(
             extract(zipBytes, dir)
             unwrapZipball(dir)
             val manifest = readManifest(dir)
+            manifest.apiVersion?.let { declared ->
+                if (declared > RIZX_PLUGIN_API_VERSION) throw AppError.ProviderFailure(
+                    "PluginInstaller",
+                    "this plugin needs plugin API v$declared; this build of Rizx supports v$RIZX_PLUGIN_API_VERSION",
+                )
+            }
             val entryPath = normalize(manifest.main)
             val sources = collectSources(dir)
             resolveEntry(sources, entryPath)
                 ?: throw AppError.ProviderFailure("PluginInstaller", "entry '$entryPath' not found in $origin")
             checkBareDependencies(sources)
-            // Restore per-plugin settings/storage so an update never loses a plugin's tokens/state.
-            for ((name, bytes) in kept) File(dir, name).writeBytes(bytes)
+            // Restore per-plugin settings/storage so an update never loses a plugin's tokens/state —
+            // but only for the same manifest name. Two different names can normalize to one id, and
+            // then the second install would silently inherit the first's stored credentials.
+            if (previousName == null || previousName == manifest.name) {
+                for ((name, bytes) in kept) File(dir, name).writeBytes(bytes)
+            }
             return ExtractedPlugin(manifest, dir, sources, entryPath)
         } catch (e: Throwable) {
             dir.deleteRecursively() // installs are atomic
@@ -129,14 +146,34 @@ class PluginInstaller(
     private fun download(url: String): ByteArray =
         client.newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) throw AppError.ProviderFailure("PluginInstaller", "download failed (HTTP ${response.code})")
-            val bytes = response.body?.bytes() ?: ByteArray(0)
-            if (bytes.size > MAX_ZIP_BYTES) throw AppError.ProviderFailure("PluginInstaller", "plugin archive too large")
-            bytes
+            val body = response.body ?: return@use ByteArray(0)
+            readBounded(body.byteStream(), MAX_ZIP_BYTES, "plugin archive too large")
         }
+
+    /**
+     * Reads at most [max] bytes, failing **as soon as** the limit is passed.
+     *
+     * The point is where the check happens: reading the whole thing and then measuring it means a
+     * server (or a deflate bomb) that answers with gigabytes has already exhausted the heap by the time
+     * anyone objects.
+     */
+    private fun readBounded(input: InputStream, max: Int, message: String): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            if (out.size().toLong() + read > max) throw AppError.ProviderFailure("PluginInstaller", message)
+            out.write(buffer, 0, read)
+        }
+        return out.toByteArray()
+    }
 
     /** Extracts preserving entry paths verbatim (zip-slip and size guarded). */
     private fun extract(zipBytes: ByteArray, dir: File) {
-        val canonicalRoot = dir.canonicalPath
+        // With the separator: without it, `…/plugins/evil` is a prefix of `…/plugins/evil-victim`, so an
+        // entry named `../evil-victim/index.js` passed the check and overwrote another plugin's code.
+        val canonicalRoot = dir.canonicalPath + File.separator
         ZipInputStream(zipBytes.inputStream()).use { zis ->
             var entry = zis.nextEntry
             var total = 0L
@@ -145,9 +182,9 @@ class PluginInstaller(
                     val out = File(dir, entry.name)
                     if (!out.canonicalPath.startsWith(canonicalRoot)) throw AppError.ProviderFailure("PluginInstaller", "unsafe zip entry ${entry.name}")
                     out.parentFile?.mkdirs()
-                    val bytes = zis.readBytes()
+                    val room = (MAX_UNZIPPED_BYTES - total).coerceAtLeast(0L).toInt()
+                    val bytes = readBounded(zis, room, "plugin unpacks too large")
                     total += bytes.size
-                    if (total > MAX_UNZIPPED_BYTES) throw AppError.ProviderFailure("PluginInstaller", "plugin unpacks too large")
                     out.writeBytes(bytes)
                 }
                 zis.closeEntry()
@@ -190,6 +227,9 @@ class PluginInstaller(
             main = obj["main"]?.jsonPrimitive?.contentOrNull ?: "src/index.ts",
             category = category ?: "other",
             displayName = nuclear?.get("displayName")?.jsonPrimitive?.contentOrNull ?: "",
+            // Rizx's own block. Absent for every Nuclear plugin, which is the point: declaring nothing
+            // keeps the old behaviour, declaring a version is how a plugin states its contract.
+            apiVersion = obj["rizx"]?.jsonObject?.get("apiVersion")?.jsonPrimitive?.intOrNull,
         )
     }
 
@@ -258,16 +298,31 @@ class PluginInstaller(
         private val ID_UNSAFE = Regex("[^a-z0-9._-]+")
 
         /**
-         * The plugin id an archive named [name] installs under.
+         * The plugin id an archive named [name] installs under, or `""` when nothing safe remains.
          *
          * Public because the id has to be predictable *before* the install: the store decides whether to
          * draw "Install" or "Installed" by comparing a manifest's name against the installed list, and
          * comparing the raw name would leave a plugin called `Rizx Lossless` looking uninstalled forever
          * — its own files sitting under `rizx-lossless`.
          */
-        fun pluginIdFor(name: String): String = name.lowercase().replace(ID_UNSAFE, "-").trim('-')
+        fun pluginIdFor(name: String): String =
+            name.lowercase().replace(ID_UNSAFE, "-").trim('-').takeIf { isSafePluginId(it) }.orEmpty()
+
+        /**
+         * A plugin id becomes one path segment under the plugins root, and the installer **deletes that
+         * directory** before extracting into it.
+         *
+         * `.` and `..` are the whole reason this exists: `File(pluginsRoot, "..")` is the app's entire
+         * files directory, so a manifest named `".."` used to wipe the database, the downloads, the
+         * playback session and every other plugin — reachable by pasting a URL. Dot-leading ids are
+         * refused wholesale rather than enumerated, which also covers the installer's own `.cache` and
+         * scratch directories.
+         */
+        fun isSafePluginId(id: String): Boolean =
+            id.isNotBlank() && !id.startsWith(".") && '/' !in id && '\\' !in id
 
         const val CACHE_DIR = ".cache"
+        const val TMP_DIR = ".tmp-sideload"
         const val SETTINGS_FILE = "settings.json"
         const val STORAGE_FILE = "storage.json"
         const val MAX_ZIP_BYTES = 20 * 1024 * 1024

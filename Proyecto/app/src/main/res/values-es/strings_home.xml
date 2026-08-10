@@ -59,7 +59,8 @@
 
     <!-- Search screen: idle state (suggestions + genre tiles) -->
     <string name="search_try_searching">Prueba a buscar</string>
-    <string name="search_browse_genres">Explorar géneros</string>
+    <string name="search_browse_all">Explorar todo</string>
+    <string name="search_genre_charts">Éxitos</string>
     <string name="search_genre_pop">Pop</string>
     <string name="search_genre_hiphop">Hip-Hop</string>
     <string name="search_genre_rock">Rock</string>
@@ -76,6 +77,21 @@
     <string name="search_genre_country">Country</string>
     <string name="search_genre_folk">Folk</string>
     <string name="search_genre_dance">Dance</string>
+    <string name="search_genre_alternative">Alternativo</string>
+    <string name="search_genre_mexican">Música mexicana</string>
+    <string name="search_genre_salsa">Salsa</string>
+    <string name="search_genre_cumbia">Cumbia</string>
+    <string name="search_genre_brazilian">Música brasileña</string>
+    <string name="search_genre_african">Música africana</string>
+    <string name="search_genre_asian">Música asiática</string>
+    <string name="search_genre_indian">Música de la India</string>
+    <string name="search_genre_christian">Cristiana</string>
+    <string name="search_genre_soundtracks">Películas y juegos</string>
+    <string name="search_genre_kids">Infantil</string>
+
+    <!-- Genre hub (a browse tile opens this, not a text search) -->
+    <string name="genre_eyebrow">GÉNERO</string>
+    <string name="genre_empty">No hay nada en este género ahora mismo.</string>
     <string name="home_tab_playlists">Playlists</string>
     <string name="home_new_releases">Novedades</string>
     <string name="home_empty_playlists">No hay playlists por ahora.</string>

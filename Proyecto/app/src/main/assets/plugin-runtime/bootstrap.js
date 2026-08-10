@@ -10,9 +10,38 @@
 (function () {
   const g = globalThis;
 
+  // ---- host bindings, captured once -----------------------------------------
+  // Every plugin shares this one context, so anything left reachable on the global object is reachable
+  // by all of them. Capturing the host functions here means a plugin that overwrites `globalThis.
+  // __rizx_kv_get` changes nothing: this file keeps calling the original through its own reference.
+  // Deleting them afterwards is defence in depth — the design does not depend on the delete working.
+  const hLog = g.__rizx_log, hFetch = g.__rizx_fetch, hSleep = g.__rizx_sleep;
+  const hOnRegister = g.__rizx_onRegister;
+  const hKvGet = g.__rizx_kv_get, hKvSet = g.__rizx_kv_set, hKvRemove = g.__rizx_kv_remove;
+  const hOpenExternal = g.__rizx_open_external;
+  const hRandomHex = g.__rizx_random_hex, hHmacHex = g.__rizx_hmac_hex, hDigestHex = g.__rizx_digest_hex;
+  const hYtdlp = g.__rizx_ytdlp;
+
+  // The host proves it is the host with this token, injected by Kotlin just before this file and read
+  // back here. It only ever appears as a literal in expressions Kotlin evaluates at global scope, never
+  // inside a plugin's own scope chain, so plugin code has nowhere to read it from.
+  const HOST_TOKEN = g.__RIZX_HOST_TOKEN;
+  function hostOnly(token) {
+    if (token !== HOST_TOKEN) throw new Error('host-only entry point');
+  }
+
+  for (const name of [
+    '__rizx_log', '__rizx_fetch', '__rizx_sleep', '__rizx_onRegister', '__rizx_kv_get', '__rizx_kv_set',
+    '__rizx_kv_remove', '__rizx_open_external', '__rizx_random_hex', '__rizx_hmac_hex',
+    '__rizx_digest_hex', '__rizx_ytdlp', '__RIZX_HOST_TOKEN',
+  ]) {
+    try { delete g[name]; } catch (e) { /* non-configurable: the captured references still hold */ }
+    if (g[name] !== undefined) { try { g[name] = undefined; } catch (e) { /* frozen: ditto */ } }
+  }
+
   // ---- console -> Kotlin log ------------------------------------------------
   const log = (level) => (...args) =>
-    __rizx_log(level, args.map((a) => (typeof a === 'string' ? a : safeStringify(a))).join(' '));
+    hLog(level, args.map((a) => (typeof a === 'string' ? a : safeStringify(a))).join(' '));
   g.console = { log: log('info'), info: log('info'), warn: log('warn'), error: log('error'), debug: log('debug') };
 
   function safeStringify(v) { try { return JSON.stringify(v); } catch (e) { return String(v); } }
@@ -89,21 +118,12 @@
     return out;
   };
 
-  // ---- timers (best-effort; advance while an evaluate is pending) ------------
-  let timerId = 1; const timers = {};
-  g.setTimeout = function (fn, ms) { const id = timerId++; timers[id] = fn; __rizx_sleep(ms | 0).then(() => { if (timers[id]) { delete timers[id]; try { fn(); } catch (e) { console.error('timer', e); } } }); return id; };
-  g.clearTimeout = function (id) { delete timers[id]; };
-  g.setInterval = function (fn, ms) {
-    const id = timerId++; timers[id] = fn;
-    const tick = () => __rizx_sleep(ms | 0).then(() => {
-      if (!timers[id]) return;
-      try { fn(); } catch (e) { console.error('interval', e); }
-      tick();
-    });
-    tick();
-    return id;
-  };
-  g.clearInterval = g.clearTimeout;
+  // ---- timers ---------------------------------------------------------------
+  // There are deliberately **no global timers**. Every plugin's module graph is handed its own
+  // `setTimeout`/`setInterval` (see `rizx.pluginScope`), bound to that plugin and stopped when it is
+  // disabled or uninstalled. A global pair would have been the way around that: an unowned
+  // `setInterval` kept running — fetching, holding its module graph in memory — after the user had
+  // switched the plugin off, and nothing could reach it to stop it.
 
   // ---- URLSearchParams (parsing ctor + full surface) ------------------------
   function qsDecode(s) { try { return decodeURIComponent(String(s).replace(/\+/g, ' ')); } catch (e) { return String(s); } }
@@ -204,13 +224,13 @@
   // ---- crypto ---------------------------------------------------------------
   g.crypto = {
     getRandomValues: function (arr) {
-      const bytes = hexToBytes(__rizx_random_hex(arr.byteLength));
+      const bytes = hexToBytes(hRandomHex(arr.byteLength));
       const view = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
       view.set(bytes);
       return arr;
     },
     randomUUID: function () {
-      const b = hexToBytes(__rizx_random_hex(16));
+      const b = hexToBytes(hRandomHex(16));
       b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
       const h = bytesToHex(b);
       return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
@@ -222,12 +242,12 @@
         return { __hmacHex: bytesToHex(keyData), hash: String(hash) };
       },
       sign: async function (algorithm, key, data) {
-        const hex = __rizx_hmac_hex(key.hash, key.__hmacHex, bytesToHex(data));
+        const hex = hHmacHex(key.hash, key.__hmacHex, bytesToHex(data));
         return hexToBytes(hex).buffer;
       },
       digest: async function (algorithm, data) {
         const name = (algorithm && (algorithm.name || algorithm)) || 'SHA-256';
-        const hex = __rizx_digest_hex(String(name), bytesToHex(data));
+        const hex = hDigestHex(String(name), bytesToHex(data));
         return hexToBytes(hex).buffer;
       },
     },
@@ -244,7 +264,7 @@
     let headers = init.headers || {};
     if (headers instanceof g.Headers) { const o = {}; headers.forEach((v, k) => { o[k] = v; }); headers = o; }
     const params = { url: String(url), method: (init.method || 'GET').toUpperCase(), headers: headers, body: body };
-    const raw = await __rizx_fetch(JSON.stringify(params));
+    const raw = await hFetch(JSON.stringify(params));
     const res = JSON.parse(raw);
     return {
       ok: res.status >= 200 && res.status < 300,
@@ -259,16 +279,27 @@
     };
   };
 
+  // ---- shared state, closure-private ----------------------------------------
+  // These used to hang off the object published as `globalThis.__rizx`, which made every plugin's
+  // descriptors, module graph and event handlers readable — and *writable* — by every other plugin.
+  // Swapping an entry in `providers` was enough to become a permanent man-in-the-middle on a rival's
+  // calls. Keeping them here means plugin code has no name to reach them by.
+  const providers = {};  // uid -> descriptor object
+  const plugins = {};    // pluginId -> plugin module exports
+  const events = {};     // pluginId -> { eventName -> [handlers] }
+  const widgets = {};    // pluginId -> [widget names] (recorded; nothing renders)
+  const pluginTimers = {}; // pluginId -> { next, live } — per plugin so unloading can stop them
+
   // ---- __rizx host ----------------------------------------------------------
-  const rizx = {
-    providers: {},   // uid -> descriptor object
-    plugins: {},     // pluginId -> plugin object
-    events: {},      // pluginId -> { eventName -> [handlers] }
-    widgets: {},     // pluginId -> [widget names] (recorded; nothing renders)
-    timers: {},      // pluginId -> { next, live } — per plugin so unloading can stop them
-    __last: null,    // last captured async result (JSON string) — read by Kotlin
-    __err: null,     // last captured error message — read by Kotlin
-  };
+  // The only object published to the global scope, and it carries no state: just the entry points
+  // Kotlin calls, each proving it is the host. Frozen at the end of this file.
+  const rizx = {};
+  let lastValue = null; // last captured async result (JSON string) — read by Kotlin
+  let lastError = null; // last captured error message — read by Kotlin
+  // Getters, not fields: a plugin cannot redefine a non-configurable accessor, so it cannot install a
+  // getter of its own and have every provider call in the app return whatever it likes.
+  Object.defineProperty(rizx, '__last', { get: () => lastValue, configurable: false });
+  Object.defineProperty(rizx, '__err', { get: () => lastError, configurable: false });
 
   // ---- bare-specifier stubs (module loader asks here before failing) --------
   // The plugin SDK is type-only (verified across the registry) so an empty module is correct. The
@@ -294,18 +325,16 @@
   };
 
   // ---- per-plugin timers ----------------------------------------------------
-  // The module graph shadows setTimeout/setInterval with these, so a timer belongs to the plugin that
-  // started it. The global versions above are unowned and stay for the runtime's own use.
-  rizx.timer = function (pluginId, repeat, fn, ms) {
-    const own = (rizx.timers[pluginId] = rizx.timers[pluginId] || { next: 1, live: {} });
+  function timer(pluginId, repeat, fn, ms) {
+    const own = (pluginTimers[pluginId] = pluginTimers[pluginId] || { next: 1, live: {} });
     const id = own.next++;
     own.live[id] = true;
     const fire = function () {
-      __rizx_sleep(ms | 0).then(function () {
+      hSleep(ms | 0).then(function () {
         // Unloading drops the whole table, so a tick that outlives its plugin stops here. Without this
         // a setInterval survived disable *and* uninstall, kept its module graph alive, and could still
         // call Providers.register — putting a zombie provider back into the app.
-        const still = rizx.timers[pluginId];
+        const still = pluginTimers[pluginId];
         if (!still || !still.live[id]) return;
         if (!repeat) delete still.live[id];
         try { fn(); } catch (e) { console.error('timer', e); }
@@ -314,26 +343,50 @@
     };
     fire();
     return id;
-  };
-  rizx.clearTimer = function (pluginId, id) {
-    const own = rizx.timers[pluginId];
+  }
+  function clearPluginTimer(pluginId, id) {
+    const own = pluginTimers[pluginId];
     if (own) delete own.live[id];
+  }
+
+  /**
+   * The timer functions a plugin's module graph shadows `setTimeout`/`setInterval` with, already bound
+   * to that plugin. Host-only, and the returned object holds nothing but these four functions — the
+   * plugin can see what it is handed, and what it is handed is harmless.
+   */
+  rizx.pluginScope = function (token, pluginId) {
+    hostOnly(token);
+    return {
+      setTimeout: function (fn, ms) { return timer(pluginId, false, fn, ms); },
+      setInterval: function (fn, ms) { return timer(pluginId, true, fn, ms); },
+      clearTimeout: function (id) { clearPluginTimer(pluginId, id); },
+      clearInterval: function (id) { clearPluginTimer(pluginId, id); },
+    };
   };
 
-  // Drop every descriptor a plugin registered (unload path) so its closures can be collected.
-  rizx.dropProviders = function (pluginId) {
-    for (const uid in rizx.providers) if (uid.indexOf(pluginId + ':') === 0) delete rizx.providers[uid];
-    delete rizx.events[pluginId];
-    delete rizx.widgets[pluginId];
-    delete rizx.timers[pluginId];
+  /** Stores a loaded plugin's exports. Host-only: Kotlin builds and evaluates the module graph. */
+  rizx.definePlugin = function (token, pluginId, exports) {
+    hostOnly(token);
+    plugins[pluginId] = exports;
+  };
+
+  /** Drops everything a plugin holds (unload path) so its closures can be collected. Host-only. */
+  rizx.dropProviders = function (token, pluginId) {
+    hostOnly(token);
+    for (const uid in providers) if (uid.indexOf(pluginId + ':') === 0) delete providers[uid];
+    delete plugins[pluginId];
+    delete events[pluginId];
+    delete widgets[pluginId];
+    delete pluginTimers[pluginId];
   };
 
   // Dispatch a host event (trackStarted/trackFinished/…) to every subscribed plugin, isolated.
-  rizx.emit = function (name, payloadJson) {
+  rizx.emit = function (token, name, payloadJson) {
+    hostOnly(token);
     let payload = null;
     try { payload = payloadJson ? JSON.parse(payloadJson) : null; } catch (e) {}
-    for (const pluginId in rizx.events) {
-      const handlers = rizx.events[pluginId][name];
+    for (const pluginId in events) {
+      const handlers = events[pluginId][name];
       if (!handlers) continue;
       for (const fn of handlers.slice()) {
         try { fn(payload); } catch (e) { console.error('event ' + name + ' (' + pluginId + ')', e); }
@@ -341,20 +394,25 @@
     }
   };
 
-  rizx.makeApi = function (pluginId) {
+  // Closure-private: the only caller is `runHook`, which already knows which plugin it is running. A
+  // plugin never needs (and never gets) a way to build an api object for an id it chooses.
+  function makeApi(pluginId) {
     const kvGet = (scope, key) => {
-      const raw = __rizx_kv_get(pluginId, scope, String(key));
+      const raw = hKvGet(pluginId, scope, String(key));
       if (raw == null) return null;
       try { return JSON.parse(raw); } catch (e) { return null; }
     };
     const kvSet = (scope, key, value) =>
-      __rizx_kv_set(pluginId, scope, String(key), JSON.stringify(value === undefined ? null : value));
-    const kvRemove = (scope, key) => __rizx_kv_remove(pluginId, scope, String(key));
+      hKvSet(pluginId, scope, String(key), JSON.stringify(value === undefined ? null : value));
+    const kvRemove = (scope, key) => hKvRemove(pluginId, scope, String(key));
     return {
       Providers: {
         register: function (descriptor) {
+          // Always prefixed with the caller's own id, and the host derives the same uid again on its
+          // side rather than trusting this one. Between the two, a plugin cannot register under
+          // another plugin's name — nor under a native provider's, since those carry no colon.
           const uid = pluginId + ':' + descriptor.id;
-          rizx.providers[uid] = descriptor;
+          providers[uid] = descriptor;
           // Walk the prototype chain: class-instance descriptors keep methods on the prototype.
           const methods = [];
           let obj = descriptor;
@@ -373,12 +431,17 @@
             metadataProviderId: descriptor.metadataProviderId || null,
             methods: methods,
           };
-          __rizx_onRegister(pluginId, JSON.stringify(meta));
+          hOnRegister(pluginId, JSON.stringify(meta));
           return uid;
         },
         unregister: function (idOrUid) {
-          const uid = rizx.providers[idOrUid] ? idOrUid : pluginId + ':' + idOrUid;
-          delete rizx.providers[uid];
+          // Always scoped to the caller. This used to accept any uid that happened to exist, so
+          // `unregister('other-plugin:their-id')` removed somebody else's provider through the
+          // documented API. Both forms of your own id still work.
+          const own = String(idOrUid);
+          const prefix = pluginId + ':';
+          const bare = own.indexOf(prefix) === 0 ? own.slice(prefix.length) : own;
+          delete providers[prefix + bare];
           return true;
         },
       },
@@ -393,13 +456,13 @@
           const list = Array.isArray(defs) ? defs : [defs];
           for (const d of list) {
             if (!d || d.id == null) continue;
-            if (__rizx_kv_get(pluginId, 'settings', String(d.id)) == null && d.default !== undefined)
+            if (hKvGet(pluginId, 'settings', String(d.id)) == null && d.default !== undefined)
               kvSet('settings', d.id, d.default);
           }
         },
         get: function (key) { return kvGet('settings', key); },
         set: function (key, value) { kvSet('settings', key, value); },
-        registerWidget: function (w) { (rizx.widgets[pluginId] = rizx.widgets[pluginId] || []).push((w && w.id) || 'widget'); },
+        registerWidget: function (w) { (widgets[pluginId] = widgets[pluginId] || []).push((w && w.id) || 'widget'); },
         unregisterWidget: function () {},
       },
       Storage: {
@@ -411,63 +474,70 @@
       Events: {
         on: function (name, fn) {
           if (typeof fn !== 'function') return;
-          const forPlugin = (rizx.events[pluginId] = rizx.events[pluginId] || {});
+          const forPlugin = (events[pluginId] = events[pluginId] || {});
           (forPlugin[String(name)] = forPlugin[String(name)] || []).push(fn);
         },
         off: function (name, fn) {
-          const forPlugin = rizx.events[pluginId]; if (!forPlugin) return;
+          const forPlugin = events[pluginId]; if (!forPlugin) return;
           const list = forPlugin[String(name)]; if (!list) return;
           const i = list.indexOf(fn); if (i >= 0) list.splice(i, 1);
         },
       },
       Shell: {
-        openExternal: function (url) { __rizx_open_external(String(url)); },
+        openExternal: function (url) { hOpenExternal(String(url)); },
       },
       // Backed by the native YouTube extractor (no yt-dlp binary on Android). When the host facade
       // is absent the call rejects, which lets multi-source plugins drop the YouTube leg under
       // Promise.allSettled while everything else works.
       Ytdlp: {
         search: function (query) {
-          return __rizx_ytdlp('search', JSON.stringify({ query: String(query) })).then(JSON.parse);
+          return hYtdlp('search', JSON.stringify({ query: String(query) })).then(JSON.parse);
         },
         getStream: function (idOrUrl) {
-          return __rizx_ytdlp('getStream', JSON.stringify({ id: String(idOrUrl) })).then(JSON.parse);
+          return hYtdlp('getStream', JSON.stringify({ id: String(idOrUrl) })).then(JSON.parse);
         },
         getPlaylist: function (url) {
-          return __rizx_ytdlp('getPlaylist', JSON.stringify({ url: String(url) })).then(JSON.parse);
+          return hYtdlp('getPlaylist', JSON.stringify({ url: String(url) })).then(JSON.parse);
         },
       },
     };
   };
 
-  // Invoke a registered provider's method and stash the resolved value (or error) on globals. Returns
-  // the Promise so QuickJS drains it during `evaluate`; Kotlin then reads rizx.__last / rizx.__err.
-  rizx.invokeAndCapture = function (uid, method, argsJson) {
-    rizx.__last = null; rizx.__err = null;
-    const p = rizx.providers[uid];
-    if (!p) { rizx.__err = 'no provider ' + uid; return; }
+  // Invoke a registered provider's method and stash the resolved value (or error). Returns the Promise
+  // so QuickJS drains it during `evaluate`; Kotlin then reads rizx.__last / rizx.__err.
+  rizx.invokeAndCapture = function (token, uid, method, argsJson) {
+    hostOnly(token);
+    lastValue = null; lastError = null;
+    const p = providers[uid];
+    if (!p) { lastError = 'no provider ' + uid; return; }
     const fn = p[method];
-    if (typeof fn !== 'function') { rizx.__err = 'no method ' + method + ' on ' + uid; return; }
+    if (typeof fn !== 'function') { lastError = 'no method ' + method + ' on ' + uid; return; }
     let args = [];
-    try { args = argsJson ? JSON.parse(argsJson) : []; } catch (e) { rizx.__err = 'bad args: ' + e; return; }
+    try { args = argsJson ? JSON.parse(argsJson) : []; } catch (e) { lastError = 'bad args: ' + e; return; }
     return Promise.resolve().then(() => fn.apply(p, args)).then(
-      (v) => { rizx.__last = JSON.stringify(v === undefined ? null : v); },
-      (e) => { rizx.__err = String((e && e.message) || e); }
+      (v) => { lastValue = JSON.stringify(v === undefined ? null : v); },
+      (e) => { lastError = String((e && e.message) || e); }
     );
   };
 
   // Run a plugin lifecycle hook (onLoad/onEnable/onDisable/onUnload) and capture success/error.
-  rizx.runHook = function (pluginId, hook) {
-    rizx.__last = null; rizx.__err = null;
-    const plugin = rizx.plugins[pluginId];
-    if (!plugin) { rizx.__err = 'no plugin ' + pluginId; return; }
+  rizx.runHook = function (token, pluginId, hook) {
+    hostOnly(token);
+    lastValue = null; lastError = null;
+    const plugin = plugins[pluginId];
+    if (!plugin) { lastError = 'no plugin ' + pluginId; return; }
     const fn = plugin[hook];
-    if (typeof fn !== 'function') { rizx.__last = 'null'; return; } // hook optional
-    return Promise.resolve().then(() => fn.call(plugin, rizx.makeApi(pluginId))).then(
-      () => { rizx.__last = 'null'; },
-      (e) => { rizx.__err = String((e && e.message) || e); }
+    if (typeof fn !== 'function') { lastValue = 'null'; return; } // hook optional
+    // The api object is built here, by the host, closed over the id of the plugin actually being run.
+    // A plugin therefore never handles its own id and has no way to name someone else's.
+    return Promise.resolve().then(() => fn.call(plugin, makeApi(pluginId))).then(
+      () => { lastValue = 'null'; },
+      (e) => { lastError = String((e && e.message) || e); }
     );
   };
 
+  // Frozen before publishing: with the state private, replacing one of these functions was the last way
+  // to sit in the middle of every other plugin's calls.
+  Object.freeze(rizx);
   g.__rizx = rizx;
 })();

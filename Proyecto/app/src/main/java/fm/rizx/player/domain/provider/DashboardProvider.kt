@@ -4,6 +4,7 @@ import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.ArtistRef
 import fm.rizx.player.domain.model.DashboardCapability
 import fm.rizx.player.domain.model.FeaturedPlaylist
+import fm.rizx.player.domain.model.GenreFeed
 import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.model.Track
@@ -31,4 +32,13 @@ interface DashboardProvider : ProviderDescriptor {
 
     /** What a station is playing right now — resolved at tap time, never persisted. */
     suspend fun stationTracks(stationId: String, limit: Int): List<Track> = emptyList()
+
+    /**
+     * Everything the provider has for one **genre**.
+     *
+     * [genreId] belongs to the provider's own id space and travels unchanged from whatever published
+     * the browse tile, so no caller ever has to translate between two catalogues' idea of "Rock". A
+     * provider that doesn't know the id returns an empty feed rather than guessing.
+     */
+    suspend fun genreFeed(genreId: String, limit: Int): GenreFeed = GenreFeed()
 }

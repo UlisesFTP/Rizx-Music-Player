@@ -69,6 +69,17 @@ interface DeezerApi {
     @GET("chart")
     suspend fun chart(): DeezerChartDto
 
+    /**
+     * The same chart **restricted to one genre** — Deezer's own grouping of its catalogue, which is
+     * what browsing a genre has to be built on. `chart/464` answers with Metallica and Megadeth;
+     * searching for the word "Metal" answers with everything that has it in the title.
+     *
+     * `0` is the all-genres chart. Note that the response's `artists` section is **not** genre-filtered
+     * (see [fm.rizx.player.data.provider.DeezerDashboardProvider.genreFeed]).
+     */
+    @GET("chart/{genreId}")
+    suspend fun genreChart(@Path("genreId") genreId: String, @Query("limit") limit: Int): DeezerChartDto
+
     /** Full playlist with its tracks (URL import, Phase 22). Embeds only the first 400 — see [playlistTracks]. */
     @GET("playlist/{id}")
     suspend fun playlist(@Path("id") id: String): DeezerPlaylistFullDto

@@ -70,6 +70,7 @@ import fm.rizx.player.ui.screens.AlbumDetailScreen
 import fm.rizx.player.ui.screens.ArtistDetailScreen
 import fm.rizx.player.ui.screens.HomeScreen
 import fm.rizx.player.ui.screens.EditorialPlaylistScreen
+import fm.rizx.player.ui.screens.GenreScreen
 import fm.rizx.player.ui.screens.LibraryScreen
 import fm.rizx.player.ui.screens.LibraryTab
 import fm.rizx.player.ui.screens.LocalAlbumScreen
@@ -213,8 +214,24 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     onOpenArtist = { nav.navigate(Routes.artistDetail(it)) },
                     onOpenPlaylist = { nav.navigate(Routes.editorialPlaylist(it)) },
                     onOpenRecognition = { nav.navigate(Routes.RECOGNITION) },
+                    onOpenGenre = { genreId, label -> nav.navigate(Routes.genre(genreId, label)) },
                     initialQuery = entry.arguments?.getString(Routes.SEARCH_QUERY_ARG).orEmpty(),
                     queueCount = queue.items.size,
+                )
+            }
+            composable(
+                Routes.GENRE_ROUTE,
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType },
+                    navArgument("name") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                GenreScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpenAlbum = { nav.navigate(Routes.albumDetail(it)) },
+                    onOpenArtist = { nav.navigate(Routes.artistDetail(it)) },
+                    onOpenPlaylist = { nav.navigate(Routes.editorialPlaylist(it)) },
+                    genreId = entry.arguments?.getString("id").orEmpty(),
                 )
             }
             composable(Routes.RECOGNITION) {

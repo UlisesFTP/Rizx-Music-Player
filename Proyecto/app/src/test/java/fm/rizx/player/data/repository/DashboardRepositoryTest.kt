@@ -2,6 +2,7 @@ package fm.rizx.player.data.repository
 
 import fm.rizx.player.data.provider.DefaultProviderRegistry
 import fm.rizx.player.domain.model.DashboardCapability
+import fm.rizx.player.domain.model.GenreFeed
 import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Track
@@ -28,18 +29,24 @@ class DashboardRepositoryTest {
         private val failTracks: Boolean = false,
         private val stations: List<MoodStation> = emptyList(),
         private val stationTracks: Map<String, List<Track>> = emptyMap(),
+        private val genres: Map<String, GenreFeed> = emptyMap(),
+        private val knowsGenres: Boolean = genres.isNotEmpty(),
+        private val failGenres: Boolean = false,
     ) : DashboardProvider {
         override val kind = ProviderKind.DASHBOARD
         override val name = id
         override val dashboardCapabilities = buildSet {
             add(DashboardCapability.TOP_TRACKS)
             if (stations.isNotEmpty()) add(DashboardCapability.MOOD_STATIONS)
+            if (knowsGenres) add(DashboardCapability.GENRE_FEED)
         }
         override suspend fun topTracks(limit: Int): List<Track> =
             if (failTracks) throw RuntimeException("boom") else tracks
         override suspend fun moodStations(limit: Int): List<MoodStation> = stations.take(limit)
         override suspend fun stationTracks(stationId: String, limit: Int): List<Track> =
             stationTracks[stationId] ?: throw RuntimeException("unknown station")
+        override suspend fun genreFeed(genreId: String, limit: Int): GenreFeed =
+            if (failGenres) throw RuntimeException("boom") else genres[genreId] ?: GenreFeed()
     }
 
     private fun track(title: String) = Track(title = title, source = ProviderRef("deezer", title))
@@ -120,5 +127,58 @@ class DashboardRepositoryTest {
         // Unknown provider → nobody can resolve it; a failing provider → same quiet empty.
         assertTrue(repo.stationTracks("nope", "31061", 30).isEmpty())
         assertTrue(repo.stationTracks("d1", "bad-id", 30).isEmpty())
+    }
+
+    // ---- Genre browse ----
+
+    private fun genreFeed(vararg titles: String) = GenreFeed(tracks = titles.map(::track))
+
+    /**
+     * Genre ids belong to one catalogue, so this takes the first provider that recognises the id
+     * rather than blending — a provider that doesn't own the id space answers empty and is skipped.
+     */
+    @Test
+    fun `a genre feed comes from the first provider that knows the id`() = runTest {
+        val registry = DefaultProviderRegistry().apply {
+            register(FakeDash("no-genres")) // no GENRE_FEED capability at all
+            register(FakeDash("other-space", genres = mapOf("999" to genreFeed("Wrong"))))
+            register(FakeDash("owner", genres = mapOf("464" to genreFeed("Master Of Puppets"))))
+        }
+
+        val feed = DashboardRepositoryImpl(registry, FakeEnabled()).genreFeed("464", 50)
+
+        assertEquals(listOf("Master Of Puppets"), feed.tracks.map { it.title })
+    }
+
+    @Test
+    fun `a provider that throws on a genre never breaks the browse`() = runTest {
+        val registry = DefaultProviderRegistry().apply {
+            register(FakeDash("bad", knowsGenres = true, failGenres = true))
+            register(FakeDash("good", genres = mapOf("464" to genreFeed("Toxicity"))))
+        }
+
+        val feed = DashboardRepositoryImpl(registry, FakeEnabled()).genreFeed("464", 50)
+
+        assertEquals(listOf("Toxicity"), feed.tracks.map { it.title })
+    }
+
+    @Test
+    fun `a disabled provider does not answer genre browsing either`() = runTest {
+        val registry = DefaultProviderRegistry().apply {
+            register(FakeDash("off", genres = mapOf("464" to genreFeed("Hidden"))))
+        }
+
+        val feed = DashboardRepositoryImpl(registry, FakeEnabled(disabled = setOf("off"))).genreFeed("464", 50)
+
+        assertTrue(feed.isEmpty)
+    }
+
+    @Test
+    fun `an unknown genre degrades to an empty feed`() = runTest {
+        val registry = DefaultProviderRegistry().apply {
+            register(FakeDash("owner", genres = mapOf("464" to genreFeed("Toxicity"))))
+        }
+
+        assertTrue(DashboardRepositoryImpl(registry, FakeEnabled()).genreFeed("12345", 50).isEmpty)
     }
 }

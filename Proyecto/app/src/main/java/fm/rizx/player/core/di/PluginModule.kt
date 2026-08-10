@@ -61,15 +61,37 @@ object PluginModule {
             client, asset(context, "plugin-runtime/bootstrap.js"), json, registry, transpiler,
             extraJs = listOfNotNull(runCatching { asset(context, "plugin-runtime/domparser.min.js") }.getOrNull()),
             kv = kv,
-            onOpenExternal = { url ->
-                runCatching {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                }
-            },
+            onOpenExternal = { url -> openExternal(context, url) },
             ytdlp = YtdlpFacade(youtube, json),
         )
+
+    @Volatile
+    private var lastExternalOpenMs = 0L
+
+    /**
+     * `api.Shell.openExternal`, gated twice.
+     *
+     * The intent is already fixed to `ACTION_VIEW` on an http(s) URL, so a plugin cannot fire an
+     * arbitrary intent. What it *could* do was fire this one whenever it liked: from a timer, from a
+     * fetch callback, with the app in the background and music playing — the browser landing on top of
+     * whatever the user was doing, in a loop if it wanted. Opening a page is a thing the user asked for
+     * or it is not, so it only happens with the app actually on screen, and once every few seconds.
+     */
+    private fun openExternal(context: Context, url: String) {
+        val state = android.app.ActivityManager.RunningAppProcessInfo()
+        android.app.ActivityManager.getMyMemoryState(state)
+        if (state.importance != android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastExternalOpenMs < EXTERNAL_OPEN_MIN_GAP_MS) return
+        lastExternalOpenMs = now
+        runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+    }
+
+    private const val EXTERNAL_OPEN_MIN_GAP_MS = 3_000L
 
     @Provides
     @Singleton

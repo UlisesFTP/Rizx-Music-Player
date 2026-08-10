@@ -136,4 +136,69 @@ class DeezerDashboardProviderTest {
 
         assertEquals(0, provider().featuredPlaylists(2).size)
     }
+
+    // ---- Genre browse (`/chart/{genreId}`) ----
+
+    /**
+     * A metal chart shaped like the live one: genre-correct tracks, albums and playlists, and an
+     * `artists` section carrying whatever is globally charting — which is exactly what Deezer returns
+     * for **every** genre id, including ids that do not exist.
+     */
+    private val metalChartBody = """
+        {"tracks":{"data":[
+            {"id":1,"title":"Master Of Puppets","duration":515,"artist":{"id":119,"name":"Metallica","picture_xl":"https://p/m.jpg"}},
+            {"id":2,"title":"Toxicity","duration":218,"artist":{"id":220,"name":"System of a Down"}},
+            {"id":3,"title":"One","duration":447,"artist":{"id":119,"name":"Metallica"}}]},
+         "albums":{"data":[{"id":77,"title":"Megadeth","cover_xl":"https://c/xl.jpg","artist":{"id":330,"name":"Megadeth"}}]},
+         "artists":{"data":[{"id":10583405,"name":"Bad Bunny","picture_xl":"https://p/bb.jpg"}]},
+         "playlists":{"data":[{"id":901,"title":"Metal Essentials","picture_xl":"https://pl/xl.jpg","nb_tracks":80}]}}
+    """.trimIndent()
+
+    @Test
+    fun `a genre feed carries the genre's own tracks, albums and playlists`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(metalChartBody))
+
+        val feed = provider().genreFeed("464", 50)
+
+        assertEquals(listOf("Master Of Puppets", "Toxicity", "One"), feed.tracks.map { it.title })
+        assertEquals(listOf("Megadeth"), feed.albums.map { it.title })
+        assertEquals(listOf("Metal Essentials"), feed.playlists.map { it.name })
+        assertEquals("/chart/464?limit=50", server.takeRequest().path)
+    }
+
+    /**
+     * The regression that matters: Deezer's `artists` section is **not** genre-filtered. Shipping it
+     * would put Bad Bunny at the top of Metal, so the artists are derived from the rows that *are*
+     * filtered — deduped, and in the order they charted.
+     */
+    @Test
+    fun `genre artists come from the genre's tracks and albums, never from the artists section`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(metalChartBody))
+
+        val artists = provider().genreFeed("464", 50).artists
+
+        assertEquals(listOf("Metallica", "System of a Down", "Megadeth"), artists.map { it.name })
+        assertEquals(false, artists.any { it.name == "Bad Bunny" })
+        assertEquals("artist:119", artists.first().source.id)
+    }
+
+    @Test
+    fun `a genre id that is not a number never reaches the network`() = runBlocking {
+        val feed = provider().genreFeed("../chart", 50)
+
+        assertEquals(true, feed.isEmpty)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `each genre is fetched once and does not evict the global chart`() = runBlocking {
+        serveByPath()
+        val p = provider()
+
+        p.genreFeed("464", 50)
+        p.genreFeed("464", 50)
+        p.topTracks(10)
+
+        assertEquals(2, server.requestCount) // one per genre, plus the global chart
+    }
 }

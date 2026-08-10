@@ -2,6 +2,7 @@ package fm.rizx.player.data.repository
 
 import fm.rizx.player.data.artwork.TrackArtworkEnricher
 import fm.rizx.player.domain.model.AttributedResult
+import fm.rizx.player.domain.model.GenreFeed
 import fm.rizx.player.domain.model.HomeFeed
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.repository.DashboardRepository
@@ -54,6 +55,10 @@ class BlendingDashboardRepository(
 
     override suspend fun stationTracks(providerId: String, stationId: String, limit: Int): List<Track> =
         inner.stationTracks(providerId, stationId, limit)
+
+    /** Straight through: a genre feed comes from one catalogue, so there is nothing to blend. */
+    override suspend fun genreFeed(genreId: String, limit: Int): GenreFeed =
+        inner.genreFeed(genreId, limit)
 
     /** One source needs no blending — skip the normalization work entirely and keep it as it came. */
     private fun <T> blended(

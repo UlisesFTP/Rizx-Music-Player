@@ -2,6 +2,8 @@
 
 package fm.rizx.player.ui.screens
 
+import fm.rizx.player.ui.search.BROWSE_CATEGORIES
+import fm.rizx.player.ui.search.BrowseCategory
 import fm.rizx.player.ui.search.SearchTab
 import fm.rizx.player.ui.search.Suggestion
 import fm.rizx.player.ui.components.RizxChip
@@ -102,6 +104,8 @@ fun SearchScreen(
     onOpenArtist: (fm.rizx.player.domain.model.ProviderRef) -> Unit,
     onOpenPlaylist: (PlaylistRef) -> Unit,
     onOpenRecognition: () -> Unit,
+    /** A browse tile: the catalogue's genre id plus the label already localized for the header. */
+    onOpenGenre: (String, String) -> Unit,
     queueCount: Int,
     initialQuery: String = "",
     vm: SearchViewModel = hiltViewModel(),
@@ -176,7 +180,11 @@ fun SearchScreen(
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (query.isBlank()) {
-                IdleContent(pills = pills, onSearch = vm::searchFor)
+                IdleContent(
+                    pills = pills,
+                    onSearch = vm::searchFor,
+                    onOpenGenre = { category, label -> onOpenGenre(category.genreId, label) },
+                )
             } else {
                 when (val s = uiState) {
                     SearchUiState.Idle, SearchUiState.Loading -> LoadingState()
@@ -580,44 +588,24 @@ private fun ResultPlaylistRow(playlist: PlaylistRef, onClick: () -> Unit) {
     }
 }
 
-// ---- Idle (no query): suggested searches + genre tiles (all trigger a real search) ----
-
-/** A browse-genre tile: display [labelRes], the [query] it searches, a Deezer genre [image], a fallback [tint] and a HUD [code]. */
-private data class Genre(val labelRes: Int, val query: String, val image: String, val tint: Int, val code: String)
-
-/** Deezer genre artwork — keyless CDN, the same host Coil already loads album covers from. */
-private fun dzGenre(hash: String) = "https://cdn-images.dzcdn.net/images/misc/$hash/500x500-000000-80-0-0.jpg"
-
-// NB: `query` is the literal string sent to Deezer's genre search — it must stay in English and is
-// intentionally NOT localized, unlike `labelRes` (what's shown on the tile).
-private val BROWSE_GENRES = listOf(
-    Genre(R.string.search_genre_pop, "Pop", dzGenre("db7a604d9e7634a67d45cfc86b48370a"), 1, "G01"),
-    Genre(R.string.search_genre_hiphop, "Hip Hop", dzGenre("5c27115d3b797954afff59199dad98d1"), 2, "G02"),
-    Genre(R.string.search_genre_rock, "Rock", dzGenre("b36ca681666d617edd0dcb5ab389a6ac"), 5, "G03"),
-    Genre(R.string.search_genre_electronic, "Electronic", dzGenre("15df4502c1c58137dae5bdd1cc6f0251"), 3, "G04"),
-    Genre(R.string.search_genre_rnb, "R&B", dzGenre("68a43aec844708e693cb99f47814153b"), 0, "G05"),
-    Genre(R.string.search_genre_jazz, "Jazz", dzGenre("91468ecc5dfdd19c42a43d2cbdf27059"), 4, "G06"),
-    Genre(R.string.search_genre_latin, "Latin", dzGenre("069c9888538799748960781f098b5f4b"), 6, "G07"),
-    Genre(R.string.search_genre_classical, "Classical", dzGenre("609f69b669b242252aa8ee09b5597655"), 7, "G08"),
-    Genre(R.string.search_genre_metal, "Metal", dzGenre("f14f9fde9feb38ca6d61960f00681860"), 5, "G09"),
-    Genre(R.string.search_genre_reggaeton, "Reggaeton", dzGenre("44dfebf3cf943dd82759d9bd9063767a"), 6, "G10"),
-    Genre(R.string.search_genre_reggae, "Reggae", dzGenre("7b901a98628cf879e1465f1dfd697e00"), 4, "G11"),
-    Genre(R.string.search_genre_soul_funk, "Funk", dzGenre("3d5e8aab99b95bfa7ac7e9e466e7781e"), 0, "G12"),
-    Genre(R.string.search_genre_blues, "Blues", dzGenre("1abb6810098d4015bdc860c91bcfd2b6"), 3, "G13"),
-    Genre(R.string.search_genre_country, "Country", dzGenre("6eca3188f724f04843a15e3e575751a5"), 1, "G14"),
-    Genre(R.string.search_genre_folk, "Folk", dzGenre("f9e070848998df8870ba65cd0d22b2b3"), 2, "G15"),
-    Genre(R.string.search_genre_dance, "Dance", dzGenre("bd5fdfa1a23e02e2697818e09e008e69"), 7, "G16"),
-)
+// ---- Idle (no query): suggested searches + the browse wall ----
 
 /**
- * The idle screen: the pills, then the genre wall.
+ * The idle screen: the pills, then the browse wall.
  *
  * [pills] arrive already chosen and ordered by the ViewModel - the searches this user made, then the
  * artists they play, then the curated fallback - so this only has to draw them. Same count and the same
  * single row-wrapping block as the static list it replaces, so the layout is unchanged.
+ *
+ * A tile calls [onOpenGenre], **not** [onSearch]: the wall browses the catalogue's own genres now
+ * rather than searching for their names. See [BrowseCategory].
  */
 @Composable
-private fun IdleContent(pills: List<Suggestion>, onSearch: (String) -> Unit) {
+private fun IdleContent(
+    pills: List<Suggestion>,
+    onSearch: (String) -> Unit,
+    onOpenGenre: (BrowseCategory, String) -> Unit,
+) {
     val c = RizxTheme.colors
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text(stringResource(R.string.search_try_searching), style = sg(16, FontWeight.Bold), color = c.text, modifier = Modifier.padding(top = 22.dp))
@@ -648,14 +636,20 @@ private fun IdleContent(pills: List<Suggestion>, onSearch: (String) -> Unit) {
             }
         }
 
-        Text(stringResource(R.string.search_browse_genres), style = sg(19, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.padding(top = 24.dp))
+        Text(stringResource(R.string.search_browse_all), style = sg(19, FontWeight.Bold, -0.01f), color = c.text, modifier = Modifier.padding(top = 24.dp))
         Column(Modifier.fillMaxWidth().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            BROWSE_GENRES.chunked(2).forEachIndexed { rowIndex, rowGenres ->
+            BROWSE_CATEGORIES.chunked(2).forEachIndexed { rowIndex, rowCategories ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    rowGenres.forEachIndexed { colIndex, genre ->
-                        GenreTile(genre, onSearch, Modifier.weight(1f).staggeredReveal(rowIndex * 2 + colIndex))
+                    rowCategories.forEachIndexed { colIndex, category ->
+                        val label = stringResource(category.labelRes)
+                        BrowseTile(
+                            category,
+                            label,
+                            { onOpenGenre(category, label) },
+                            Modifier.weight(1f).staggeredReveal(rowIndex * 2 + colIndex),
+                        )
                     }
-                    if (rowGenres.size == 1) Spacer(Modifier.weight(1f))
+                    if (rowCategories.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }
@@ -663,25 +657,29 @@ private fun IdleContent(pills: List<Suggestion>, onSearch: (String) -> Unit) {
     }
 }
 
-/** A genre mosaic: a full-bleed Deezer genre photo under a bottom-weighted scrim, with a HUD serial + display-font label. */
+/** A browse mosaic: a full-bleed Deezer genre photo under a bottom-weighted scrim, with a HUD serial + display-font label. */
 @Composable
-private fun GenreTile(genre: Genre, onSearch: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun BrowseTile(category: BrowseCategory, label: String, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val c = RizxTheme.colors
     Box(
         modifier
             .height(116.dp)
             .paperElevation()
             .clip(RectangleShape)
-            .background(catBg(genre.tint, c.isDark))
+            .background(catBg(category.tint, c.isDark))
             .border(1.dp, c.line, RectangleShape)
-            .clickableScale(scale = 0.98f) { onSearch(genre.query) },
+            .clickableScale(scale = 0.98f, onClick = onOpen),
     ) {
-        coil.compose.AsyncImage(
-            model = genre.image,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.matchParentSize(),
-        )
+        // Null for the all-genres chart, which Deezer publishes no artwork for — the tint block below
+        // is the tile then, which is why it is drawn unconditionally underneath.
+        if (category.image != null) {
+            coil.compose.AsyncImage(
+                model = category.image,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
         // Bottom-weighted scrim keeps the label legible over bright or busy photos, in either theme.
         Box(
             Modifier
@@ -701,10 +699,10 @@ private fun GenreTile(genre: Genre, onSearch: (String) -> Unit, modifier: Modifi
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Box(Modifier.size(6.dp).background(c.redAccent))
-            Text(genre.code, style = code(10, FontWeight.Bold), color = Color.White.copy(alpha = 0.82f))
+            Text(category.code, style = code(10, FontWeight.Bold), color = Color.White.copy(alpha = 0.82f))
         }
         Text(
-            stringResource(genre.labelRes),
+            label,
             style = sg(18, FontWeight.Bold, -0.01f),
             color = Color.White,
             maxLines = 1,
