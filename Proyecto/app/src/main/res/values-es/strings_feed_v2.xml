@@ -4,4 +4,11 @@
     <string name="home_moods_heading">Estado de ánimo y géneros</string>
     <string name="home_station_of">Estación · %1$s</string>
     <string name="home_featured_heading">Playlists destacadas</string>
+    <!-- Mood/genre stations: the full list and one station's hub -->
+    <string name="moods_eyebrow">EXPLORAR</string>
+    <string name="moods_all_heading">Todas las estaciones</string>
+    <string name="moods_empty">No hay estaciones ahora mismo.</string>
+    <string name="station_eyebrow">ESTACIÓN</string>
+    <string name="station_playing_now">SONANDO AHORA</string>
+    <string name="station_empty">Esta estación no está sonando ahora mismo.</string>
 </resources>

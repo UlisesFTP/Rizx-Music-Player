@@ -5,4 +5,11 @@
     <string name="home_moods_heading">Moods &amp; genres</string>
     <string name="home_station_of">Station · %1$s</string>
     <string name="home_featured_heading">Featured playlists</string>
+    <!-- Mood/genre stations: the full list and one station's hub -->
+    <string name="moods_eyebrow">BROWSE</string>
+    <string name="moods_all_heading">All stations</string>
+    <string name="moods_empty">No stations right now.</string>
+    <string name="station_eyebrow">STATION</string>
+    <string name="station_playing_now">PLAYING NOW</string>
+    <string name="station_empty">This station has nothing playing right now.</string>
 </resources>

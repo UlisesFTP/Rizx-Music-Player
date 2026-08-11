@@ -1,6 +1,9 @@
 package fm.rizx.player.data.provider
 
 import fm.rizx.player.data.remote.deezer.DeezerApi
+import fm.rizx.player.domain.model.ArtworkTargetPx
+import fm.rizx.player.domain.model.coverUrl
+import fm.rizx.player.domain.model.thumbnailUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -77,7 +80,7 @@ class DeezerDashboardProviderTest {
                     path.startsWith("/radio/lists") ->
                         // A dupe title and a trailing space, both straight from the live endpoint.
                         """{"data":[
-                            {"id":37151,"title":"Hits","picture_medium":"https://r/1.jpg"},
+                            {"id":37151,"title":"Hits","picture_xl":"https://r/xl.jpg","picture_big":"https://r/big.jpg","picture_medium":"https://r/1.jpg"},
                             {"id":42042,"title":"Hits"},
                             {"id":38305,"title":"80's "},
                             {"id":37121,"title":"Chill Out"}]}"""
@@ -105,6 +108,32 @@ class DeezerDashboardProviderTest {
 
         assertEquals(listOf("Hits", "80's", "Chill Out"), stations.map { it.title })
         assertEquals("37151", stations.first().id) // the first spelling of a duped title wins
+    }
+
+    /**
+     * A station tile is a photo now, and every tile in the app picks its own rung — so a station has to
+     * carry the whole set rather than the one 250px URL the mapper used to keep.
+     */
+    @Test
+    fun `a station carries its full cover set, so data saver can pick the cheap rung`() = runBlocking {
+        serveByPath()
+
+        val artwork = provider().moodStations(10).first().artwork
+
+        // The cheap rung is the 250 (data saver), the tile rung the 500 — both real choices now,
+        // where before there was a single 250px URL and nothing to choose between.
+        assertEquals("https://r/1.jpg", artwork.thumbnailUrl())
+        assertEquals("https://r/big.jpg", artwork.coverUrl(ArtworkTargetPx.COVER))
+    }
+
+    /** The whole published list in one call — Home previews it and its "See all" needs the rest. */
+    @Test
+    fun `the station list is fetched deep enough to be the whole catalogue`() = runBlocking {
+        serveByPath()
+
+        provider().moodStations(10)
+
+        assertEquals("/radio/lists?limit=100", server.takeRequest().path)
     }
 
     @Test

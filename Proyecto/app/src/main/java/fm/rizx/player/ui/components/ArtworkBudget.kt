@@ -30,5 +30,11 @@ val LocalThriftyArtwork = staticCompositionLocalOf { false }
  */
 @Composable
 @ReadOnlyComposable
-fun ArtworkSet?.tileUrl(): String? =
-    if (LocalThriftyArtwork.current) thumbnailUrl() else coverUrl()
+fun ArtworkSet?.tileUrl(): String? = tileUrl(LocalThriftyArtwork.current)
+
+/**
+ * The same choice, for the callers that cannot be composable — a click handler picking the cover to
+ * hand the next screen. Takes the policy explicitly, read once by the composable that owns the lambda.
+ */
+fun ArtworkSet?.tileUrl(thrifty: Boolean): String? =
+    if (thrifty) thumbnailUrl() else coverUrl()

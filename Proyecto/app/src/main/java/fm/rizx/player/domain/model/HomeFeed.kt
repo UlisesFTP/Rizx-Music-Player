@@ -15,7 +15,11 @@ enum class DashboardCapability { TOP_TRACKS, TOP_ARTISTS, TOP_ALBUMS, EDITORIAL_
 data class MoodStation(
     val id: String,
     val title: String,
-    val artworkUrl: String? = null,
+    /**
+     * An [ArtworkSet] rather than one URL so a station tile picks its rung like every other tile in
+     * the app — including the cheap one when data saver is on.
+     */
+    val artwork: ArtworkSet? = null,
 )
 
 /**

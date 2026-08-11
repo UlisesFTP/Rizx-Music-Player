@@ -79,6 +79,7 @@ import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.DotMatrixSpinner
 import fm.rizx.player.ui.components.LocalLosslessCodecs
 import fm.rizx.player.ui.components.LosslessTag
+import fm.rizx.player.ui.components.PhotoTile
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.clickableScale
@@ -642,11 +643,13 @@ private fun IdleContent(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     rowCategories.forEachIndexed { colIndex, category ->
                         val label = stringResource(category.labelRes)
-                        BrowseTile(
-                            category,
-                            label,
-                            { onOpenGenre(category, label) },
-                            Modifier.weight(1f).staggeredReveal(rowIndex * 2 + colIndex),
+                        PhotoTile(
+                            label = label,
+                            imageUrl = category.image,
+                            code = category.code,
+                            tint = category.tint,
+                            onClick = { onOpenGenre(category, label) },
+                            modifier = Modifier.weight(1f).staggeredReveal(rowIndex * 2 + colIndex),
                         )
                     }
                     if (rowCategories.size == 1) Spacer(Modifier.weight(1f))
@@ -654,63 +657,6 @@ private fun IdleContent(
             }
         }
         Spacer(Modifier.height(LocalBottomInset.current + 16.dp))
-    }
-}
-
-/** A browse mosaic: a full-bleed Deezer genre photo under a bottom-weighted scrim, with a HUD serial + display-font label. */
-@Composable
-private fun BrowseTile(category: BrowseCategory, label: String, onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val c = RizxTheme.colors
-    Box(
-        modifier
-            .height(116.dp)
-            .paperElevation()
-            .clip(RectangleShape)
-            .background(catBg(category.tint, c.isDark))
-            .border(1.dp, c.line, RectangleShape)
-            .clickableScale(scale = 0.98f, onClick = onOpen),
-    ) {
-        // Null for the all-genres chart, which Deezer publishes no artwork for — the tint block below
-        // is the tile then, which is why it is drawn unconditionally underneath.
-        if (category.image != null) {
-            coil.compose.AsyncImage(
-                model = category.image,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
-            )
-        }
-        // Bottom-weighted scrim keeps the label legible over bright or busy photos, in either theme.
-        Box(
-            Modifier
-                .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = 0.10f),
-                        0.55f to Color.Black.copy(alpha = 0.30f),
-                        1f to Color.Black.copy(alpha = 0.80f),
-                    ),
-                ),
-        )
-        // HUD serial (red tick + mono code) — ties the photo tiles into the spec-sheet language.
-        Row(
-            Modifier.align(Alignment.TopStart).padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Box(Modifier.size(6.dp).background(c.redAccent))
-            Text(category.code, style = code(10, FontWeight.Bold), color = Color.White.copy(alpha = 0.82f))
-        }
-        Text(
-            label,
-            style = sg(18, FontWeight.Bold, -0.01f),
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 13.dp, end = 12.dp, bottom = 11.dp),
-        )
     }
 }
 

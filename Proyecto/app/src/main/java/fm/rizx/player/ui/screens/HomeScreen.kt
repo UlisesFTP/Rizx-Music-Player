@@ -118,6 +118,12 @@ enum class HomeTab(val labelRes: Int) {
 private const val PREVIEW_ITEMS = 10
 
 /**
+ * Station tiles at the foot of the feed before "See all" — six rows of the mosaic. The provider
+ * publishes ~76; all of them here would be most of the scroll and a lot of covers to fetch.
+ */
+private const val MOOD_PREVIEW = 12
+
+/**
  * How many tiles the mosaic wall holds — as much of the Home as the mosaics may take before the charts
  * are pushed out of reach. Six also leaves the arrangement room to vary: it partitions into rows several
  * different ways, which is what the weave draws on.
@@ -209,6 +215,8 @@ fun HomeScreen(
     onOpenAlbum: (ProviderRef) -> Unit,
     onOpenArtist: (ProviderRef) -> Unit,
     onOpenEditorialPlaylist: (PlaylistRef) -> Unit,
+    onOpenStation: (providerId: String, station: MoodStation) -> Unit,
+    onOpenAllMoods: () -> Unit,
     vm: HomeViewModel = hiltViewModel(),
 ) {
     val c = RizxTheme.colors
@@ -394,7 +402,8 @@ fun HomeScreen(
                     tabContent(
                         s.feed, tab, onOpenAlbum, onOpenArtist, onOpenEditorialPlaylist, vm::playTrack,
                         onPlayFeatured = vm::playFeatured,
-                        onPlayStation = vm::playStation,
+                        onOpenStation = onOpenStation,
+                        onOpenAllMoods = onOpenAllMoods,
                         onSeeAll = { tabName = it.name },
                         topSongsTitle = topSongsTitle,
                         topAlbumsTitle = topAlbumsTitle,
@@ -452,7 +461,8 @@ private fun LazyListScope.tabContent(
     onOpenEditorialPlaylist: (PlaylistRef) -> Unit,
     onPlay: (Track) -> Unit,
     onPlayFeatured: (FeaturedPlaylist) -> Unit,
-    onPlayStation: (providerId: String, station: MoodStation, queueLabel: String) -> Unit,
+    onOpenStation: (providerId: String, station: MoodStation) -> Unit,
+    onOpenAllMoods: () -> Unit,
     onSeeAll: (HomeTab) -> Unit,
     topSongsTitle: String,
     topAlbumsTitle: String,
@@ -672,9 +682,12 @@ private fun LazyListScope.tabContent(
             if (stationPairs.isNotEmpty()) {
                 item(key = "mood-grid") {
                     MoodGrid(
-                        stations = stationPairs,
-                        onPlay = onPlayStation,
+                        // A preview of the shelf, with the rest one tap away — the provider publishes
+                        // far more stations than belong at the foot of a feed.
+                        stations = stationPairs.take(MOOD_PREVIEW),
+                        onOpen = onOpenStation,
                         modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp),
+                        onSeeAll = onOpenAllMoods.takeIf { stationPairs.size > MOOD_PREVIEW },
                     )
                 }
             }

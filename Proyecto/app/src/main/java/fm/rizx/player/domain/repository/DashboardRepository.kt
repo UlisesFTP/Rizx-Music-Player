@@ -1,7 +1,9 @@
 package fm.rizx.player.domain.repository
 
+import fm.rizx.player.domain.model.AttributedResult
 import fm.rizx.player.domain.model.GenreFeed
 import fm.rizx.player.domain.model.HomeFeed
+import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.Track
 
 /**
@@ -26,4 +28,11 @@ interface DashboardRepository {
      * two providers' answers would mean merging two unrelated groupings.
      */
     suspend fun genreFeed(genreId: String, limit: Int): GenreFeed = GenreFeed()
+
+    /**
+     * Every mood/genre station the enabled providers offer, attributed — the "See all" behind Home's
+     * grid, which shows a preview. Separate from [homeFeed] so opening that screen costs one section's
+     * fetch rather than a whole feed's fan-out and blend.
+     */
+    suspend fun moodStations(limit: Int): List<AttributedResult<MoodStation>> = emptyList()
 }

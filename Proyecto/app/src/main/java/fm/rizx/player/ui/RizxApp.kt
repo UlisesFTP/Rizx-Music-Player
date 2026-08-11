@@ -72,6 +72,9 @@ import fm.rizx.player.ui.screens.HomeScreen
 import fm.rizx.player.ui.screens.EditorialPlaylistScreen
 import fm.rizx.player.ui.screens.GenreScreen
 import fm.rizx.player.ui.screens.LibraryScreen
+import fm.rizx.player.ui.screens.MoodsScreen
+import fm.rizx.player.ui.screens.StationScreen
+import fm.rizx.player.ui.components.tileUrl
 import fm.rizx.player.ui.screens.LibraryTab
 import fm.rizx.player.ui.screens.LocalAlbumScreen
 import fm.rizx.player.ui.screens.LocalArtistScreen
@@ -185,6 +188,9 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
             popExitTransition = { fadeOut(tween(160)) + slideOutHorizontally(tween(200)) { it / 22 } },
         ) {
             composable(Routes.HOME) {
+                // Read here, in composable scope: the click handlers below pick a cover to hand the
+                // station screen, and a lambda is not a place `tileUrl()` can read the policy from.
+                val thrifty = LocalThriftyArtwork.current
                 HomeScreen(
                     onOpenSearch = { nav.navigateTab(Routes.SEARCH) },
                     // Liked songs live in the Library now — go straight to that tab, as a tab switch.
@@ -192,7 +198,31 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     onOpenAlbum = { nav.navigate(Routes.albumDetail(it)) },
                     onOpenArtist = { nav.navigate(Routes.artistDetail(it)) },
                     onOpenEditorialPlaylist = { nav.navigate(Routes.editorialPlaylist(it)) },
+                    onOpenStation = { providerId, station ->
+                        nav.navigate(Routes.station(providerId, station.id, station.title, station.artwork.tileUrl(thrifty)))
+                    },
+                    onOpenAllMoods = { nav.navigate(Routes.MOODS) },
                 )
+            }
+            composable(Routes.MOODS) {
+                val thrifty = LocalThriftyArtwork.current
+                MoodsScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpenStation = { providerId, station ->
+                        nav.navigate(Routes.station(providerId, station.id, station.title, station.artwork.tileUrl(thrifty)))
+                    },
+                )
+            }
+            composable(
+                Routes.STATION_ROUTE,
+                arguments = listOf(
+                    navArgument("provider") { type = NavType.StringType },
+                    navArgument("id") { type = NavType.StringType },
+                    navArgument("name") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("art") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) {
+                StationScreen(onBack = { nav.popBackStack() })
             }
             composable(
                 Routes.SEARCH_ROUTE,

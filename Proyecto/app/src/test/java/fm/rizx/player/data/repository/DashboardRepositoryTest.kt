@@ -173,6 +173,34 @@ class DashboardRepositoryTest {
         assertTrue(feed.isEmpty)
     }
 
+    // ---- Stations, as their own section ----
+
+    @Test
+    fun `moodStations fans out attributed, without building a whole feed`() = runTest {
+        val registry = DefaultProviderRegistry().apply {
+            register(FakeDash("d1", stations = listOf(MoodStation("31061", "Pop"))))
+            register(FakeDash("d2", stations = listOf(MoodStation("37121", "Chill Out"))))
+            register(FakeDash("d3")) // no MOOD_STATIONS capability
+        }
+
+        val results = DashboardRepositoryImpl(registry, FakeEnabled()).moodStations(50)
+
+        assertEquals(setOf("d1", "d2"), results.map { it.providerId }.toSet())
+        assertEquals(listOf("Pop"), results.first { it.providerId == "d1" }.items.map { it.title })
+    }
+
+    @Test
+    fun `a disabled provider contributes no stations to the see-all list either`() = runTest {
+        val registry = DefaultProviderRegistry().apply {
+            register(FakeDash("off", stations = listOf(MoodStation("31061", "Pop"))))
+            register(FakeDash("on", stations = listOf(MoodStation("37121", "Chill Out"))))
+        }
+
+        val results = DashboardRepositoryImpl(registry, FakeEnabled(disabled = setOf("off"))).moodStations(50)
+
+        assertEquals(listOf("on"), results.map { it.providerId })
+    }
+
     @Test
     fun `an unknown genre degrades to an empty feed`() = runTest {
         val registry = DefaultProviderRegistry().apply {

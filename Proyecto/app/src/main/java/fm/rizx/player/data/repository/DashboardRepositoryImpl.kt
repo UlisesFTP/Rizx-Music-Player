@@ -8,6 +8,7 @@ import fm.rizx.player.domain.provider.PlaylistProvider
 import fm.rizx.player.domain.model.DashboardCapability
 import fm.rizx.player.domain.model.GenreFeed
 import fm.rizx.player.domain.model.HomeFeed
+import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.DashboardProvider
 import fm.rizx.player.domain.provider.EnabledProviderStore
@@ -71,6 +72,19 @@ class DashboardRepositoryImpl(
             featured = contribs.attributed { c -> c.featured.filter { canOpen(it.playlist) } },
             stations = contribs.attributed { it.stations },
         )
+    }
+
+    /** Just the stations section, fanned out and attributed — see [DashboardRepository.moodStations]. */
+    override suspend fun moodStations(limit: Int): List<AttributedResult<MoodStation>> = withContext(io) {
+        val all = registry.list(ProviderKind.DASHBOARD).filterIsInstance<DashboardProvider>()
+        val enabledMap = enabled.snapshot(all.map { it.id })
+        val providers = all.filter {
+            enabledMap[it.id] != false && DashboardCapability.MOOD_STATIONS in it.dashboardCapabilities
+        }
+        providers
+            .map { p -> async { p to safe(true) { p.moodStations(limit) } } }
+            .awaitAll()
+            .mapNotNull { (p, items) -> items.takeIf { it.isNotEmpty() }?.let { AttributedResult(p.id, p.name, it) } }
     }
 
     /** Routed to the provider that supplied the station — its id rode along in the [AttributedResult]. */
@@ -175,7 +189,11 @@ class DashboardRepositoryImpl(
         /** Full-width cards — two is a shelf, five would be the whole Home. */
         private const val FEATURED_LIMIT = 2
 
-        /** A 2-column grid five rows deep — a taste of the stations, not the catalogue. */
-        private const val STATION_LIMIT = 10
+        /**
+         * The provider's whole station list. Home draws a preview of it and puts the rest behind
+         * "See all", so capping here would only hide stations from that screen too — and they all
+         * arrive in the single `/radio/lists` call the section already makes.
+         */
+        private const val STATION_LIMIT = 100
     }
 }

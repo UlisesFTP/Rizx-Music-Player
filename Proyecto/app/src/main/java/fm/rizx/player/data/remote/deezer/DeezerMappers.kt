@@ -98,7 +98,7 @@ fun DeezerRadioDto.toMoodStation(): MoodStation? {
     return MoodStation(
         id = stationId.toString(),
         title = t,
-        artworkUrl = pictureMedium?.takeIf { it.isNotBlank() },
+        artwork = coverSet(pictureXl, pictureBig, pictureMedium),
     )
 }
 

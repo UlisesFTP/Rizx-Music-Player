@@ -166,7 +166,10 @@ class DeezerDashboardProvider(
         /** What a featured card actually draws; playing the playlist re-fetches the real list. */
         private const val PREVIEW_TRACKS = 4
 
-        /** Fetched deeper than shown because the title dedupe eats a few. */
-        private const val RADIO_FETCH = 40
+        /**
+         * The whole published list (76 today), not a page of it — one call either way, and the caller
+         * decides how many to show. Deeper than the total on purpose, because the title dedupe eats a few.
+         */
+        private const val RADIO_FETCH = 100
     }
 }

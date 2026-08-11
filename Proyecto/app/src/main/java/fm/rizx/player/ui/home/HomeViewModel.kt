@@ -12,7 +12,6 @@ import fm.rizx.player.domain.model.Daypart
 import fm.rizx.player.domain.model.FeaturedPlaylist
 import fm.rizx.player.domain.model.ForYouSection
 import fm.rizx.player.domain.model.HomeFeed
-import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.PlayStat
 import fm.rizx.player.domain.model.QueueContext
 import fm.rizx.player.domain.model.QueueSourceKind
@@ -352,20 +351,6 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * A mood chip: resolve what the station is playing right now and queue it as a context, labeled
-     * [queueLabel] ("Station · Chill Out") — next/previous walk the station's list, they don't wander
-     * off into a radio. Resolution can fail quietly (offline chip = nothing happens); it never crashes.
-     */
-    fun playStation(providerId: String, station: MoodStation, queueLabel: String) {
-        viewModelScope.launch {
-            val tracks = attempt { dashboard.stationTracks(providerId, station.id, STATION_TRACKS) }
-                .getOrDefault(emptyList())
-            if (tracks.isEmpty()) return@launch
-            playback.playContext(tracks, 0, QueueContext(kind = QueueSourceKind.PLAYLIST, label = queueLabel))
-        }
-    }
-
-    /**
      * A featured card's PLAY: fetch the playlist's real tracklist and queue it whole. The card's
      * preview is the fallback — four songs beat a button that does nothing when the fetch fails.
      */
@@ -389,9 +374,6 @@ class HomeViewModel @Inject constructor(
          * the old carousel because a wall of thumb-sized covers *is* the denser presentation.
          */
         const val CONTINUE_ITEMS = 17
-
-        /** One queue's worth of a mood station — enough to settle in, small enough to land fast. */
-        const val STATION_TRACKS = 30
 
         /**
          * How deep the statistics read. The log keeps three hundred songs precisely so "you haven't

@@ -4,4 +4,11 @@
     <string name="home_moods_heading">Humeurs et genres</string>
     <string name="home_station_of">Station · %1$s</string>
     <string name="home_featured_heading">Playlists à la une</string>
+    <!-- Mood/genre stations: the full list and one station's hub -->
+    <string name="moods_eyebrow">EXPLORER</string>
+    <string name="moods_all_heading">Toutes les stations</string>
+    <string name="moods_empty">Aucune station pour le moment.</string>
+    <string name="station_eyebrow">STATION</string>
+    <string name="station_playing_now">EN COURS</string>
+    <string name="station_empty">Cette station ne diffuse rien pour le moment.</string>
 </resources>

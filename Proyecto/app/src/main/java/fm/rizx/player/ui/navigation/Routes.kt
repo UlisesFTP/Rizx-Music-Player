@@ -51,6 +51,21 @@ object Routes {
     fun genre(genreId: String, name: String): String =
         "$GENRE/${Uri.encode(genreId)}?name=${Uri.encode(name)}"
 
+    /** Every mood/genre station, behind the "See all" on Home's grid (which shows a preview). */
+    const val MOODS = "moods"
+
+    /**
+     * A station hub: what a mood/genre station is playing right now. Carries the provider that can
+     * resolve it, the station id, its localized title, and the cover already picked for the tile —
+     * the station list lives in a feed section rather than a static table, so unlike a genre there is
+     * nothing to look the artwork up in without fetching the whole list again.
+     */
+    const val STATION = "station"
+    const val STATION_ROUTE = "station/{provider}/{id}?name={name}&art={art}"
+    fun station(providerId: String, stationId: String, name: String, artUrl: String?): String =
+        "$STATION/${Uri.encode(providerId)}/${Uri.encode(stationId)}" +
+            "?name=${Uri.encode(name)}&art=${Uri.encode(artUrl.orEmpty())}"
+
     /** Identify what is playing in the room. Reached from the Search header; keeps its own history. */
     const val RECOGNITION = "recognition"
 

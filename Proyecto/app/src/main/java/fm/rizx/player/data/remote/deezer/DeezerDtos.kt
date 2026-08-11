@@ -157,5 +157,7 @@ data class DeezerRadiosWrapper(val data: List<DeezerRadioDto> = emptyList())
 data class DeezerRadioDto(
     val id: Long? = null,
     val title: String? = null,
+    @SerialName("picture_xl") val pictureXl: String? = null,
+    @SerialName("picture_big") val pictureBig: String? = null,
     @SerialName("picture_medium") val pictureMedium: String? = null,
 )
