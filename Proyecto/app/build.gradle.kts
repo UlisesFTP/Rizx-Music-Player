@@ -124,16 +124,25 @@ android {
 // not at configuration — keeps sync, lint and compilation working without a keystore, and (unlike a
 // `taskGraph.whenReady` hook) stays correct if the configuration cache is ever enabled. Exact
 // task-name match on purpose: `packageReleaseTest` must stay exempt.
-val hasReleaseKeystore = keystoreProp("storeFile") != null
+// Assert against the RESOLVED signing config by IDENTITY, not a keystore-presence proxy: the guard fires
+// whenever the `release` variant would ship with the debug key — including a future edit that rewires
+// release->debug even with a keystore present, which a `storeFile != null` check would miss. Line 78 leaves
+// release.signingConfig === the debug config when no `release` config was created, so `===` catches it.
+val releaseSignedWithDebugKey = run {
+    val debugSigning = android.signingConfigs.getByName("debug")
+    val releaseSigning = android.buildTypes.getByName("release").signingConfig
+    releaseSigning == null || releaseSigning === debugSigning
+}
 val keystoreHint = keystorePropsFile.absolutePath
 tasks.configureEach {
     if (name == "packageRelease" || name == "packageReleaseBundle") {
         doFirst {
-            if (!hasReleaseKeystore) throw GradleException(
-                "Release build blocked: no release keystore is configured ($keystoreHint not found) " +
-                    "and a debug-signed release must never be distributed — it could not be updated " +
-                    "with the real key later. Create one following docs/BUILD.md § Release signing, " +
-                    "or run `assembleReleaseTest` for a minified debug-signed smoke build."
+            if (releaseSignedWithDebugKey) throw GradleException(
+                "Release build blocked: the `release` variant resolved to the DEBUG signing config " +
+                    "($keystoreHint not found, or release signing is not wired). A debug-signed release " +
+                    "must never be distributed — it could not be updated with the real key later. Configure " +
+                    "keystore.properties per docs/BUILD.md § Release signing, or run `assembleReleaseTest` " +
+                    "for a minified debug-signed smoke build."
             )
         }
     }

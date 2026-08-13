@@ -63,7 +63,7 @@ class PluginRepositoryImpl(
     }
 
     override suspend fun install(entry: RegistryPlugin): InstalledPlugin {
-        val extracted = installer.install(entry.id, entry.repo, entry.downloadUrl)
+        val extracted = installer.install(entry.id, entry.repo, entry.downloadUrl, entry.sha256)
         // The directory name, not the registry's string: the installer normalizes ids, and the plugin id
         // and its directory have to be the same thing or unregister/uninstall look in the wrong place.
         return loadAndPersist(extracted.dir.name, extracted, fallbackDescription = entry.description, fallbackAuthor = entry.author, fallbackCategory = entry.category)
@@ -138,6 +138,7 @@ class PluginRepositoryImpl(
             entryPath = extracted.entryPath,
             enabled = true,
             installedAtIso = nowIso(),
+            archiveSha256 = extracted.sha256,
         )
         store.upsert(plugin)
         return plugin

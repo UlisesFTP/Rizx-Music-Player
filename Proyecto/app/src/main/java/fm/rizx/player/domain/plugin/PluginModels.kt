@@ -20,6 +20,12 @@ data class RegistryPlugin(
     val version: String = "",
     /** Direct release asset URL when the registry provides one (skips the GitHub releases API). */
     val downloadUrl: String? = null,
+    /**
+     * Optional SHA-256 (hex) of the plugin archive. The official Nuclear registry publishes none, so this
+     * is nullable; when a registry DOES publish it, the installer verifies the download against it before
+     * any plugin code runs. Absence never fails an install (verify-when-present, like a lossless index).
+     */
+    val sha256: String? = null,
 ) {
     companion object {
         /**
@@ -122,6 +128,8 @@ data class InstalledPlugin(
     val health: String = "",
     /** The failure that caused [health], shown on the plugin's row. Safe text, never a URL. */
     val lastError: String = "",
+    /** SHA-256 (hex) of the archive this was installed from — recorded on install (trust-on-first-use). */
+    val archiveSha256: String = "",
 ) {
     val isQuarantined: Boolean get() = health == HEALTH_QUARANTINED
 

@@ -4,12 +4,15 @@ import android.util.Log
 import com.dokar.quickjs.QuickJs
 import com.dokar.quickjs.binding.asyncFunction
 import com.dokar.quickjs.binding.function
+import fm.rizx.player.BuildConfig
+import fm.rizx.player.data.lossless.LosslessUrlGuard
 import fm.rizx.player.data.plugin.PluginKvStore
 import fm.rizx.player.data.plugin.YtdlpFacade
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -18,11 +21,16 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import okhttp3.Dns
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.InetAddress
+import java.net.UnknownHostException
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
@@ -54,11 +62,29 @@ class QuickJsEngine(
     private val onOpenExternal: ((String) -> Unit)? = null,
     /** `api.Ytdlp` backed by the native YouTube extractor; null keeps the sandbox's rejecting stub. */
     private val ytdlp: YtdlpFacade? = null,
+    /**
+     * Which URLs the plugin `fetch` bridge may reach. Production uses [LosslessUrlGuard.Strict], whose
+     * DNS hook refuses private/loopback/link-local addresses (SSRF); only tests pass a loopback-allowing
+     * guard so they can serve fixtures from a local server.
+     */
+    private val fetchGuard: LosslessUrlGuard = LosslessUrlGuard.Strict,
     /** Called (on the engine thread) when a plugin registers a provider descriptor. */
     private val onRegister: (pluginId: String, metaJson: String) -> Unit,
 ) {
-    private val engineDispatcher: CoroutineDispatcher =
-        Executors.newSingleThreadExecutor { r -> Thread(r, "rizx-quickjs") }.asCoroutineDispatcher()
+    // Swappable on purpose: a plugin's synchronous `while(true){}` wedges the single engine thread and
+    // alpha13's QuickJS exposes no interrupt to preempt it, so recovery (restart) means abandoning that
+    // thread and building the next VM on a fresh one. Both are @Volatile so eval()/engine() always read
+    // the live pair; the swap itself happens under [lifecycleLock].
+    private val lifecycleLock = Any()
+
+    @Volatile
+    private var executor: ExecutorService = newEngineExecutor()
+
+    @Volatile
+    private var engineDispatcher: CoroutineDispatcher = executor.asCoroutineDispatcher()
+
+    private fun newEngineExecutor(): ExecutorService =
+        Executors.newSingleThreadExecutor { r -> Thread(r, "rizx-quickjs") }
 
     /**
      * Proves to the bootstrap that a call is the host's, not a plugin's.
@@ -72,7 +98,14 @@ class QuickJsEngine(
 
     /** Fetches get a hard call timeout so a stalled server can't wedge a plugin invocation forever. */
     private val fetchClient by lazy {
-        httpClient.newBuilder().callTimeout(FETCH_TIMEOUT_S, TimeUnit.SECONDS).build()
+        httpClient.newBuilder()
+            .callTimeout(FETCH_TIMEOUT_S, TimeUnit.SECONDS)
+            // A plugin's fetch is arbitrary-URL by design (keyless public providers), but it must not be a
+            // pivot onto the device's own LAN/loopback. This refuses any host that *resolves* to a private
+            // address — catching IP literals and DNS rebinding alike, and every redirect hop (each does its
+            // own lookup). Same guard the community-lossless ingress already relies on.
+            .dns(GuardedDns(httpClient.dns, fetchGuard))
+            .build()
     }
 
     @Volatile
@@ -81,8 +114,14 @@ class QuickJsEngine(
     private suspend fun engine(): QuickJs {
         quickJs?.let { return it }
         val qjs = QuickJs.create(engineDispatcher)
+        // Runaway-allocation backstop for the shared VM: an allocation past this throws a catchable
+        // exception instead of OOM-killing the whole app process. Generous (bootstrap + DOMParser + every
+        // plugin share this one runtime) — a ceiling, not a per-plugin quota. It does NOT stop a
+        // non-allocating CPU loop; alpha13 has no interrupt handler for that (see restart()).
+        qjs.memoryLimit = VM_MEMORY_LIMIT_BYTES
         qjs.function("__rizx_log") { args ->
-            Log.d(TAG, "[${args.getOrNull(0)}] ${args.getOrNull(1)}")
+            // Debug only: a plugin's console.* could otherwise print a token it fetched into release logcat.
+            if (BuildConfig.DEBUG) Log.d(TAG, "[${args.getOrNull(0)}] ${args.getOrNull(1)}")
         }
         qjs.function("__rizx_onRegister") { args ->
             onRegister(args[0] as String, args[1] as String)
@@ -157,20 +196,46 @@ class QuickJsEngine(
      * hammer for a wedged engine (ADR 0014). Loaded plugins are gone afterwards; the repository is
      * responsible for reloading the enabled set.
      */
-    suspend fun restart() = withContext(engineDispatcher) {
-        runCatching { quickJs?.close() }
-        quickJs = null
-    }
+    suspend fun restart() = resetEngine()
 
-    suspend fun close() = withContext(engineDispatcher) {
-        runCatching { quickJs?.close() }
-        quickJs = null
+    suspend fun close() = resetEngine()
+
+    /**
+     * Tears the current VM down and installs a fresh executor + dispatcher so the next call lazily rebuilds
+     * a clean VM (the repository reloads the enabled set). Crucially it does NOT dispatch onto the engine
+     * thread — that thread may be wedged by a plugin's uninterruptible loop, and `close()` on a wedged VM
+     * busy-spins forever. A healthy VM is still closed and freed within [RECLAIM_GRACE_MS]; a wedged one is
+     * abandoned and leaks its one thread until the process dies — the honest ceiling of quickjs-kt alpha13,
+     * whose QuickJS has no interrupt handler (the real fix is quickjs-kt >= 1.0.7, which needs Kotlin 2.3;
+     * blocked by this project's toolchain pin — see build.gradle.kts).
+     */
+    private suspend fun resetEngine() {
+        val old: QuickJs?
+        val oldExecutor: ExecutorService
+        val oldDispatcher: CoroutineDispatcher
+        synchronized(lifecycleLock) {
+            old = quickJs
+            oldExecutor = executor
+            oldDispatcher = engineDispatcher
+            executor = newEngineExecutor()
+            engineDispatcher = executor.asCoroutineDispatcher()
+            quickJs = null
+        }
+        if (old != null) {
+            // A healthy VM closes promptly on its own thread; a wedged one never yields, so bound the wait.
+            withTimeoutOrNull(RECLAIM_GRACE_MS) { runCatching { withContext(oldDispatcher) { old.close() } } }
+        }
+        runCatching { oldExecutor.shutdownNow() }
     }
 
     private suspend fun doFetch(paramsJson: String): String {
         val params = json.parseToJsonElement(paramsJson).jsonObject
         val url = params["url"]!!.jsonPrimitive.content
         require(url.startsWith("http://") || url.startsWith("https://")) { "blocked non-http url" }
+        // Userinfo in a URL leaks into logs and bug reports; private-address hosts are the DNS guard's job.
+        require(url.toHttpUrlOrNull()?.let { it.username.isEmpty() && it.password.isEmpty() } != false) {
+            "blocked credentialed url"
+        }
         val method = params["method"]?.jsonPrimitive?.contentOrNull ?: "GET"
         val bodyStr = params["body"]?.jsonPrimitive?.contentOrNull
         val builder = Request.Builder().url(url)
@@ -216,6 +281,17 @@ class QuickJsEngine(
         else -> throw PluginException("unsupported digest: $name")
     }
 
+    /** Resolves names normally, then refuses the ones that landed on a private/loopback/link-local IP. */
+    private class GuardedDns(private val delegate: Dns, private val guard: LosslessUrlGuard) : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            val resolved = delegate.lookup(hostname)
+            if (resolved.any { guard.isPrivateAddress(it) }) {
+                throw UnknownHostException("blocked private address for $hostname")
+            }
+            return resolved
+        }
+    }
+
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
     private fun String.hexToBytes(): ByteArray {
@@ -227,6 +303,10 @@ class QuickJsEngine(
         const val TAG = "JsPlugin"
         const val MAX_BODY_BYTES = 10 * 1024 * 1024
         const val FETCH_TIMEOUT_S = 30L
+        /** Runaway-allocation ceiling for the shared plugin VM (a backstop, not a per-plugin quota). */
+        const val VM_MEMORY_LIMIT_BYTES = 128L * 1024 * 1024
+        /** How long a restart waits for a healthy VM to close before abandoning a wedged one. */
+        const val RECLAIM_GRACE_MS = 3_000L
         val secureRandom = SecureRandom()
     }
 }

@@ -150,6 +150,7 @@ fun PluginsScreen(vm: PluginsViewModel = hiltViewModel()) {
                 confirmLabel = stringResource(R.string.plugins_install),
                 onConfirm = { vm.installFromUrl(it) },
                 onDismiss = { sideloadOpen = false },
+                warning = stringResource(R.string.plugins_sideload_warning),
             )
         }
         if (registryOpen) {
@@ -172,6 +173,8 @@ private fun UrlInputDialog(
     confirmLabel: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** Shown above the field when set (the sideload path warns that it runs third-party code). */
+    warning: String? = null,
 ) {
     var url by remember { mutableStateOf("") }
     AlertDialog(
@@ -179,12 +182,18 @@ private fun UrlInputDialog(
         shape = RectangleShape,
         title = { Text(title) },
         text = {
-            OutlinedTextField(
-                value = url,
-                onValueChange = { url = it },
-                singleLine = true,
-                placeholder = { Text(hint) },
-            )
+            Column {
+                if (warning != null) {
+                    Text(warning)
+                    Spacer(Modifier.height(10.dp))
+                }
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    singleLine = true,
+                    placeholder = { Text(hint) },
+                )
+            }
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(url); onDismiss() }, enabled = url.isNotBlank()) { Text(confirmLabel) }

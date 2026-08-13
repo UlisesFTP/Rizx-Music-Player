@@ -745,8 +745,16 @@ class PlaybackService : MediaSessionService() {
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
             val base = super.onConnect(session, controller)
-            // Grant our two custom commands on top of whatever the default connection allows — never narrow
-            // the UI controller's rights, just add heart/repeat so the notification controller can fire them.
+            // The service is exported (the framework requires it), so any app on the device can connect a
+            // controller. Standard transport for everyone is fine and intended, but the two custom write
+            // commands (toggle Liked / cycle repeat) are only for our own UI, our media notification, and
+            // trusted system media controllers — otherwise a zero-permission app could silently toggle the
+            // user's Liked songs. Untrusted controllers get the plain connection (transport only).
+            val trusted = controller.packageName == packageName ||
+                session.isMediaNotificationController(controller) ||
+                session.isAutomotiveController(controller) ||
+                session.isAutoCompanionController(controller)
+            if (!trusted) return base
             val sessionCommands = base.availableSessionCommands.buildUpon()
                 .add(SessionCommand(ACTION_TOGGLE_FAVORITE, Bundle.EMPTY))
                 .add(SessionCommand(ACTION_CYCLE_REPEAT, Bundle.EMPTY))

@@ -255,4 +255,81 @@ class PluginInstallerTest {
         assertEquals("src/index", PluginInstaller.resolveEntry(sources, "src/index"))
         assertNull(PluginInstaller.resolveEntry(sources, "nope"))
     }
+
+    @Test
+    fun `an archive with too many entries is refused`() {
+        // Directory entries: they count against the cap but write nothing, so the test stays cheap while
+        // proving the file/inode-exhaustion bomb is bounded before the install materializes it.
+        val entries = buildList {
+            add("package.json" to pkg())
+            repeat(PluginInstaller.MAX_ENTRY_COUNT + 2) { add("d$it/" to "") }
+        }.toTypedArray()
+
+        val failure = runCatching { runBlocking { installer().installFromZip(zipOf(*entries).inputStream()) } }
+
+        assertTrue(failure.exceptionOrNull() is AppError.ProviderFailure)
+        assertTrue(failure.exceptionOrNull()!!.message!!.contains("too many entries"))
+    }
+
+    @Test
+    fun `settings are not inherited when the previous manifest is unreadable`() = runBlocking {
+        val installer = installer()
+        val first = installer.installFromZip(
+            zipOf("package.json" to pkg(), "src/index.ts" to "export default {}").inputStream(),
+        )
+        java.io.File(first.dir, PluginInstaller.SETTINGS_FILE).writeText("""{"token":"abc"}""")
+        // Corrupted prior install: keep the credential file but lose the manifest, so previousName is null.
+        // A null previous name must NOT be treated as "same plugin" — the kept settings are dropped.
+        java.io.File(first.dir, "package.json").delete()
+
+        val again = installer.installFromZip(
+            zipOf("package.json" to pkg(), "src/index.ts" to "export default {}").inputStream(),
+        )
+
+        assertEquals("acme-plugin", again.dir.name)
+        assertTrue(!java.io.File(again.dir, PluginInstaller.SETTINGS_FILE).exists())
+    }
+
+    // ---- archive integrity (SHA-256 verify-when-present + trust-on-first-use record) ----
+
+    private fun hexSha256(bytes: ByteArray): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+    @Test
+    fun `the archive's sha256 is recorded on install`() = runBlocking {
+        val zip = zipOf("package.json" to pkg(), "src/index.ts" to "export default {}")
+
+        val extracted = installer().installFromZip(zip.inputStream())
+
+        assertEquals(hexSha256(zip), extracted.sha256)
+    }
+
+    @Test
+    fun `a matching expected checksum installs and records it`() = runBlocking {
+        val zip = zipOf("package.json" to pkg(), "src/index.ts" to "export default {}")
+
+        val extracted = installer().installFromZipBytes("acme-plugin", zip, origin = "registry", expectedSha256 = hexSha256(zip))
+
+        assertEquals("acme-plugin", extracted.dir.name)
+        assertEquals(hexSha256(zip), extracted.sha256)
+    }
+
+    @Test
+    fun `a checksum mismatch is refused without destroying the previous install`() = runBlocking {
+        val installer = installer()
+        val good = installer.installFromZip(
+            zipOf("package.json" to pkg(), "src/index.ts" to "export default {}").inputStream(),
+        )
+        java.io.File(good.dir, PluginInstaller.SETTINGS_FILE).writeText("""{"token":"abc"}""")
+
+        val other = zipOf("package.json" to pkg(version = "2.0.0"), "src/index.ts" to "export default {}")
+        val failure = runCatching {
+            installer.installFromZipBytes(good.dir.name, other, origin = "registry", expectedSha256 = "deadbeef")
+        }
+
+        assertTrue(failure.exceptionOrNull() is AppError.ProviderFailure)
+        assertTrue(failure.exceptionOrNull()!!.message!!.contains("checksum"))
+        // The verify runs before anything is deleted, so the previous good install and its token survive.
+        assertEquals("""{"token":"abc"}""", java.io.File(good.dir, PluginInstaller.SETTINGS_FILE).readText())
+    }
 }

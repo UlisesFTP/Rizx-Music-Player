@@ -174,8 +174,22 @@ fun LibraryScreen(
             // An Exportify CSV carries no playlist name — its file name is the name, so read that too.
             val file = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                        ?.let { text -> text to context.displayNameOf(uri) }
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        // Bounded read: a picked file larger than a few MB is refused rather than
+                        // materialized whole into memory. Playlist files are small; a giant one is a
+                        // mistake or an attack, and readText() on it would OOM.
+                        val maxBytes = 8 * 1024 * 1024
+                        val out = java.io.ByteArrayOutputStream()
+                        val buf = ByteArray(64 * 1024)
+                        var ok = true
+                        while (true) {
+                            val n = stream.read(buf)
+                            if (n < 0) break
+                            if (out.size() + n > maxBytes) { ok = false; break }
+                            out.write(buf, 0, n)
+                        }
+                        if (ok) out.toString(Charsets.UTF_8.name()) else null
+                    }?.let { text -> text to context.displayNameOf(uri) }
                 }.getOrNull()
             }
             if (file != null) vm.importPlaylistFile(file.first, file.second, reportImport)

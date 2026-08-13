@@ -32,6 +32,7 @@
     <string name="plugins_sideload_title">Instalar por URL</string>
     <string name="plugins_sideload_subtitle">Um plugin.zip de release ou um link zipball do GitHub</string>
     <string name="plugins_sideload_hint">Cole a URL de um zip de plugin…</string>
+    <string name="plugins_sideload_warning">Isto transfere e executa código de terceiros no seu dispositivo. Instale apenas plugins de confiança.</string>
     <string name="plugins_add_registry">Adicionar um repositório</string>
     <string name="plugins_add_registry_subtitle">Outro catálogo plugins.json para explorar</string>
     <string name="plugins_add_registry_hint">Cole a URL de um plugins.json…</string>

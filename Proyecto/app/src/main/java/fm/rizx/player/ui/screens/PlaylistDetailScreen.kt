@@ -123,6 +123,18 @@ fun PlaylistDetailScreen(
             )
         }
 
+        // The description is where an import records that it was cut short ("First 100 tracks only…").
+        // It was written on every import but drawn nowhere the user would read it — the Library row
+        // ellipsizes it away after the track count — so a truncated import looked like a complete one.
+        playlist?.description?.takeIf { it.isNotBlank() }?.let { note ->
+            Text(
+                note,
+                style = mr(12, FontWeight.Medium), color = c.muted,
+                maxLines = 3, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            )
+        }
+
         val items = playlist?.items.orEmpty()
         // A 240-track import is not something you scroll: the filter searches this playlist and only this
         // playlist. Rows keep their **playlist** position while filtered, so a hit still tells you where it

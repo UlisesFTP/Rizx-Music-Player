@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fm.rizx.player.BuildConfig
 import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.domain.plugin.InstalledPlugin
 import fm.rizx.player.domain.plugin.PluginRepository
@@ -180,7 +181,8 @@ class PluginsViewModel @Inject constructor(
             _state.update { it.copy(storeError = null) }
             return
         }
-        Log.w("Plugins", "install of '${expectedId ?: "?"}' failed", error)
+        // Debug only: the raw throwable can carry the user-pasted install URL/repo; the UI gets toSafeMessage.
+        if (BuildConfig.DEBUG) Log.w("Plugins", "install of '${expectedId ?: "?"}' failed", error)
         _state.update { it.copy(storeError = error.toSafeMessage(fallback)) }
     }
 

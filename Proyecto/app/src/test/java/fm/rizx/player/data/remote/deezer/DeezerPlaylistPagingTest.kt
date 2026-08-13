@@ -76,7 +76,8 @@ class DeezerPlaylistPagingTest {
 
         val all = api.allPlaylistTracks("1", embedded = rows(400), declaredTotal = 500_000)
 
-        assertEquals(5_000, all.size)
+        // The ceiling matches the repository's own save cap, so paging is never the shorter limit.
+        assertEquals(10_000, all.size)
     }
 
     /** Only [DeezerApi.playlistTracks] is exercised here; everything else must never be called. */

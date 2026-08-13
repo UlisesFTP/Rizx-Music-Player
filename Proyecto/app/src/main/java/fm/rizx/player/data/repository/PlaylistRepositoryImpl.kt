@@ -28,6 +28,9 @@ import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.util.UUID
 
+/** Hard cap on tracks persisted from a single import — a hostile/huge file otherwise bloats the DB. */
+private const val MAX_IMPORT_TRACKS = 10_000
+
 /**
  * Room-backed [PlaylistRepository]. Each added track becomes a [PlaylistItem] with a fresh id (via
  * [newId]) — distinct from track identity — and is stored resolution-stripped. Read-only playlists
@@ -214,7 +217,8 @@ class PlaylistRepositoryImpl(
             ),
         )
         // Insert items directly rather than via addTracks() so lastModified isn't bumped per track.
-        tracks.forEachIndexed { index, track ->
+        // Bounded: a hostile/oversized import must not bloat the DB or freeze the UI.
+        tracks.take(MAX_IMPORT_TRACKS).forEachIndexed { index, track ->
             dao.insertItem(
                 PlaylistItemEntity(
                     id = newId(), playlistId = id, sortOrder = index,

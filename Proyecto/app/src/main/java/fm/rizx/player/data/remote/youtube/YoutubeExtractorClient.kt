@@ -141,11 +141,18 @@ class NewPipeYoutubeExtractorClient(
         var pages = 1
         var stoppedEarly = false
         while (page != null && pages < MAX_PAGES && items.size < MAX_ITEMS) {
+            // One retry before giving up. A continuation is a live request to YouTube, so a single
+            // dropped connection mid-playlist used to end the import silently — and the user saw a
+            // round "100 tracks" that looked like a hard cap rather than the network blip it was.
             val more = try {
                 PlaylistInfo.getMoreItems(service, playlistUrl, page)
             } catch (e: Exception) {
-                stoppedEarly = true // keep the pages we already have rather than losing the import
-                break
+                try {
+                    PlaylistInfo.getMoreItems(service, playlistUrl, page)
+                } catch (retry: Exception) {
+                    stoppedEarly = true // keep the pages we already have rather than losing the import
+                    break
+                }
             }
             items += more.items
             page = more.nextPage
@@ -184,8 +191,12 @@ class NewPipeYoutubeExtractorClient(
     }
 
     private companion object {
-        /** Import bounds: ~100 items per page, so this covers playlists up to [MAX_ITEMS] tracks. */
-        const val MAX_PAGES = 20
-        const val MAX_ITEMS = 2_000
+        /**
+         * Import bounds: ~100 items per page, so [MAX_PAGES] is sized to reach [MAX_ITEMS], which in turn
+         * matches the repository's own save ceiling — this loop should never be the shorter limit of the
+         * two, or a long playlist gets cut by a number the user is never shown.
+         */
+        const val MAX_PAGES = 120
+        const val MAX_ITEMS = 10_000
     }
 }

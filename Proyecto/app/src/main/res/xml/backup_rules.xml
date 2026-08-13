@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto Backup content rules (Android 8-11, API < 31 — see data_extraction_rules.xml for API 31+).
+
+  The `plugins/` subtree under filesDir holds each plugin's settings.json / storage.json, which can
+  carry a plugin's login token or username in plaintext (PluginKvStore). A backup must never carry those
+  off the device, so the whole subtree is excluded. Everything else (favorites, playlists, the playback
+  session) is still backed up and restores on a new phone. Plugin *code* is excluded too and is simply
+  reinstalled — cheaper than restoring, and it keeps a stale plugin from riding a backup forward.
+-->
+<full-backup-content>
+    <exclude domain="file" path="plugins" />
+</full-backup-content>

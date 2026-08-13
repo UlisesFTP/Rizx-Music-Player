@@ -62,11 +62,13 @@ object JsModelMappers {
 
     fun parseStream(jsonStr: String, fallbackProvider: String, json: Json): Stream? {
         val obj = runCatching { json.parseToJsonElement(jsonStr) as? JsonObject }.getOrNull() ?: return null
-        val url = obj.str("url") ?: return null
+        // Plugin-sourced streams are http(s)/hls only. Without this a plugin could return
+        // {"protocol":"file","url":"file:///data/data/.../databases/rizx.db"} and drive ExoPlayer's file
+        // data source at an app-private file. StreamProtocol.FILE is the host's own downloads/local library.
+        val url = obj.str("url")?.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) } ?: return null
         val protocol = when (obj.str("protocol")?.lowercase()) {
             "hls" -> StreamProtocol.HLS
             "http" -> StreamProtocol.HTTP
-            "file" -> StreamProtocol.FILE
             else -> StreamProtocol.HTTPS
         }
         return Stream(

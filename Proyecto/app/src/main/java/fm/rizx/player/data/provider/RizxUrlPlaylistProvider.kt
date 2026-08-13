@@ -54,7 +54,11 @@ class RizxUrlPlaylistProvider(
     private fun get(url: String): String {
         client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
-            return resp.body?.string() ?: throw IOException("empty body")
+            val source = resp.body?.source() ?: throw IOException("empty body")
+            // The body is controlled by whoever hosts the URL (a link a third party may have handed the
+            // user), so bound it: without this a multi-hundred-MB response OOMs the app during import.
+            if (source.request(MAX_IMPORT_BYTES + 1L)) throw IOException("playlist file too large")
+            return source.readUtf8()
         }
     }
 
@@ -64,5 +68,6 @@ class RizxUrlPlaylistProvider(
 
     companion object {
         const val ID = "rizx-url-playlists"
+        private const val MAX_IMPORT_BYTES = 8L * 1024 * 1024
     }
 }

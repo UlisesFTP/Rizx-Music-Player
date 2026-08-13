@@ -1,6 +1,7 @@
 package fm.rizx.player.data.provider
 
 import fm.rizx.player.core.error.AppError
+import fm.rizx.player.data.remote.spotify.SpotifyPathfinderClient
 import fm.rizx.player.domain.model.coverUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -34,17 +35,43 @@ class SpotifyPlaylistProviderTest {
     @After
     fun tearDown() = server.shutdown()
 
-    private fun provider() = SpotifyPlaylistProvider(
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+
+    private fun provider(pathfinder: SpotifyPathfinderClient? = null) = SpotifyPlaylistProvider(
         client = OkHttpClient(),
-        json = Json { ignoreUnknownKeys = true; isLenient = true },
+        json = json,
         io = Dispatchers.Unconfined,
         embedUrlTemplate = server.url("/embed/playlist/").toString() + "%s",
+        pathfinder = pathfinder,
     )
+
+    /** A pathfinder client wired to the same MockWebServer, so one dispatcher can serve both hops. */
+    private fun pathfinder() = SpotifyPathfinderClient(
+        client = OkHttpClient(),
+        json = json,
+        queryUrl = server.url("/pathfinder/v1/query").toString(),
+        webPlayerUrl = server.url("/playlist/").toString() + "%s",
+    )
+
+    /** The anonymous bearer the real embed publishes alongside the tracklist. */
+    private val sessionJson = """"settings":{"session":{"accessToken":"anon-token","isAnonymous":true}},"""
+
+    private fun pathfinderPage(totalCount: Int, ids: List<Int>): String {
+        val items = ids.joinToString(",") { n ->
+            """{"itemV2":{"__typename":"TrackResponseWrapper","data":{
+                 "uri":"spotify:track:pf%022d","name":"Paged $n","trackDuration":{"totalMilliseconds":$n},
+                 "artists":{"items":[{"profile":{"name":"Tyler, The Creator"}}]},
+                 "albumOfTrack":{"uri":"spotify:album:alb$n","name":"Album $n",
+                   "coverArt":{"sources":[{"url":"https://i.scdn.co/image/cover$n","width":640,"height":640}]}}
+               }}}""".format(n)
+        }
+        return """{"data":{"playlistV2":{"content":{"totalCount":$totalCount,"items":[$items]}}}}"""
+    }
 
     private fun embedHtml(tracks: String, name: String = "Today’s Top Hits", coverArt: String = ""): String =
         """<!DOCTYPE html><html><body><div>markup</div>
            <script id="__NEXT_DATA__" type="application/json">
-           {"props":{"pageProps":{"state":{"data":{"entity":
+           {"props":{"pageProps":{"state":{$sessionJson"data":{"entity":
              {"type":"playlist","name":"$name","subtitle":"Spotify",$coverArt"trackList":[$tracks]}
            }}}}}
            </script></body></html>
@@ -129,6 +156,83 @@ class SpotifyPlaylistProviderTest {
 
         assertEquals(SpotifyPlaylistProvider.EMBED_TRACK_CAP, preview.tracks.size)
         assertTrue(preview.description!!.contains("First ${SpotifyPlaylistProvider.EMBED_TRACK_CAP} tracks"))
+    }
+
+    /** A full embed page plus a pathfinder dispatcher that serves [totalCount] tracks in 100s. */
+    private fun serveFullPlaylist(totalCount: Int, failPaging: Boolean = false) {
+        val embed = embedHtml(
+            (1..SpotifyPlaylistProvider.EMBED_TRACK_CAP)
+                .joinToString(",") { trackJson("id%022d".format(it), "Song $it", "Artist", 1000) },
+        )
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                val path = request.path.orEmpty()
+                if (path.startsWith("/embed/")) return MockResponse().setResponseCode(200).setBody(embed)
+                if (!path.startsWith("/pathfinder/")) return MockResponse().setResponseCode(404)
+                if (failPaging) return MockResponse().setResponseCode(500)
+                val offset = Regex("""offset%22%3A(\d+)|"offset":(\d+)""").find(path)
+                    ?.groupValues?.drop(1)?.firstOrNull { it.isNotEmpty() }?.toInt() ?: 0
+                val ids = (offset until minOf(offset + 100, totalCount)).toList()
+                return MockResponse().setResponseCode(200).setBody(pathfinderPage(totalCount, ids))
+            }
+        }
+    }
+
+    @Test
+    fun `pages past the embed cap so a long playlist imports whole`() = runBlocking {
+        serveFullPlaylist(totalCount = 250)
+
+        val preview = provider(pathfinder()).fetchPlaylist("https://open.spotify.com/playlist/abc")
+
+        // 100 from the embed + everything pathfinder served past it.
+        assertEquals(250, preview.tracks.size)
+        // No truncation notice: the list really is complete now.
+        assertFalse(preview.description!!.contains("First"))
+    }
+
+    @Test
+    fun `paged rows keep their own artists, album and cover instead of the embed's blanks`() = runBlocking {
+        serveFullPlaylist(totalCount = 150)
+
+        val preview = provider(pathfinder()).fetchPlaylist("https://open.spotify.com/playlist/abc")
+        val paged = preview.tracks[SpotifyPlaylistProvider.EMBED_TRACK_CAP]
+
+        // Pathfinder ships artists as separate objects, so a comma inside a name survives — the embed's
+        // comma-splitting would have made this two artists.
+        assertEquals(listOf("Tyler, The Creator"), paged.artists.map { it.name })
+        assertEquals("Album 100", paged.album?.title)
+        assertEquals("https://i.scdn.co/image/cover100", paged.artwork.coverUrl())
+    }
+
+    @Test
+    fun `a paging failure degrades to the embed's tracks rather than failing the import`() = runBlocking {
+        serveFullPlaylist(totalCount = 250, failPaging = true)
+
+        val preview = provider(pathfinder()).fetchPlaylist("https://open.spotify.com/playlist/abc")
+
+        assertEquals(SpotifyPlaylistProvider.EMBED_TRACK_CAP, preview.tracks.size)
+        // …and says so, so a short import never passes for a complete one.
+        assertTrue(preview.description!!.contains("First ${SpotifyPlaylistProvider.EMBED_TRACK_CAP} tracks"))
+    }
+
+    @Test
+    fun `a playlist shorter than the cap never spends a paging request`() = runBlocking {
+        serveFullPlaylist(totalCount = 250)
+        // Override the embed with a short one: the cap wasn't hit, so there is nothing to page.
+        val short = embedHtml((1..3).joinToString(",") { trackJson("id%022d".format(it), "Song $it", "Artist", 1000) })
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse =
+                if (request.path.orEmpty().startsWith("/embed/")) {
+                    MockResponse().setResponseCode(200).setBody(short)
+                } else {
+                    MockResponse().setResponseCode(500) // any pathfinder hit here is a bug
+                }
+        }
+
+        val preview = provider(pathfinder()).fetchPlaylist("https://open.spotify.com/playlist/abc")
+
+        assertEquals(3, preview.tracks.size)
+        assertEquals(1, server.requestCount)
     }
 
     @Test

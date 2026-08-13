@@ -1,5 +1,6 @@
 package fm.rizx.player.data.remote.spotify
 
+import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.Artwork
 import fm.rizx.player.domain.model.ArtworkPurpose
 import fm.rizx.player.domain.model.ArtworkSet
@@ -15,9 +16,13 @@ object SpotifyIds {
 
     /** Namespaced so a playlist ref can't collide with a track ref (same convention as `DeezerIds`). */
     fun playlist(id: String) = ProviderRef(PROVIDER, "playlist:$id")
+
+    /** Namespaced for the same reason as [playlist]. */
+    fun album(id: String) = ProviderRef(PROVIDER, "album:$id")
 }
 
 private const val TRACK_URI_PREFIX = "spotify:track:"
+private const val ALBUM_URI_PREFIX = "spotify:album:"
 
 /** Matches every playlist form: web URL (incl. `/intl-es/`), `spotify:playlist:<id>`, and the embed URL. */
 private val PLAYLIST_ID = Regex("""playlist[:/]([A-Za-z0-9]+)""")
@@ -29,6 +34,12 @@ fun spotifyPlaylistId(url: String): String? = PLAYLIST_ID.find(url)?.groupValues
 fun spotifyTrackId(uri: String?): String? =
     uri?.takeIf { it.startsWith(TRACK_URI_PREFIX) }
         ?.removePrefix(TRACK_URI_PREFIX)
+        ?.takeIf { it.isNotBlank() }
+
+/** `spotify:album:<id>` → `<id>`. */
+fun spotifyAlbumId(uri: String?): String? =
+    uri?.takeIf { it.startsWith(ALBUM_URI_PREFIX) }
+        ?.removePrefix(ALBUM_URI_PREFIX)
         ?.takeIf { it.isNotBlank() }
 
 /**
@@ -54,6 +65,41 @@ fun SpotifyEmbedTrackDto.toTrackOrNull(): Track? {
         artwork = coverArt.toArtworkSet(),
         source = SpotifyIds.track(trackId),
     )
+}
+
+/**
+ * Maps a **pathfinder** row to a domain [Track] — the same identity and the same metadata-only contract as
+ * the embed mapper above, but from a richer row: artists arrive already split into their own objects
+ * (no comma-splitting heuristic, so "Tyler, The Creator" survives intact) and the album ships its cover
+ * art ladder, which playlist embeds omit entirely.
+ *
+ * Returns null for anything that is not a playable Spotify track — podcast episodes and local files ride
+ * in the same `items` array, and a row whose `uri` isn't `spotify:track:…` has no identity we can use.
+ */
+fun SpotifyPathfinderTrackDto.toTrackOrNull(): Track? {
+    val trackId = spotifyTrackId(uri) ?: return null
+    val trackName = name?.takeIf { it.isNotBlank() } ?: return null
+    val cover = albumOfTrack?.coverArt.toArtworkSet()
+    return Track(
+        title = trackName,
+        artists = artists?.items.orEmpty()
+            .mapNotNull { it.profile?.name?.trim()?.takeIf(String::isNotBlank) }
+            .map { ArtistCredit(name = it) },
+        // An AlbumRef needs its own identity, so the album is only carried when Spotify names its uri;
+        // the title alone would have to invent a ProviderRef, and invented identity is the one thing
+        // ProviderRef exists to prevent.
+        album = albumRefOrNull(cover),
+        durationMs = trackDuration?.totalMilliseconds?.takeIf { it > 0 },
+        artwork = cover,
+        source = SpotifyIds.track(trackId),
+    )
+}
+
+private fun SpotifyPathfinderTrackDto.albumRefOrNull(cover: ArtworkSet?): AlbumRef? {
+    val album = albumOfTrack ?: return null
+    val albumId = spotifyAlbumId(album.uri) ?: return null
+    val title = album.name?.takeIf { it.isNotBlank() } ?: return null
+    return AlbumRef(title = title, artwork = cover, source = SpotifyIds.album(albumId))
 }
 
 /**

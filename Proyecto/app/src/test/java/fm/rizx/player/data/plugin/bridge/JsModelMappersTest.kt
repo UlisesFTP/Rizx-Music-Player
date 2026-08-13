@@ -79,4 +79,16 @@ class JsModelMappersTest {
         assertTrue(JsModelMappers.parseSearchResults("[]", "p", json).isEmpty)
         assertNull(JsModelMappers.parseSearchResults("{}", "p", json).tracks.firstOrNull())
     }
+
+    @Test
+    fun `parseStream keeps an http(s) url and refuses any other scheme`() {
+        val https = """{"url":"https://cdn.example/song.mp3","source":{"provider":"p","id":"s1"}}"""
+        assertEquals("https://cdn.example/song.mp3", JsModelMappers.parseStream(https, "p", json)?.url)
+
+        // A plugin claiming a local file would otherwise drive ExoPlayer's file source at an app-private DB.
+        val fileUrl = """{"protocol":"file","url":"file:///data/data/fm.rizx.player/databases/rizx.db","source":{"provider":"p","id":"s1"}}"""
+        assertNull(JsModelMappers.parseStream(fileUrl, "p", json))
+        val contentUrl = """{"url":"content://media/external/audio/1","source":{"provider":"p","id":"s1"}}"""
+        assertNull(JsModelMappers.parseStream(contentUrl, "p", json))
+    }
 }

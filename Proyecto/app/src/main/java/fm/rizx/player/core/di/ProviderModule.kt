@@ -97,7 +97,13 @@ object ProviderModule {
         region: RegionResolver,
     ): ProviderRegistry {
         // One shared instance: registered as the URL-import provider and reused by the charts dashboard.
-        val spotifyPlaylists = SpotifyPlaylistProvider(okHttp, json)
+        // The pathfinder client is what lets an import go past the embed's 100 rows; it only engages for
+        // playlists that actually hit that cap, so the charts path is unaffected.
+        val spotifyPlaylists = SpotifyPlaylistProvider(
+            okHttp,
+            json,
+            pathfinder = fm.rizx.player.data.remote.spotify.SpotifyPathfinderClient(okHttp, json),
+        )
         return DefaultProviderRegistry().apply {
             // The two fake *metadata* providers are gone: they were Phase-1 scaffolding that stayed
             // registered, and each carried an artificial `delay()`. Since `TrackArtworkEnricher` walks

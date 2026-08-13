@@ -539,5 +539,19 @@
   // Frozen before publishing: with the state private, replacing one of these functions was the last way
   // to sit in the middle of every other plugin's calls.
   Object.freeze(rizx);
-  g.__rizx = rizx;
+  // Freezing the object is not enough — `globalThis.__rizx = shim` would still hand a plugin every host
+  // call (and the host token, passed as arg0 each time). Kotlin re-resolves `globalThis.__rizx.*` at each
+  // call, so the *binding* has to be non-writable too, not just the object it points at.
+  try {
+    Object.defineProperty(g, '__rizx', { value: rizx, writable: false, configurable: false, enumerable: false });
+  } catch (e) { g.__rizx = rizx; /* fall back to a plain (still-frozen) publish if defineProperty is blocked */ }
+
+  // The browser shims a plugin could otherwise swap to man-in-the-middle every *other* plugin's traffic.
+  // `api.Http.fetch` resolves `globalThis.fetch` at call time, so a writable global fetch is a one-line
+  // credential interceptor; `crypto` is the same story. Freeze the objects and pin the bindings.
+  try { Object.freeze(g.crypto.subtle); } catch (e) { /* keep going */ }
+  try { Object.freeze(g.crypto); } catch (e) { /* keep going */ }
+  for (const name of ['fetch', 'crypto']) {
+    try { Object.defineProperty(g, name, { value: g[name], writable: false, configurable: false, enumerable: true }); } catch (e) { /* keep going */ }
+  }
 })();

@@ -21,7 +21,25 @@ data class SpotifyEmbedProps(val pageProps: SpotifyEmbedPageProps? = null)
 data class SpotifyEmbedPageProps(val state: SpotifyEmbedState? = null)
 
 @Serializable
-data class SpotifyEmbedState(val data: SpotifyEmbedData? = null)
+data class SpotifyEmbedState(
+    val data: SpotifyEmbedData? = null,
+    val settings: SpotifyEmbedSettings? = null,
+)
+
+/**
+ * The embed also publishes, in the very same blob, the **anonymous** bearer its own JavaScript uses
+ * (`isAnonymous: true`). That token is what lets [SpotifyPathfinderClient] page past the 100 rows the
+ * embed itself ships — read from a public page, not minted by defeating a control. See
+ * [SpotifyPathfinderResponse] for the ADR 0018 reasoning.
+ */
+@Serializable
+data class SpotifyEmbedSettings(val session: SpotifyEmbedSession? = null)
+
+@Serializable
+data class SpotifyEmbedSession(
+    val accessToken: String? = null,
+    val isAnonymous: Boolean? = null,
+)
 
 @Serializable
 data class SpotifyEmbedData(val entity: SpotifyEmbedEntity? = null)

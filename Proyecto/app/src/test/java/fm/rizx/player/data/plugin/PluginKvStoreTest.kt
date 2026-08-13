@@ -89,4 +89,26 @@ class PluginKvStoreTest {
             store().get("acme", PluginKvStore.SCOPE_STORAGE, """weird "key" \ here"""),
         )
     }
+
+    @Test
+    fun `an oversized value is rejected and never written`() {
+        val kv = store()
+        val huge = "x".repeat(PluginKvStore.MAX_VALUE_CHARS + 1)
+
+        assertTrue(runCatching { kv.set("acme", PluginKvStore.SCOPE_STORAGE, "k", huge) }.isFailure)
+        assertNull(kv.get("acme", PluginKvStore.SCOPE_STORAGE, "k"))
+        assertTrue(!File(File(tmp.root, "acme"), PluginInstaller.STORAGE_FILE).isFile)
+    }
+
+    @Test
+    fun `the key-count budget bounds how many keys a plugin can hoard`() {
+        val kv = store()
+        for (i in 0 until PluginKvStore.MAX_KEYS) kv.set("acme", PluginKvStore.SCOPE_STORAGE, "k$i", "1")
+
+        // A brand-new key past the budget is refused, but an existing key can still be overwritten.
+        assertTrue(runCatching { kv.set("acme", PluginKvStore.SCOPE_STORAGE, "one-too-many", "1") }.isFailure)
+        kv.set("acme", PluginKvStore.SCOPE_STORAGE, "k0", "2")
+        assertEquals("2", kv.get("acme", PluginKvStore.SCOPE_STORAGE, "k0"))
+        assertNull(kv.get("acme", PluginKvStore.SCOPE_STORAGE, "one-too-many"))
+    }
 }

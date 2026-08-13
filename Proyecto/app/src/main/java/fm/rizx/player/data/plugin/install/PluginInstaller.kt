@@ -16,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.InputStream
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
 /** What language/shape a collected plugin source file is, decided by its extension. */
@@ -31,6 +32,8 @@ data class ExtractedPlugin(
     /** Extension-less path relative to the plugin root (e.g. `src/index`, `dist/index`) → source. */
     val sources: Map<String, PluginSourceFile>,
     val entryPath: String,
+    /** SHA-256 (hex) of the archive it was extracted from — recorded so a re-install can notice a change. */
+    val sha256: String,
 )
 
 /**
@@ -47,14 +50,14 @@ class PluginInstaller(
     private val json: Json,
     private val pluginsRoot: File,
 ) {
-    suspend fun install(pluginId: String, repo: String, downloadUrl: String? = null): ExtractedPlugin = withContext(Dispatchers.IO) {
+    suspend fun install(pluginId: String, repo: String, downloadUrl: String? = null, expectedSha256: String? = null): ExtractedPlugin = withContext(Dispatchers.IO) {
         // A registry entry's id is a remote string that becomes a directory name. Sideloads have always
         // been normalized through `pluginIdFor`; this path was not — and the user can add any registry.
         val safeId = pluginIdFor(pluginId)
         if (safeId.isBlank()) throw AppError.ProviderFailure("PluginInstaller", "unsafe plugin id '$pluginId'")
         val assetUrl = downloadUrl ?: resolveAssetUrl(repo)
         val zipBytes = download(assetUrl)
-        installFromZipBytes(safeId, zipBytes, origin = repo)
+        installFromZipBytes(safeId, zipBytes, origin = repo, expectedSha256 = expectedSha256)
     }
 
     /** Sideload: download a plugin zip from a pasted [url]; the id comes from its own manifest. */
@@ -88,8 +91,15 @@ class PluginInstaller(
         }
     }
 
-    private fun installFromZipBytes(pluginId: String, zipBytes: ByteArray, origin: String): ExtractedPlugin {
+    internal fun installFromZipBytes(pluginId: String, zipBytes: ByteArray, origin: String, expectedSha256: String? = null): ExtractedPlugin {
         if (!isSafePluginId(pluginId)) throw AppError.ProviderFailure("PluginInstaller", "unsafe plugin id '$pluginId'")
+        // Integrity gate, BEFORE anything is deleted: when the registry publishes a hash, the download is
+        // verified against it and a mismatch fails here without touching the existing good install. The
+        // computed hash is carried out either way (trust-on-first-use), so a re-install can notice a change.
+        val actualSha256 = sha256(zipBytes)
+        if (expectedSha256 != null && !actualSha256.equals(expectedSha256, ignoreCase = true)) {
+            throw AppError.ProviderFailure("PluginInstaller", "plugin archive checksum mismatch")
+        }
         val dir = File(pluginsRoot, pluginId)
         // Read before deleting: per-plugin state is only carried over when this is *the same plugin*.
         val previousName = runCatching { readManifest(dir).name }.getOrNull()
@@ -111,13 +121,15 @@ class PluginInstaller(
             resolveEntry(sources, entryPath)
                 ?: throw AppError.ProviderFailure("PluginInstaller", "entry '$entryPath' not found in $origin")
             checkBareDependencies(sources)
-            // Restore per-plugin settings/storage so an update never loses a plugin's tokens/state —
-            // but only for the same manifest name. Two different names can normalize to one id, and
-            // then the second install would silently inherit the first's stored credentials.
-            if (previousName == null || previousName == manifest.name) {
+            // Restore per-plugin settings/storage so an update never loses a plugin's tokens/state — but
+            // only when this is provably the same plugin (same manifest name). Two different names can
+            // normalize to one id; carrying state across would hand the second install the first's stored
+            // credentials. A null previous name (unreadable prior manifest) is NOT trusted to mean "same
+            // plugin" — binding inheritance to a verified author/signature would be the fuller fix.
+            if (previousName != null && previousName == manifest.name) {
                 for ((name, bytes) in kept) File(dir, name).writeBytes(bytes)
             }
-            return ExtractedPlugin(manifest, dir, sources, entryPath)
+            return ExtractedPlugin(manifest, dir, sources, entryPath, sha256 = actualSha256)
         } catch (e: Throwable) {
             dir.deleteRecursively() // installs are atomic
             throw e
@@ -177,7 +189,11 @@ class PluginInstaller(
         ZipInputStream(zipBytes.inputStream()).use { zis ->
             var entry = zis.nextEntry
             var total = 0L
+            var count = 0
             while (entry != null) {
+                // Byte caps alone don't stop an archive of hundreds of thousands of near-empty entries
+                // exhausting inodes/file handles before the install finishes — bound the count too.
+                if (++count > MAX_ENTRY_COUNT) throw AppError.ProviderFailure("PluginInstaller", "plugin archive has too many entries")
                 if (!entry.isDirectory) {
                     val out = File(dir, entry.name)
                     if (!out.canonicalPath.startsWith(canonicalRoot)) throw AppError.ProviderFailure("PluginInstaller", "unsafe zip entry ${entry.name}")
@@ -321,11 +337,16 @@ class PluginInstaller(
         fun isSafePluginId(id: String): Boolean =
             id.isNotBlank() && !id.startsWith(".") && '/' !in id && '\\' !in id
 
+        /** Lowercase-hex SHA-256 of [bytes] (JDK-only; same hex shape used across the download paths). */
+        private fun sha256(bytes: ByteArray): String =
+            MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
         const val CACHE_DIR = ".cache"
         const val TMP_DIR = ".tmp-sideload"
         const val SETTINGS_FILE = "settings.json"
         const val STORAGE_FILE = "storage.json"
         const val MAX_ZIP_BYTES = 20 * 1024 * 1024
         const val MAX_UNZIPPED_BYTES = 40 * 1024 * 1024
+        const val MAX_ENTRY_COUNT = 8192
     }
 }

@@ -29,8 +29,17 @@ class PluginKvStore(
 
     fun set(pluginId: String, scope: String, key: String, valueJson: String) {
         synchronized(this) {
+            require(valueJson.length <= MAX_VALUE_CHARS) { "plugin value too large" }
             val map = load(pluginId, scope)
-            map[key] = valueJson
+            val hadKey = map.containsKey(key)
+            require(hadKey || map.size < MAX_KEYS) { "plugin key budget exceeded" }
+            val previous = map.put(key, valueJson)
+            // Bound total size per (plugin, scope) so a looping plugin cannot fill internal storage and
+            // starve Room/downloads/session writes. Revert on breach; don't persist an over-budget map.
+            if (map.entries.sumOf { it.key.length + it.value.length } > MAX_SCOPE_CHARS) {
+                if (previous == null) map.remove(key) else map[key] = previous
+                throw IllegalStateException("plugin storage budget exceeded")
+            }
             persist(pluginId, scope, map)
         }
     }
@@ -91,5 +100,13 @@ class PluginKvStore(
     companion object {
         const val SCOPE_SETTINGS = "settings"
         const val SCOPE_STORAGE = "storage"
+
+        /**
+         * Generous per-(plugin, scope) budgets: far above any real token/username store, low enough that a
+         * plugin cannot fill internal storage in a loop. Char counts stand in for bytes — fine for a budget.
+         */
+        const val MAX_KEYS = 1024
+        const val MAX_VALUE_CHARS = 512 * 1024
+        const val MAX_SCOPE_CHARS = 2 * 1024 * 1024
     }
 }

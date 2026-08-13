@@ -72,15 +72,22 @@ object KrcParser {
         return LyricWord(startMs = start, endMs = start + duration, text = groupValues[3])
     }
 
+    private const val MAX_INFLATED_BYTES = 4 * 1024 * 1024
+
     private fun inflate(data: ByteArray): String {
         val inflater = Inflater()
         return try {
             inflater.setInput(data)
             val out = java.io.ByteArrayOutputStream(data.size * 4)
             val buffer = ByteArray(8 * 1024)
+            var total = 0
             while (!inflater.finished()) {
                 val n = inflater.inflate(buffer)
                 if (n == 0 && (inflater.needsInput() || inflater.needsDictionary())) break
+                total += n
+                // A krc is a few KB of text; a stream that expands past this is a decompression bomb from a
+                // hostile/compromised endpoint, not lyrics. Fail — decode() catches it and the provider degrades.
+                if (total > MAX_INFLATED_BYTES) throw IllegalStateException("krc lyrics too large")
                 out.write(buffer, 0, n)
             }
             out.toString(Charsets.UTF_8.name())

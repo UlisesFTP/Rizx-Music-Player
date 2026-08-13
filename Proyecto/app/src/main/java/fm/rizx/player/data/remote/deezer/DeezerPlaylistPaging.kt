@@ -39,7 +39,8 @@ internal suspend fun DeezerApi.allPlaylistTracks(
 private const val PAGE_SIZE = 500
 
 /**
- * A ceiling so a pathological playlist can't page indefinitely. Well past anything a person curates —
- * the largest found while testing was 1640.
+ * A ceiling so a pathological playlist can't page indefinitely. Set to the repository's own save ceiling
+ * so this loop is never the shorter of the two — a playlist cut here would be cut by a number the user
+ * never sees. Well past anything a person curates; the largest found while testing was 1640.
  */
-private const val MAX_TRACKS = 5_000
+private const val MAX_TRACKS = 10_000
