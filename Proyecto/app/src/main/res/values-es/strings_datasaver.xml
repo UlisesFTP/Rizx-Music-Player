@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="pref_data_saver_caption">Audio de menor bitrate, portadas más pequeñas, sin portadas animadas, y las descargas esperan al Wi-Fi.</string>
+    <string name="pref_data_saver_caption">Menos bitrate, portadas más pequeñas y descargas solo por Wi-Fi.</string>
 
     <string name="pref_forced_by_data_saver">Forzado por Ahorro de datos</string>
     <string name="pref_paused_by_data_saver">En pausa por Ahorro de datos</string>

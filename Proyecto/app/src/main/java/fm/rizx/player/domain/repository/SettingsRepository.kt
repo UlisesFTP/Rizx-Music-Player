@@ -4,7 +4,9 @@ import fm.rizx.player.domain.model.AudioQualityMode
 import fm.rizx.player.domain.model.CanvasNetworkPolicy
 import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.CanvasQuality
+import fm.rizx.player.domain.model.LyricsDisplayMode
 import fm.rizx.player.domain.model.LyricsVisualQuality
+import fm.rizx.player.domain.model.PlayerLayout
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.SpatialAudioMode
 import fm.rizx.player.domain.model.ThemeMode
@@ -22,6 +24,10 @@ interface SettingsRepository {
     /** Light / dark / system. [ThemeMode.SYSTEM] (the default) follows the device's dark-mode setting. */
     val themeMode: Flow<ThemeMode>
     suspend fun setThemeMode(mode: ThemeMode)
+
+    /** How Now Playing stacks its controls. [PlayerLayout.CLASSIC] is the original arrangement. */
+    val playerLayout: Flow<PlayerLayout>
+    suspend fun setPlayerLayout(layout: PlayerLayout)
 
     val activeMetadataProviderId: Flow<String?>
     suspend fun setActiveMetadataProviderId(id: String?)
@@ -246,4 +252,14 @@ interface SettingsRepository {
      */
     val lyricsVisualQuality: Flow<LyricsVisualQuality>
     suspend fun setLyricsVisualQuality(quality: LyricsVisualQuality)
+
+    /**
+     * Which reading of a lyric to show — the original script, how it sounds, or what it means.
+     *
+     * Persisted rather than reset per song, because it describes the listener and not the track: someone
+     * who can't read Hangul can't read it on the next song either. A song with no such reading falls
+     * back to its original text on its own, so the setting is harmless where it doesn't apply.
+     */
+    val lyricsDisplayMode: Flow<LyricsDisplayMode>
+    suspend fun setLyricsDisplayMode(mode: LyricsDisplayMode)
 }

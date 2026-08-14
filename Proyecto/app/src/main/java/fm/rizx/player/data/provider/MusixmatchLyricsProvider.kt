@@ -3,6 +3,7 @@ package fm.rizx.player.data.provider
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.lyrics.LrcParser
 import fm.rizx.player.data.lyrics.RichSyncParser
+import fm.rizx.player.data.lyrics.withReadingsByText
 import fm.rizx.player.data.remote.musixmatch.MusixmatchClient
 import fm.rizx.player.data.remote.musixmatch.MusixmatchTrack
 import fm.rizx.player.domain.lyrics.LyricsMatchTarget
@@ -74,6 +75,40 @@ class MusixmatchLyricsProvider(
         }.orEmpty()
     }
 
+    /**
+     * The pronunciation and the translation, from Musixmatch's crowd contributions.
+     *
+     * This is the only source that hands back a real translation into the listener's own language — the
+     * other providers translate to Chinese, which for anyone reading this app in Spanish is one
+     * unreadable script traded for another. The romaji is worth having too, and better than NetEase's,
+     * but it is only asked for when nothing else already supplied one: this endpoint answers
+     * `401 captcha` after about ten calls, so every request has to earn itself.
+     */
+    override suspend fun readings(track: Track, lyrics: Lyrics, language: String): Lyrics {
+        if (lyrics.lines.isEmpty()) return lyrics
+        val artist = track.artists.firstOrNull()?.name.orEmpty()
+        val query = listOf(artist, track.title).filter { it.isNotBlank() }.joinToString(" ")
+
+        return guard {
+            withContext(io) {
+                // The token host, not the signed one: they fail independently, and the signed one has
+                // been answering 503 while the crowd endpoints below were perfectly reachable.
+                val hits = client.searchByTitle(track.title, artist, MAX_RESULTS)
+                    .ifEmpty { client.search(query, MAX_RESULTS) }
+                val hit = hits.bestFor(track) ?: return@withContext lyrics
+                val translated = client.crowdReadings(hit.trackId, language)
+                val romanized =
+                    if (lyrics.hasRomanization) emptyMap() else client.crowdReadings(hit.trackId, ROMAJI)
+                if (translated.isEmpty() && romanized.isEmpty()) return@withContext lyrics
+
+                lyrics.copy(
+                    lines = lyrics.lines.withReadingsByText(romanized = romanized, translated = translated),
+                    translationLang = language.takeIf { translated.isNotEmpty() } ?: lyrics.translationLang,
+                )
+            }
+        } ?: lyrics
+    }
+
     private fun List<MusixmatchTrack>.bestFor(track: Track): MusixmatchTrack? =
         LyricsTrackMatcher.bestOf(track, this) { hit ->
             LyricsMatchTarget(
@@ -111,5 +146,7 @@ class MusixmatchLyricsProvider(
         /** Each candidate costs a second request for its body, so the manual picker stays short. */
         private const val MAX_CANDIDATES = 4
 
+        /** Musixmatch's pseudo-language for romaji, alongside the real translation codes. */
+        private const val ROMAJI = "rj"
     }
 }

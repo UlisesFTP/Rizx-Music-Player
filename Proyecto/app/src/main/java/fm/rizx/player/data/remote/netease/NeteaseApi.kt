@@ -1,6 +1,5 @@
 package fm.rizx.player.data.remote.netease
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import retrofit2.http.GET
 import retrofit2.http.Headers
@@ -66,13 +65,27 @@ data class NeteaseArtistDto(val name: String? = null)
 @Serializable
 data class NeteaseAlbumDto(val name: String? = null)
 
+/**
+ * Everything NetEase already sends back for one song id.
+ *
+ * The alternative readings come as **separate LRC documents**, in two families that must not be mixed:
+ * `romalrc`/`tlyric` carry `lrc`'s timestamps, and `yromalrc`/`ytlrc` carry `yrc`'s. For 残酷な天使のテーゼ
+ * the same first line is stamped `[00:02.460]` in one family and `[00:01.560]` in the other — pairing
+ * them the wrong way round puts every line ~900 ms out.
+ *
+ * The response also carries `tlyric`/`ytlrc`, which are translations **into Chinese**. They are left
+ * undeclared on purpose: swapping a script the listener can't read for another one isn't a translation.
+ */
 @Serializable
 data class NeteaseLyricResponse(
     /** Word-by-word transcript when the song has one. */
     val yrc: NeteaseLyricBody? = null,
     /** Classic line-timed LRC. */
     val lrc: NeteaseLyricBody? = null,
-    @SerialName("tlyric") val translated: NeteaseLyricBody? = null,
+    /** Latin transcription of [lrc]. Present for most Japanese and Korean songs. */
+    val romalrc: NeteaseLyricBody? = null,
+    /** Latin transcription of [yrc]. */
+    val yromalrc: NeteaseLyricBody? = null,
 )
 
 @Serializable

@@ -81,6 +81,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fm.rizx.player.R
@@ -93,6 +94,7 @@ import fm.rizx.player.ui.components.TransportMarker
 import fm.rizx.player.ui.components.TransportPlayButton
 import fm.rizx.player.ui.components.VerticalLabel
 import fm.rizx.player.ui.components.clickableScale
+import fm.rizx.player.domain.model.PlayerLayout
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.RepeatMode
 import fm.rizx.player.domain.usecase.LinkedArtist
@@ -176,6 +178,11 @@ fun NowPlayingScreen(
     loading: Boolean = false,
     // Live audio spectrum (0..1 per bar) read lazily inside the waveform's draw so only it invalidates.
     levels: () -> FloatArray = { FloatArray(0) },
+    /**
+     * Which arrangement the user picked in Settings. Both show the same controls — see [PlayerLayout].
+     * Defaulted so every existing call site (and preview) keeps the original stack.
+     */
+    layout: PlayerLayout = PlayerLayout.CLASSIC,
 ) {
     val c = RizxTheme.colors
     val haptics = rememberRizxHaptics()
@@ -240,14 +247,23 @@ fun NowPlayingScreen(
           // pinned at 420 *before* that row went, so freeing its 69dp would otherwise have left dead paper
           // above the up-next bar rather than a bigger cover. Short screens are unaffected — they never
           // reach the cap.
-          val artHeight = (maxHeight - CONTROLS_RESERVE * fontScale).coerceIn(180.dp, 470.dp)
+          //
+          // The reserve is per-layout because the layouts are not the same height: Compact folds the
+          // track-actions row into the title row, so it needs one row less. Reserving the classic figure
+          // for it would leave a band of dead paper under the transport instead of a taller cover.
+          val controlsReserve = controlsReserveFor(layout)
+          // The **cap** has to move with the reserve, not just the reserve. On a tall phone the artwork is
+          // already pinned at the cap, so lowering the reserve alone changes nothing about the cover and
+          // hands Compact's freed row to the trailing spacer instead — a band of dead paper under the
+          // transport, which is the opposite of what folding a row away was for.
+          val artHeight = (maxHeight - controlsReserve * fontScale).coerceIn(180.dp, artMaxFor(layout))
           // Side by side only where it is genuinely better: a landscape window on a device whose *shortest*
           // edge is tablet-sized, and only when it is tall enough for the whole control stack. A phone never
           // gets here — it stays upright — but the height check still matters, because a short landscape
           // window is better served by the stacked layout, which shrinks the artwork to fit.
           val twoPane = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE &&
               isLargeScreenDevice() &&
-              maxHeight >= CONTROLS_RESERVE * fontScale
+              maxHeight >= controlsReserve * fontScale
           // Two ways to lay this screen out, from **one** definition of each half: stacked on a phone,
           // side by side where there is width for it. Local composable lambdas rather than extracted
           // functions — these two blocks read forty-odd pieces of state and a dozen callbacks between them,
@@ -408,6 +424,37 @@ fun NowPlayingScreen(
             } else {
                 Modifier.fillMaxWidth()
             }
+            // Declared once and *placed* by the layout below. Both arrangements call these same two, so a
+            // layout can only reorder the player — it can never end up missing a button.
+            //
+            // `bare` drops the framed container and leaves the glyph alone (Compact). The frame is what
+            // aligns Classic's four buttons on two vertical axes, so only the layout that doesn't need
+            // that alignment gives it up.
+            val likeButton: @Composable (bare: Boolean) -> Unit = { bare ->
+                ActionButton(
+                    icon = if (liked) RizxIcons.Favorite else RizxIcons.FavoriteBorder,
+                    // State-aware: the old constant "Like" told a screen-reader user nothing about
+                    // whether the song was already liked.
+                    contentDescription = if (liked) {
+                        stringResource(R.string.player_remove_from_liked)
+                    } else {
+                        stringResource(R.string.player_like)
+                    },
+                    onClick = onToggleLike,
+                    isDark = c.isDark,
+                    bare = bare,
+                    tint = if (liked) c.redAccent else null,
+                )
+            }
+            val addToPlaylistButton: @Composable (bare: Boolean) -> Unit = { bare ->
+                ActionButton(
+                    icon = RizxIcons.PlaylistAdd,
+                    contentDescription = stringResource(R.string.player_add_to_playlist),
+                    onClick = onAddToPlaylist,
+                    isDark = c.isDark,
+                    bare = bare,
+                )
+            }
                 // Nothing-OS dot-matrix texture behind the controls — a STATIC grid (drawn only on
                 // recomposition, not a 60fps driver), so it never contends with audio decode/output on
                 // low-end GPUs / emulators. Both themes.
@@ -445,6 +492,34 @@ fun NowPlayingScreen(
                     // screen of empty paper underneath.
                     verticalArrangement = if (twoPane) Arrangement.Center else Arrangement.Top,
                 ) {
+                    // Compact leads with the title flanked by its two actions, so everything that isn't
+                    // transport lives above the progress bar.
+                    //
+                    // The title takes `weight(1f)` and the buttons stay unweighted: an unweighted child in
+                    // a Row measures at its own intrinsic width first, so a long title would otherwise
+                    // claim the whole row and push the buttons off the end of a narrow screen.
+                    if (layout == PlayerLayout.COMPACT) {
+                        Row(
+                            paneWidth.padding(horizontal = ACTION_INSET),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            addToPlaylistButton(true)
+                            TrackTextBlock(
+                                title = title,
+                                artist = artist,
+                                artistLinks = artistLinks,
+                                onOpenArtist = onOpenArtist,
+                                audioFormat = audioFormat,
+                                shadow = npTextShadow,
+                                modifier = Modifier.weight(1f),
+                                // The buttons already own the row's ends; the classic 24.dp on top of them
+                                // would leave the title a sliver on a 320.dp screen.
+                                horizontalPadding = 8.dp,
+                            )
+                            likeButton(true)
+                        }
+                    }
+
                     // ---- Waveform scrubber (tap or drag to seek) ----
                     // Local drag override so the playhead follows the finger instantly, before the polled
                     // position round-trips back through the player (same trick as the mini-player). Read
@@ -553,38 +628,17 @@ fun NowPlayingScreen(
                         )
                     }
 
-                    // Title + artist cross-fade/slide when the track changes, so next/prev feels intentional
-                    // instead of a hard swap. Keyed by the text pair; one-shot, so no continuous driver.
-                    AnimatedContent(
-                        targetState = title to artist,
-                        transitionSpec = {
-                            (fadeIn(tween(280)) + slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it / 3 }) togetherWith
-                                (fadeOut(tween(180)) + slideOutVertically(tween(180)) { -it / 3 })
-                        },
-                        label = "trackText",
-                        modifier = paneWidth,
-                    ) { (animTitle, animArtist) ->
-                        Column(
-                            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                animTitle,
-                                style = sg(26, FontWeight.Bold, -0.02f).copy(shadow = npTextShadow),
-                                color = c.text,
-                                maxLines = 1,
-                                textAlign = TextAlign.Center,
-                                // Marquee: a title too long for one line scrolls leftward instead of clipping.
-                                modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE),
-                            )
-                            ArtistLine(
-                                fallback = animArtist,
-                                links = artistLinks,
-                                onOpenArtist = onOpenArtist,
-                                shadow = npTextShadow,
-                            )
-                            AudioFormatLine(audioFormat, npTextShadow)
-                        }
+                    // Classic keeps the title under the times, where it has the full pane to itself.
+                    if (layout == PlayerLayout.CLASSIC) {
+                        TrackTextBlock(
+                            title = title,
+                            artist = artist,
+                            artistLinks = artistLinks,
+                            onOpenArtist = onOpenArtist,
+                            audioFormat = audioFormat,
+                            shadow = npTextShadow,
+                            modifier = paneWidth,
+                        )
                     }
 
                     // ---- Controls ----
@@ -644,27 +698,20 @@ fun NowPlayingScreen(
                         )
                     }
 
-                    // Track actions sit in their own row so the transport above stays purely playback. Same
-                    // horizontal padding and SpaceBetween as that row, and the same 46.dp button, so these
-                    // land squarely under shuffle (left) and repeat (right) instead of floating loose —
-                    // and the bottom bar below repeats the pair, so all four share two vertical axes.
-                    Row(
-                        paneWidth.padding(horizontal = ACTION_INSET, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        GlassButton(RizxIcons.PlaylistAdd, stringResource(R.string.player_add_to_playlist), onAddToPlaylist, c.isDark, size = ACTION_BUTTON, iconSize = ACTION_ICON)
-                        GlassButton(
-                            if (liked) RizxIcons.Favorite else RizxIcons.FavoriteBorder,
-                            // State-aware: the old constant "Like" told a screen-reader user nothing about
-                            // whether the song was already liked.
-                            if (liked) stringResource(R.string.player_remove_from_liked) else stringResource(R.string.player_like),
-                            onToggleLike,
-                            c.isDark,
-                            size = ACTION_BUTTON,
-                            iconSize = ACTION_ICON,
-                            tint = if (liked) c.redAccent else null,
-                        )
+                    // Classic: track actions sit in their own row so the transport above stays purely
+                    // playback. Same horizontal padding and SpaceBetween as that row, and the same 46.dp
+                    // button, so these land squarely under shuffle (left) and repeat (right) instead of
+                    // floating loose — and the bottom bar below repeats the pair, so all four share two
+                    // vertical axes. Compact has already drawn this pair up beside the title.
+                    if (layout == PlayerLayout.CLASSIC) {
+                        Row(
+                            paneWidth.padding(horizontal = ACTION_INSET, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            addToPlaylistButton(false)
+                            likeButton(false)
+                        }
                     }
 
                     // Pushes the stack to the top in portrait; in the centred wide pane it would take
@@ -764,6 +811,60 @@ fun NowPlayingScreen(
  * Names carry `weight(fill = false)`: they shrink to fit and ellipsize individually, so a long billing
  * can never push the row past the screen or move the controls below it.
  */
+/**
+ * Title · artists · decoded format, cross-fading when the track changes so next/prev feels intentional
+ * instead of a hard swap. Keyed by the text pair; one-shot, so no continuous driver.
+ *
+ * Extracted because [PlayerLayout] moves it: in [PlayerLayout.COMPACT] it sits *between* the like and
+ * add buttons rather than on its own line, which is also why [horizontalPadding] is a parameter — the
+ * classic layout's 24.dp breathing room would squeeze the title into a marquee the moment two 46.dp
+ * buttons take the ends of the row.
+ */
+@Composable
+private fun TrackTextBlock(
+    title: String,
+    artist: String,
+    artistLinks: List<LinkedArtist>,
+    onOpenArtist: (ProviderRef) -> Unit,
+    audioFormat: AudioFormatUi?,
+    shadow: Shadow?,
+    modifier: Modifier = Modifier,
+    horizontalPadding: Dp = 24.dp,
+) {
+    val c = RizxTheme.colors
+    AnimatedContent(
+        targetState = title to artist,
+        transitionSpec = {
+            (fadeIn(tween(280)) + slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it / 3 }) togetherWith
+                (fadeOut(tween(180)) + slideOutVertically(tween(180)) { -it / 3 })
+        },
+        label = "trackText",
+        modifier = modifier,
+    ) { (animTitle, animArtist) ->
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                animTitle,
+                style = sg(26, FontWeight.Bold, -0.02f).copy(shadow = shadow),
+                color = c.text,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                // Marquee: a title too long for one line scrolls leftward instead of clipping.
+                modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE),
+            )
+            ArtistLine(
+                fallback = animArtist,
+                links = artistLinks,
+                onOpenArtist = onOpenArtist,
+                shadow = shadow,
+            )
+            AudioFormatLine(audioFormat, shadow)
+        }
+    }
+}
+
 @Composable
 private fun ArtistLine(
     fallback: String,
@@ -1064,6 +1165,41 @@ private fun UpNextRow(
     }
 }
 
+/**
+ * Like / add-to-playlist, in either dress.
+ *
+ * Framed (Classic) it is a [GlassButton], which is what puts it on the same vertical axis as the
+ * transport and the bottom bar. **Bare** (Compact) drops the container and leaves the glyph: there the
+ * pair flanks the title rather than lining up with anything, so the frame was only boxing them in.
+ *
+ * The tap target stays [ACTION_BUTTON] wide either way — the frame is the only thing that goes. A bare
+ * glyph also has no container to lend it weight, so it is drawn a little larger and at full text
+ * strength; at the framed size and alpha it read as disabled.
+ */
+@Composable
+private fun ActionButton(
+    icon: ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    isDark: Boolean,
+    bare: Boolean,
+    tint: Color? = null,
+) {
+    val c = RizxTheme.colors
+    if (!bare) {
+        GlassButton(icon, contentDescription, onClick, isDark, size = ACTION_BUTTON, iconSize = ACTION_ICON, tint = tint)
+        return
+    }
+    RizxIconButton(
+        icon,
+        contentDescription,
+        onClick,
+        size = ACTION_BUTTON,
+        iconSize = BARE_ACTION_ICON,
+        tint = tint ?: c.text,
+    )
+}
+
 @Composable
 private fun GlassButton(
     icon: ImageVector,
@@ -1163,6 +1299,9 @@ private val PANE_CONTENT_MAX = 460.dp
 private val ACTION_BUTTON = 46.dp
 private val ACTION_ICON = 22.dp
 
+/** The unframed glyph (Compact). Larger than [ACTION_ICON] because it has no container behind it. */
+private val BARE_ACTION_ICON = 27.dp
+
 /**
  * How much of the screen the up-next drawer covers when open. Trimmed twice at the owner's request
  * (0.62 → 0.465 → 0.38): four upcoming songs at a glance, and most of the player — artwork, waveform,
@@ -1181,3 +1320,28 @@ private const val QUEUE_DRAWER_FRACTION = 0.38f
  * it is the whole of "organize the player better", and the artwork simply gets the space back.
  */
 private val CONTROLS_RESERVE = 385.dp
+
+/**
+ * The same sum for [PlayerLayout.COMPACT], which has one row fewer: like and add-to-playlist ride *in*
+ * the title row (46dp buttons inside an 81dp block, so the row costs nothing extra) instead of taking
+ * their own 54dp line below the transport. 385 − 54 = 331, headroom included on both sides.
+ */
+private val COMPACT_CONTROLS_RESERVE = 331.dp
+
+/** Both layouts stack the same rows; only Compact folds one of them away, so only its reserve differs. */
+private fun controlsReserveFor(layout: PlayerLayout): Dp = when (layout) {
+    PlayerLayout.CLASSIC -> CONTROLS_RESERVE
+    PlayerLayout.COMPACT -> COMPACT_CONTROLS_RESERVE
+}
+
+/**
+ * How tall the artwork is allowed to get. Compact's cap is the classic one plus exactly the row it
+ * folds away, so the space that row used to occupy goes to the cover — which is the whole point of the
+ * arrangement. Short screens never reach either figure; they are governed by the reserve.
+ */
+private fun artMaxFor(layout: PlayerLayout): Dp = when (layout) {
+    PlayerLayout.CLASSIC -> ART_MAX
+    PlayerLayout.COMPACT -> ART_MAX + (CONTROLS_RESERVE - COMPACT_CONTROLS_RESERVE)
+}
+
+private val ART_MAX = 470.dp

@@ -28,6 +28,11 @@
     <string name="lyrics_word_badge">Palabra</string>
     <string name="lyrics_resume_autoscroll">Reanudar desplazamiento</string>
 
+    <!-- LyricsScreen: which reading of a foreign-script lyric is on screen -->
+    <string name="lyrics_reading_original">Original</string>
+    <string name="lyrics_reading_pronunciation">Pronunciación</string>
+    <string name="lyrics_reading_translation">Traducción</string>
+
     <!-- Ajustes: cuánto puede gastar el renderizador de karaoke -->
     <string name="pref_lyrics_quality">Calidad visual de la letra</string>
     <string name="lyrics_quality_automatic">Automática</string>

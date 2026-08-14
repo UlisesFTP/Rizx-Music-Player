@@ -21,7 +21,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Fans out over the **enabled** registered dashboard providers to assemble the [HomeFeed] (Phase 19;
@@ -132,6 +138,22 @@ class DashboardRepositoryImpl(
         }
     }
 
+    /**
+     * The enabled dashboard sources, re-emitting whenever any of them is switched on or off.
+     *
+     * Built by combining each provider's own enabled flow rather than polling: the registry's set is
+     * fixed for the process, so only the on/off state actually moves. Emits the ids sorted, so the
+     * value is a stable identity — Home compares it as a cache key, and an order flip would look like
+     * a change and refetch for nothing.
+     */
+    override fun activeSourceIds(): Flow<List<String>> {
+        val ids = registry.list(ProviderKind.DASHBOARD).map { it.id }.sorted()
+        if (ids.isEmpty()) return flowOf(emptyList())
+        return combine(ids.map { id -> enabled.isEnabled(id).map { id to it } }) { pairs ->
+            pairs.filter { it.second }.map { it.first }
+        }.distinctUntilChanged()
+    }
+
     private suspend fun contributionOf(p: DashboardProvider): Contribution = coroutineScope {
         val caps = p.dashboardCapabilities
         val tracks = async { safe(DashboardCapability.TOP_TRACKS in caps) { p.topTracks(limit) } }
@@ -152,12 +174,26 @@ class DashboardRepositoryImpl(
         )
     }
 
+    /**
+     * One section's fetch, bounded three ways: not declared → nothing; threw → nothing; **took too
+     * long → nothing**.
+     *
+     * The timeout is the one that was missing, and it is what keeps the sources independent. Every
+     * section of every provider is awaited before the feed is returned *and before the cache is
+     * written*, so until now a single provider hanging on a bad network held the whole Home hostage —
+     * Deezer's charts included — and left the cache unwritten, making the next cold start just as slow.
+     * Only the JS plugin invoker had a timeout; the native providers had none.
+     *
+     * Sections run concurrently, so this doubles as the per-provider bound. Twelve seconds is chosen to
+     * be well past a healthy call on a poor connection (cutting a slow-but-working source would show as
+     * an empty row, which is worse than a slow one) while still bounding the worst case.
+     */
     private suspend fun <T> safe(declared: Boolean, block: suspend () -> List<T>): List<T> =
         if (!declared) {
             emptyList()
         } else {
             try {
-                block()
+                withTimeoutOrNull(SECTION_TIMEOUT_MS) { block() } ?: emptyList()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -195,5 +231,8 @@ class DashboardRepositoryImpl(
          * arrive in the single `/radio/lists` call the section already makes.
          */
         private const val STATION_LIMIT = 100
+
+        /** How long any one section may take before it is dropped. See [safe] for why it exists. */
+        private const val SECTION_TIMEOUT_MS = 12_000L
     }
 }

@@ -62,4 +62,14 @@
     <string name="filter_hint">Rechercher dans cette liste</string>
     <string name="filter_no_matches_title">Aucune correspondance</string>
     <string name="filter_no_matches_body">Rien dans cette liste ne correspond à « %1$s ».</string>
+    <!-- Settings redesign: thematic sections, search, destructive confirm -->
+    <string name="settings_sound">Son</string>
+    <string name="settings_sources">Sources</string>
+    <string name="settings_downloads">Téléchargements</string>
+    <string name="settings_app">Application</string>
+    <string name="settings_search_hint">Rechercher dans les réglages</string>
+    <string name="settings_no_matches">Aucun réglage ne correspond</string>
+    <string name="settings_clear_cache_title">Vider le cache hors connexion ?</string>
+    <string name="settings_clear_cache_body">Les titres gardés pour l\'écoute hors connexion sont supprimés. Vos téléchargements ne changent pas.</string>
+    <string name="settings_clear_cache_confirm">Vider</string>
 </resources>

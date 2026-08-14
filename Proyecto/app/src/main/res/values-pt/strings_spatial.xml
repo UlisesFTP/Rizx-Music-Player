@@ -5,7 +5,7 @@
     <string name="spatial_waiting_speaker">Em espera: precisa de auscultadores</string>
     <string name="spatial_waiting_format">Em espera: indisponível nesta música</string>
 
-    <string name="pref_spatial_caption">Movimento e espaço adaptados ao género e à própria gravação. Pensado para auscultadores.</string>
+    <string name="pref_spatial_caption">Movimento e espaço conforme cada gravação. Para auscultadores.</string>
     <string name="pref_spatial_avoid_double">Evitar dupla espacialização</string>
     <string name="pref_spatial_avoid_double_caption">Pausa o efeito quando o Android já processa áudio espacial.</string>
 

@@ -59,16 +59,48 @@ object LyricsTrackMatcher {
     }
 
     /**
+     * The language this recording is *sung in*, when the title declares one.
+     *
+     * A re-recording in another language is the same song, by the same artist, and — this is what makes
+     * it lethal here — the same length. "DNA" and "DNA (Japanese Version)" differ by 573 ms, so every
+     * signal [score] has agrees with the wrong one; only the title can tell them apart. NetEase and
+     * KuGou are Japanese/Chinese-market catalogues, so their copy of a K-pop song is very often the
+     * Japanese re-recording, and it is the copy that carries word timings.
+     *
+     * A qualifier counts when it is a language *and nothing else* ("(Korean)"), or when it carries a
+     * version marker as well ("(Japanese Ver.)", "- 日本語版"). Both halves are needed: "French Kiss" is
+     * a song, and tagging it would reject the one candidate that is actually right.
+     */
+    fun languageTags(title: String): Set<String> {
+        val parts = QUALIFIER.findAll(title).map { it.value }.toMutableList()
+        title.substringAfter(" - ", missingDelimiterValue = "")
+            .takeIf { it.isNotBlank() }
+            ?.let { parts += it }
+
+        val tags = mutableSetOf<String>()
+        for (part in parts) {
+            val folded = tighten(part)
+            if (folded.isEmpty()) continue
+            val versioned = VERSION_MARKERS.any { it in folded }
+            for ((tag, spelling) in LANGUAGE_SPELLINGS) {
+                if (folded == spelling || (versioned && spelling in folded)) tags += tag
+            }
+        }
+        return tags
+    }
+
+    /**
      * How badly [target] fits [track]: lower is better, `null` means "not this recording".
      *
-     * A `null` is only ever returned for a version mismatch. Everything else — a missing duration, an
-     * artist we can't line up, prose instead of timings — is expensive but still eligible, because the
-     * alternative to a mediocre match is often no lyrics at all.
+     * A `null` is only ever returned for a version or language mismatch. Everything else — a missing
+     * duration, an artist we can't line up, prose instead of timings — is expensive but still eligible,
+     * because the alternative to a mediocre match is often no lyrics at all.
      */
     fun score(track: Track, target: LyricsMatchTarget): Long? {
         val ours = versionTags(track.title)
         val theirs = versionTags(target.title)
         if (ours != theirs) return null
+        if (languageTags(track.title) != languageTags(target.title)) return null
 
         var score = 0L
         score += durationDrift(track.durationMs, target.durationMs)
@@ -145,4 +177,39 @@ object LyricsTrackMatcher {
         "live", "remix", "acoustic", "spedup", "slowed", "remaster",
         "instrumental", "karaoke", "nightcore",
     )
+
+    /** Folded and space-free, the shape every needle below is compared against. */
+    private fun tighten(text: String): String = fold(text).replace(" ", "")
+
+    /**
+     * What turns a language into a *version* of the song. "ver" covers "version", "versión" and "ver.";
+     * it also sits inside "cover", which is the right answer anyway — a Spanish cover is a Spanish
+     * recording with different words.
+     */
+    private val VERSION_MARKERS = listOf("ver", "dub", "版")
+
+    /**
+     * Language names as they actually appear in titles, already folded so they can be matched against
+     * folded text. Folding matters more than it looks: NFD splits Hangul into jamo, so a literal
+     * "한국어" written here would never equal the folded title it is meant to match.
+     *
+     * "mandarin" maps to `chinese` on purpose — the same recording is labelled both ways, and two names
+     * for one language would make a track disagree with its own lyric.
+     */
+    private val LANGUAGE_SPELLINGS: List<Pair<String, String>> = listOf(
+        "japanese" to listOf("japanese", "japonés", "japonesa", "日本語"),
+        "korean" to listOf("korean", "coreano", "한국어", "국문"),
+        "chinese" to listOf("chinese", "chino", "mandarin", "mandarín", "中文", "国语"),
+        "cantonese" to listOf("cantonese", "cantonés", "粤语"),
+        "english" to listOf("english", "inglés", "英語"),
+        "spanish" to listOf("spanish", "español", "espanhol"),
+        "french" to listOf("french", "francés", "francais", "français"),
+        "german" to listOf("german", "alemán", "deutsch"),
+        "italian" to listOf("italian", "italiano"),
+        "portuguese" to listOf("portuguese", "portugués", "português"),
+        "russian" to listOf("russian", "ruso"),
+        "thai" to listOf("thai"),
+        "vietnamese" to listOf("vietnamese"),
+        "indonesian" to listOf("indonesian"),
+    ).flatMap { (tag, spellings) -> spellings.map { tag to tighten(it) } }
 }

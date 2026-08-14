@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import fm.rizx.player.domain.model.AudioQualityMode
 import fm.rizx.player.domain.model.DownloadFormat
+import fm.rizx.player.domain.model.PlayerLayout
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import kotlinx.coroutines.flow.first
@@ -31,6 +32,25 @@ class SettingsRepositoryTest {
         assertEquals(ThemeMode.SYSTEM, repo.themeMode.first())
         repo.setThemeMode(ThemeMode.LIGHT)
         assertEquals(ThemeMode.LIGHT, repo.themeMode.first())
+    }
+
+    @Test
+    fun `the player layout defaults to classic and persists a change`() = runTest {
+        // Classic is the arrangement every existing install already knows — an update must not silently
+        // move their like and add-to-playlist buttons.
+        val repo = SettingsRepositoryImpl(backgroundScope.newStore())
+
+        assertEquals(PlayerLayout.CLASSIC, repo.playerLayout.first())
+        repo.setPlayerLayout(PlayerLayout.COMPACT)
+        assertEquals(PlayerLayout.COMPACT, repo.playerLayout.first())
+    }
+
+    @Test
+    fun `an unrecognised stored player layout falls back to classic`() = runTest {
+        val store = backgroundScope.newStore()
+        store.edit { it[stringPreferencesKey("core.ui.playerLayout")] = "CAROUSEL" }
+
+        assertEquals(PlayerLayout.CLASSIC, SettingsRepositoryImpl(store).playerLayout.first())
     }
 
     @Test

@@ -5,7 +5,7 @@
     <string name="spatial_waiting_speaker">En espera: necesita auriculares</string>
     <string name="spatial_waiting_format">En espera: no disponible en esta canción</string>
 
-    <string name="pref_spatial_caption">Movimiento y espacio adaptados al género y a la propia grabación. Pensado para auriculares.</string>
+    <string name="pref_spatial_caption">Movimiento y espacio según cada grabación. Para auriculares.</string>
     <string name="pref_spatial_avoid_double">Evitar doble espacialización</string>
     <string name="pref_spatial_avoid_double_caption">Pausa el efecto cuando Android ya procesa audio espacial.</string>
 

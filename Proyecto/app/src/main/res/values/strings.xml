@@ -65,4 +65,14 @@
     <string name="filter_hint">Search in this list</string>
     <string name="filter_no_matches_title">No matches</string>
     <string name="filter_no_matches_body">Nothing in this list matches “%1$s”.</string>
+    <!-- Settings redesign: thematic sections, search, destructive confirm -->
+    <string name="settings_sound">Sound</string>
+    <string name="settings_sources">Sources</string>
+    <string name="settings_downloads">Downloads</string>
+    <string name="settings_app">App</string>
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_no_matches">No setting matches that</string>
+    <string name="settings_clear_cache_title">Clear the offline cache?</string>
+    <string name="settings_clear_cache_body">Songs kept for offline replay are deleted. Downloads you saved are not affected.</string>
+    <string name="settings_clear_cache_confirm">Clear</string>
 </resources>

@@ -62,4 +62,14 @@
     <string name="filter_hint">Buscar nesta lista</string>
     <string name="filter_no_matches_title">Nenhuma correspondência</string>
     <string name="filter_no_matches_body">Nada nesta lista corresponde a “%1$s”.</string>
+    <!-- Settings redesign: thematic sections, search, destructive confirm -->
+    <string name="settings_sound">Som</string>
+    <string name="settings_sources">Fontes</string>
+    <string name="settings_downloads">Transferências</string>
+    <string name="settings_app">App</string>
+    <string name="settings_search_hint">Procurar nos ajustes</string>
+    <string name="settings_no_matches">Nenhum ajuste corresponde</string>
+    <string name="settings_clear_cache_title">Limpar a cache sem ligação?</string>
+    <string name="settings_clear_cache_body">As músicas guardadas para ouvir sem ligação são apagadas. As tuas transferências não são afetadas.</string>
+    <string name="settings_clear_cache_confirm">Limpar</string>
 </resources>

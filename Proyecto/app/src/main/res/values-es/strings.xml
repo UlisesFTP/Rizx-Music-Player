@@ -62,4 +62,14 @@
     <string name="filter_hint">Buscar en esta lista</string>
     <string name="filter_no_matches_title">Sin coincidencias</string>
     <string name="filter_no_matches_body">Nada de esta lista coincide con “%1$s”.</string>
+    <!-- Settings redesign: thematic sections, search, destructive confirm -->
+    <string name="settings_sound">Sonido</string>
+    <string name="settings_sources">Fuentes</string>
+    <string name="settings_downloads">Descargas</string>
+    <string name="settings_app">App</string>
+    <string name="settings_search_hint">Buscar en ajustes</string>
+    <string name="settings_no_matches">Ningún ajuste coincide</string>
+    <string name="settings_clear_cache_title">¿Vaciar la caché sin conexión?</string>
+    <string name="settings_clear_cache_body">Se borran las canciones guardadas para escuchar sin conexión. Tus descargas no se tocan.</string>
+    <string name="settings_clear_cache_confirm">Vaciar</string>
 </resources>

@@ -209,7 +209,29 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             settings.feedProvider.drop(1).distinctUntilChanged().collect { refresh() }
         }
+        // And for turning a source on or off in Plugins. This one was missing entirely: the cache is
+        // half an hour old before it expires, so switching a platform off left its charts on screen and
+        // the setting looked broken. The key below carries the same set, so the cache can't serve them
+        // either.
+        viewModelScope.launch {
+            dashboard.activeSourceIds().drop(1).distinctUntilChanged().collect { refresh() }
+        }
     }
+
+    /**
+     * Everything the cached feed depends on, as one opaque string the store compares for equality.
+     *
+     * It used to be the feed selection alone, which meant three other inputs could change under a
+     * still-"valid" cache: which sources are switched on, the country the regional charts were built
+     * for, and whether that country was allowed to travel at all. Each produced the same confusing
+     * result — a setting changed and the Home didn't.
+     */
+    private suspend fun cacheKey(): String = cacheKeyOf(
+        feedProvider = settings.feedProvider.first(),
+        activeSources = dashboard.activeSourceIds().first(),
+        country = countryName,
+        consent = regionalConsent,
+    )
 
     /** Cache-first load: shows the last Home instantly, then revalidates if it is stale. */
     fun load() = start(useCache = true)
@@ -224,7 +246,7 @@ class HomeViewModel @Inject constructor(
             val cached = withContext(Dispatchers.IO) {
                 regionalConsent = forYou.regionalConsent.first()
                 countryName = forYou.countryName()
-                selection = settings.feedProvider.first()
+                selection = cacheKey()
                 if (useCache) cache.read(selection) else null
             }
 
@@ -368,12 +390,33 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch { forYou.setRegionalConsent(consented) }
     }
 
-    private companion object {
+    companion object {
+        /**
+         * The identity of a cached Home: everything it was built from, as one opaque string the store
+         * compares for equality.
+         *
+         * Shared with the tests deliberately. It used to be the feed selection alone, which let three
+         * other inputs change under a still-"valid" cache — which sources are switched on, the country
+         * the regional charts were built for, and whether that country was allowed to travel at all.
+         * Each produced the same confusing result: a setting changed and the Home didn't.
+         */
+        internal fun cacheKeyOf(
+            feedProvider: String,
+            activeSources: List<String>,
+            country: String?,
+            consent: Boolean?,
+        ): String = listOf(
+            feedProvider,
+            activeSources.sorted().joinToString(","),
+            country.orEmpty(),
+            consent.toString(),
+        ).joinToString("|")
+
         /**
          * Two full speed-dial pages: 17 songs + the dice = 18 cells = 2×9. The grid holds more than
          * the old carousel because a wall of thumb-sized covers *is* the denser presentation.
          */
-        const val CONTINUE_ITEMS = 17
+        private const val CONTINUE_ITEMS = 17
 
         /**
          * How deep the statistics read. The log keeps three hundred songs precisely so "you haven't

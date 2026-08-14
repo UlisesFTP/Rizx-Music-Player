@@ -36,4 +36,10 @@
     <string name="player_video_preview_on_none">Video preview on — none for this song</string>
     <string name="player_video_preview_turn_off">Turn off video preview</string>
     <string name="player_video_preview">Video preview</string>
+    <!-- Now Playing layout picker (Settings > Appearance) -->
+    <string name="pref_player_layout">Player layout</string>
+    <string name="player_layout_classic">Classic</string>
+    <string name="player_layout_classic_caption">Progress, title, transport, then like and add to playlist below.</string>
+    <string name="player_layout_compact">Compact</string>
+    <string name="player_layout_compact_caption">Like and add to playlist flank the title, above the progress bar.</string>
 </resources>

@@ -36,6 +36,10 @@ class MusixmatchClient(
     @Volatile
     private var cached: Pair<String, String>? = null // date (yyyyMMdd) to secret
 
+    /** The throwaway token the desktop-app host issues. Not date-stamped, so it is kept for the run. */
+    @Volatile
+    private var userToken: String? = null
+
     /** Search results as `(trackId, title, artist, album, durationMs, hasRichsync)`. */
     fun search(query: String, limit: Int): List<MusixmatchTrack> {
         val body = call(
@@ -46,17 +50,19 @@ class MusixmatchClient(
             "s_track_rating" to "desc",
         ) ?: return emptyList()
         val list = body["track_list"]?.jsonArray ?: return emptyList()
-        return list.mapNotNull { entry ->
-            val track = entry.jsonObject["track"]?.jsonObject ?: return@mapNotNull null
-            MusixmatchTrack(
-                trackId = track.long("track_id") ?: return@mapNotNull null,
-                title = track.string("track_name").orEmpty(),
-                artist = track.string("artist_name").orEmpty(),
-                album = track.string("album_name"),
-                durationMs = track.long("track_length")?.times(1000),
-                hasRichsync = (track.long("has_richsync") ?: 0L) > 0L,
-            )
-        }
+        return list.mapNotNull { it.toTrack() }
+    }
+
+    private fun JsonElement.toTrack(): MusixmatchTrack? {
+        val track = runCatching { jsonObject["track"]?.jsonObject }.getOrNull() ?: return null
+        return MusixmatchTrack(
+            trackId = track.long("track_id") ?: return null,
+            title = track.string("track_name").orEmpty(),
+            artist = track.string("artist_name").orEmpty(),
+            album = track.string("album_name"),
+            durationMs = track.long("track_length")?.times(1000),
+            hasRichsync = (track.long("has_richsync") ?: 0L) > 0L,
+        )
     }
 
     /** The word-by-word body for a track (a JSON string parsed by `RichSyncParser`), or null. */
@@ -69,6 +75,81 @@ class MusixmatchClient(
         call("track.subtitle.get", "track_id" to trackId.toString())
             ?.get("subtitle")?.jsonObject?.string("subtitle_body")
 
+    /**
+     * Crowd-contributed readings of a track's lines, as `original line -> reading`.
+     *
+     * [language] is a normal BCP-47 code for a translation ("es"), or the pseudo-language **`rj`** for
+     * romaji — which is proper word-segmented Hepburn ("Shizumu yō ni tokete yuku yō ni"), a different
+     * class of thing from the syllable-by-syllable transcription NetEase publishes.
+     *
+     * Two traps live here. The `position` field of each row is **always 0**, so it cannot be used to
+     * order or align anything; the join is `matched_line`, the verbatim original. And the endpoint is
+     * rate-limited hard — around ten calls and it answers `401 captcha` — so this is only ever called
+     * when the user asks for a reading, once per song, and the answer is cached.
+     *
+     * The paid endpoints (`track.subtitle.translation.get`) answer `403 translations not enabled on this
+     * plan` and are deliberately left alone: this one is open to anyone who asks for a token.
+     */
+    /**
+     * The same search, over the token host and by explicit title/artist rather than free text.
+     *
+     * Needed because the two hosts fail independently — the signed one has been answering `503` while
+     * this one is fine — and because a free-text query mixing a Japanese title with a Latin artist name
+     * comes back with unrelated songs, while `q_track`/`q_artist` does not. Whatever it returns still
+     * has to survive `LyricsTrackMatcher`, so a bad answer costs nothing but the request.
+     */
+    fun searchByTitle(title: String, artist: String, limit: Int): List<MusixmatchTrack> {
+        val body = tokenCall(
+            "track.search",
+            "q_track" to title,
+            "q_artist" to artist,
+            "page_size" to limit.toString(),
+            "page" to "1",
+            "s_track_rating" to "desc",
+        ) ?: return emptyList()
+        return (body["track_list"]?.jsonArray).orEmpty().mapNotNull { it.toTrack() }
+    }
+
+    fun crowdReadings(trackId: Long, language: String): Map<String, String> {
+        val body = tokenCall(
+            "crowd.track.translations.get",
+            "track_id" to trackId.toString(),
+            "selected_language" to language,
+        ) ?: return emptyMap()
+        val rows = body["translations_list"]?.jsonArray ?: return emptyMap()
+        val out = LinkedHashMap<String, String>(rows.size)
+        for (row in rows) {
+            val entry = runCatching { row.jsonObject["translation"]?.jsonObject }.getOrNull() ?: continue
+            val from = entry.string("matched_line") ?: entry.string("subtitle_matched_line") ?: continue
+            val to = entry.string("description") ?: continue
+            out.putIfAbsent(from, to)
+        }
+        return out
+    }
+
+    // ---- Token transport (a different host, and no signature) ----
+
+    /**
+     * Runs a call against the desktop-app host, which authenticates with a throwaway token instead of
+     * the signature the web player uses. `token.get` hands one to anyone who asks — nothing is defeated
+     * and nothing is embedded — but the two schemes are not interchangeable: the signed host answers
+     * this endpoint with a certificate error, and this host 404s without a token.
+     */
+    private fun tokenCall(endpoint: String, vararg params: Pair<String, String>): Map<String, JsonElement>? =
+        runCatching {
+            val token = token() ?: return null
+            val query = (params.toList() + BASE_PARAMS + ("usertoken" to token))
+                .joinToString("&") { (k, v) -> "$k=${v.encode()}" }
+            body(get("$TOKEN_API_BASE$endpoint?$query"))
+        }.getOrNull()
+
+    private fun token(): String? {
+        userToken?.let { return it }
+        val body = runCatching { body(get("${TOKEN_API_BASE}token.get?app_id=web-desktop-app-v1.0&format=json")) }
+            .getOrNull() ?: return null
+        return body.string("user_token")?.also { userToken = it }
+    }
+
     // ---- Signed transport ----
 
     /** Runs a signed call and returns `message.body`, or null on any failure (including a non-200 body). */
@@ -79,12 +160,16 @@ class MusixmatchClient(
             val url = "$API_BASE$endpoint?$query"
             val signed = url + "&signature=${sign(url, secret).encode()}&signature_protocol=sha256"
 
-            val payload = get(signed) ?: return null
-            val message = json.parseToJsonElement(payload).jsonObject["message"]?.jsonObject ?: return null
-            val status = message["header"]?.jsonObject?.long("status_code")
-            if (status != 200L) return null
-            message["body"]?.jsonObject
+            body(get(signed))
         }.getOrNull()
+
+    /** Unwraps the `message.body` every Musixmatch endpoint answers with, or null unless it says 200. */
+    private fun body(payload: String?): Map<String, JsonElement>? {
+        if (payload == null) return null
+        val message = json.parseToJsonElement(payload).jsonObject["message"]?.jsonObject ?: return null
+        if (message["header"]?.jsonObject?.long("status_code") != 200L) return null
+        return message["body"]?.jsonObject
+    }
 
     /** `base64(HMAC-SHA256(url + yyyyMMdd, secret))` — the scheme their own player uses. */
     private fun sign(url: String, secret: String): String {
@@ -136,6 +221,9 @@ class MusixmatchClient(
         const val SITE = "https://www.musixmatch.com/"
         const val SEARCH_PAGE = "${SITE}search"
         const val API_BASE = "${SITE}ws/1.1/"
+
+        /** The desktop-app host: token-authenticated, and the only one that serves the crowd endpoints. */
+        const val TOKEN_API_BASE = "https://apic-desktop.musixmatch.com/ws/1.1/"
         const val HMAC = "HmacSHA256"
 
         val BASE_PARAMS = listOf("app_id" to "web-desktop-app-v1.0", "format" to "json")

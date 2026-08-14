@@ -38,7 +38,11 @@ class SoundcloudChartsDashboardProvider(
     private val mutex = Mutex()
     private val cache = mutableMapOf<String, CachedKiosk>()
 
-    override suspend fun topTracks(limit: Int): List<Track> = kiosk(SoundcloudIds.KIOSK_TOP_50).take(limit)
+    // "New & hot", not "Top 50": SoundCloud retired the latter's endpoint. NewPipe maps that kiosk to
+    // `charts?kind=top`, which returns **404** live (verified with a valid client_id, while
+    // `kind=trending` returns 200) — so this row, and with it the whole "SoundCloud only" feed option,
+    // had been silently empty. Nothing failed loudly, which is why it went unnoticed.
+    override suspend fun topTracks(limit: Int): List<Track> = kiosk(SoundcloudIds.KIOSK_NEW_HOT).take(limit)
 
     private suspend fun kiosk(kind: String): List<Track> = mutex.withLock {
         cache[kind]?.takeIf { nowMs() - it.atMs < ttlMs }?.tracks

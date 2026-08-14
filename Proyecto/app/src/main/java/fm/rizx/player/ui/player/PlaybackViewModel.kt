@@ -8,6 +8,7 @@ import fm.rizx.player.core.network.DataSaverState
 import fm.rizx.player.playback.AudioVisualizer
 import fm.rizx.player.data.artwork.TrackArtworkEnricher
 import fm.rizx.player.domain.model.AudioFormatUi
+import fm.rizx.player.domain.model.PlayerLayout
 import fm.rizx.player.domain.model.QueueItem
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
@@ -96,6 +97,10 @@ class PlaybackViewModel @Inject constructor(
         combine(currentItem, nowPlayingFormat.current, settings.showTechnicalFormat) { item, entry, show ->
             if (!show || item == null || entry == null || entry.queueItemId != item.id) null else entry.format
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Which arrangement Now Playing stacks its controls in — see [PlayerLayout]. */
+    val playerLayout: StateFlow<PlayerLayout> =
+        settings.playerLayout.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayerLayout.CLASSIC)
 
     /**
      * Songs known to play losslessly, so a row anywhere in the app can mark one.

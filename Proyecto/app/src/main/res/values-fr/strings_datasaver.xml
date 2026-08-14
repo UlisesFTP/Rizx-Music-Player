@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="pref_data_saver_caption">Audio à débit réduit, pochettes plus petites, pas de pochettes animées, et les téléchargements attendent le Wi-Fi.</string>
+    <string name="pref_data_saver_caption">Débit réduit, pochettes plus petites et téléchargements en Wi-Fi seulement.</string>
 
     <string name="pref_forced_by_data_saver">Imposé par l\'économiseur de données</string>
     <string name="pref_paused_by_data_saver">En pause par l\'économiseur de données</string>

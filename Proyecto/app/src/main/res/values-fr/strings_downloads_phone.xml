@@ -7,7 +7,7 @@
     <string name="save_to_phone_also_phone_caption">Copié dans Musique/Rizx avec sa pochette et ses infos, visible depuis n\'importe quelle app. Prend deux fois la place.</string>
 
     <string name="pref_save_to_phone">Enregistrer sur le téléphone</string>
-    <string name="pref_save_to_phone_caption">Chaque téléchargement est aussi copié dans Musique/Rizx, où votre gestionnaire de fichiers et d\'autres lecteurs le trouvent.</string>
+    <string name="pref_save_to_phone_caption">Les téléchargements sont aussi copiés dans Musique/Rizx, où d\'autres apps les trouvent.</string>
 
     <string name="library_on_phone">Sur le téléphone</string>
     <string name="library_save_to_phone">Enregistrer</string>

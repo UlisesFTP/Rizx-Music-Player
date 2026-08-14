@@ -36,4 +36,10 @@
     <string name="player_video_preview_on_none">Prévia de vídeo ativada — indisponível para esta música</string>
     <string name="player_video_preview_turn_off">Desativar prévia de vídeo</string>
     <string name="player_video_preview">Prévia de vídeo</string>
+    <!-- Now Playing layout picker (Settings > Appearance) -->
+    <string name="pref_player_layout">Layout do reprodutor</string>
+    <string name="player_layout_classic">Clássico</string>
+    <string name="player_layout_classic_caption">Progresso, título, controles e, abaixo, curtir e adicionar à lista.</string>
+    <string name="player_layout_compact">Compacto</string>
+    <string name="player_layout_compact_caption">Curtir e adicionar à lista ladeiam o título, acima da barra de progresso.</string>
 </resources>

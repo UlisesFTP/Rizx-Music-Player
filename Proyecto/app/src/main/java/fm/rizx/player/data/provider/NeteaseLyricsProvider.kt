@@ -3,6 +3,8 @@ package fm.rizx.player.data.provider
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.lyrics.LrcParser
 import fm.rizx.player.data.lyrics.YrcParser
+import fm.rizx.player.data.lyrics.withReadings
+import fm.rizx.player.data.lyrics.withReadingsByText
 import fm.rizx.player.data.remote.netease.NeteaseApi
 import fm.rizx.player.data.remote.netease.NeteaseSongDto
 import fm.rizx.player.domain.lyrics.LyricsMatchTarget
@@ -92,13 +94,56 @@ class NeteaseLyricsProvider(
         }
     }
 
-    /** Word timings when the song has them, else the line-timed LRC, else nothing. */
+    /**
+     * The Latin transcription, for lyrics that came from somewhere else.
+     *
+     * NetEase publishes a transcription for most Japanese and Korean songs, and it is the only source
+     * that does so at this scale without a rate limit — but it only reaches the screen when NetEase also
+     * won the race for the words themselves, and it usually doesn't: KuGou and Musixmatch answer
+     * word-by-word, which outranks it. So this looks the song up again purely for its `romalrc` and
+     * grafts it onto whichever transcript is actually on screen, matched line by line on the words.
+     *
+     * The translation is left alone: NetEase's is into Chinese.
+     */
+    override suspend fun readings(track: Track, lyrics: Lyrics, language: String): Lyrics {
+        if (lyrics.hasRomanization || lyrics.lines.isEmpty()) return lyrics
+        val title = track.title.takeIf { it.isNotBlank() } ?: return lyrics
+        val artist = track.artists.firstOrNull()?.name.orEmpty()
+        val query = listOf(artist, title).filter { it.isNotBlank() }.joinToString(" ")
+
+        return guard {
+            withContext(io) {
+                val song = bestMatch(query, track) ?: return@withContext lyrics
+                val body = api.lyric(song.id ?: return@withContext lyrics)
+                // Joined inside NetEase's own document first, where the timestamps agree exactly, then
+                // carried across to the other provider's lines by text — the only key the two share.
+                val byText = LrcParser.parse(body.lrc?.lyric)
+                    .withReadings(romanized = LrcParser.parse(body.romalrc?.lyric))
+                    .mapNotNull { line -> line.romanized?.let { line.text to it } }
+                    .toMap()
+                if (byText.isEmpty()) lyrics
+                else lyrics.copy(lines = lyrics.lines.withReadingsByText(romanized = byText))
+            }
+        } ?: lyrics
+    }
+
+    /**
+     * Word timings when the song has them, else the line-timed LRC, else nothing — plus the Latin
+     * transcription, which NetEase has been sending all along.
+     *
+     * The transcription comes in two flavours and **each belongs to one transcript**: `yromalrc` is
+     * stamped like `yrc`, `romalrc` like `lrc`. They are ~900 ms apart on the same song, so the choice
+     * of transcript decides the choice of transcription.
+     */
     private suspend fun lyricsFor(id: Long): Lyrics? {
         val body = api.lyric(id)
         val words = YrcParser.parse(body.yrc?.lyric)
+        val fromWords = words.isNotEmpty()
         val lines = words.ifEmpty { LrcParser.parse(body.lrc?.lyric) }
         if (lines.isEmpty()) return null
-        return Lyrics(lines = lines, sourceName = NAME)
+
+        val roman = LrcParser.parse(if (fromWords) body.yromalrc?.lyric else body.romalrc?.lyric)
+        return Lyrics(lines = lines.withReadings(romanized = roman), sourceName = NAME)
     }
 
     private suspend fun <T> guard(block: suspend () -> T): T? =

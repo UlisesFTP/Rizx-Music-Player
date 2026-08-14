@@ -5,8 +5,11 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.core.error.toSafeMessage
+import fm.rizx.player.domain.lyrics.LyricsScript
+import fm.rizx.player.domain.lyrics.availableModes
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
+import fm.rizx.player.domain.model.LyricsDisplayMode
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.coverUrl
@@ -26,6 +29,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Locale
 import javax.inject.Inject
 
 /** What the lyrics pane is showing right now. */
@@ -57,11 +61,44 @@ data class LyricsUiState(
     val syncedMode: Boolean = true,
     /** How much the karaoke renderer is allowed to spend. Persisted; set from Settings. */
     val visualQuality: LyricsVisualQuality = LyricsVisualQuality.AUTOMATIC,
+    /** Original script, pronunciation or translation. Persisted: it describes the reader, not the song. */
+    val displayMode: LyricsDisplayMode = LyricsDisplayMode.ORIGINAL,
+    /** The lyric is written in an alphabet the reader may not have — computed once, when it loads. */
+    val foreignScript: Boolean = false,
+    /** The reading being fetched right now. Null when nothing is in flight. */
+    val pendingMode: LyricsDisplayMode? = null,
+    /** A readings lookup has already run for this song, so what it has is all it will ever have. */
+    val readingsTried: Boolean = false,
     val search: LyricsSearchState = LyricsSearchState.Closed,
 ) {
     /** The timed view is only possible when the lyric *has* timings and the user wants it. */
     val showSynced: Boolean
         get() = syncedMode && (content as? LyricsContent.Ready)?.lyrics?.isSynced == true
+
+    /** The readings this song can be shown in right now. */
+    val readingModes: List<LyricsDisplayMode>
+        get() = (content as? LyricsContent.Ready)?.lyrics?.availableModes().orEmpty()
+
+    /**
+     * The readings to offer, which is not the same as the readings already in hand.
+     *
+     * A foreign-script lyric offers all three before anything has been fetched, because **that first tap
+     * is what pays for them** — an endpoint that rate-limits after roughly ten calls can't be probed for
+     * every song just to find out whether a button belongs on screen. Once the lookup has run, the offer
+     * shrinks to what actually came back, so a reading that doesn't exist stops being advertised.
+     *
+     * A Latin-script song offers nothing: it would be a control that can only disappoint.
+     */
+    val offeredModes: List<LyricsDisplayMode>
+        get() = when {
+            content !is LyricsContent.Ready -> emptyList()
+            readingsTried || !foreignScript -> readingModes.takeIf { it.size > 1 }.orEmpty()
+            else -> LyricsDisplayMode.entries
+        }
+
+    /** The reading actually on screen — the chosen one when this song has it, else the original. */
+    val effectiveMode: LyricsDisplayMode
+        get() = if (displayMode in readingModes) displayMode else LyricsDisplayMode.ORIGINAL
 }
 
 /**
@@ -98,6 +135,7 @@ class LyricsViewModel @Inject constructor(
     private var track: Track? = null
     private var searchJob: Job? = null
     private var offsetJob: Job? = null
+    private var readingsJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -105,6 +143,9 @@ class LyricsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             settings.lyricsVisualQuality.collect { q -> _state.update { it.copy(visualQuality = q) } }
+        }
+        viewModelScope.launch {
+            settings.lyricsDisplayMode.collect { m -> _state.update { it.copy(displayMode = m) } }
         }
         viewModelScope.launch {
             queue.state
@@ -119,6 +160,63 @@ class LyricsViewModel @Inject constructor(
 
     fun toggleSyncedMode() {
         viewModelScope.launch { settings.setSyncedLyricsMode(!_state.value.syncedMode) }
+    }
+
+    /**
+     * Shows this song in [mode], fetching the readings first if this is the first time they're asked for.
+     *
+     * The fetch happens here rather than when the song loads because a translation costs a request to an
+     * endpoint that rate-limits after roughly ten calls: it is spent when someone asks to read the song,
+     * never when they merely open it. If [mode] turns out not to exist, the state keeps it — the lyric
+     * simply reads as the original, and the chip for it disappears once the lookup has settled.
+     */
+    fun selectDisplayMode(mode: LyricsDisplayMode) {
+        val song = track ?: return
+        val ready = _state.value.content as? LyricsContent.Ready ?: return
+        if (_state.value.pendingMode != null) return
+
+        // A translation fetched before the app changed language is the wrong translation, so it counts
+        // as missing rather than as something to show.
+        val stale = mode == LyricsDisplayMode.TRANSLATION && ready.lyrics.translationLang != language()
+        val have = mode == LyricsDisplayMode.ORIGINAL || mode in ready.lyrics.availableModes()
+
+        if (have && !stale) {
+            persist(mode)
+        } else if (!_state.value.readingsTried) {
+            loadReadings(song, ready.lyrics, mode)
+        }
+    }
+
+    /** The language a translation should arrive in — whatever the app is currently being read in. */
+    private fun language(): String = Locale.getDefault().language.ifBlank { FALLBACK_LANGUAGE }
+
+    private fun persist(mode: LyricsDisplayMode) {
+        viewModelScope.launch { settings.setLyricsDisplayMode(mode) }
+    }
+
+    private fun loadReadings(song: Track, current: Lyrics, wanted: LyricsDisplayMode) {
+        readingsJob?.cancel()
+        readingsJob = viewModelScope.launch {
+            _state.update { it.copy(pendingMode = wanted) }
+            val enriched = try {
+                lyrics.readings(song, current, language())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                current // no reading is a normal answer here, not an error worth a red screen
+            }
+            // The song may have moved on while this was in flight; its readings are not this song's.
+            if (track?.source != song.source) return@launch
+            _state.update { s ->
+                val ready = s.content as? LyricsContent.Ready
+                s.copy(
+                    content = ready?.copy(lyrics = enriched) ?: s.content,
+                    pendingMode = null,
+                    readingsTried = true,
+                )
+            }
+            if (wanted in enriched.availableModes()) persist(wanted)
+        }
     }
 
     /**
@@ -213,6 +311,7 @@ class LyricsViewModel @Inject constructor(
 
     private suspend fun load(song: Track?) {
         track = song
+        readingsJob?.cancel()
         if (song == null) {
             _state.update {
                 it.copy(title = "", artist = "", artworkUrl = null, content = LyricsContent.NoTrack)
@@ -242,12 +341,20 @@ class LyricsViewModel @Inject constructor(
         } catch (e: Exception) {
             LyricsContent.Error(e.toSafeMessage("Couldn't load lyrics"))
         }
-        _state.update { it.copy(content = content) }
+        // Which alphabet this is in decides whether the reading switch appears, and it can't change
+        // until the words do — so it is answered once here rather than on every recomposition.
+        val foreign = (content as? LyricsContent.Ready)?.lyrics?.let(LyricsScript::isForeign) == true
+        _state.update {
+            it.copy(content = content, foreignScript = foreign, pendingMode = null, readingsTried = false)
+        }
     }
 
     private companion object {
         /** ±30 s covers any plausible intro difference; beyond that the match itself is wrong. */
         const val MAX_OFFSET_MS = 30_000L
+
+        /** Musixmatch keys translations by language code; English is the one every song is likeliest to have. */
+        const val FALLBACK_LANGUAGE = "en"
 
         /** Long enough to swallow a burst of taps, short enough to survive leaving the screen. */
         const val OFFSET_WRITE_DEBOUNCE_MS = 250L

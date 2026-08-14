@@ -8,7 +8,7 @@
 
     <!-- Automatic equalizer (a curve per song: its genre, then the song's own spectrum) -->
     <string name="pref_auto_eq">Equalizador automático</string>
-    <string name="pref_auto_eq_caption">Ajusta cada música ao seu gênero e refina ouvindo a própria faixa. Assume o equalizador enquanto está ligado; sua curva manual volta ao desligar.</string>
+    <string name="pref_auto_eq_caption">Uma curva por música, pelo seu género e pela própria gravação. Substitui a tua curva manual enquanto está ligado.</string>
     <string name="eq_auto_badge">AUTO</string>
     <string name="eq_auto_badge_genre">AUTO · %1$s</string>
     <string name="eq_auto_hint">Ajustado para esta música. Desligue o equalizador automático nos Ajustes para mexer nas bandas você mesmo.</string>

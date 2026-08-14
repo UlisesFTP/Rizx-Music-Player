@@ -396,6 +396,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                 // restored (or still-buffering) track shows its real elapsed second immediately instead
                 // of 0:00 while the stream resolves.
                 val npAudioFormat by playbackViewModel.audioFormat.collectAsStateWithLifecycle()
+                val npLayout by playbackViewModel.playerLayout.collectAsStateWithLifecycle()
                 val npDurationMs = playbackState.durationMs.takeIf { it > 0L } ?: (np?.track?.durationMs ?: 0L)
                 val npProgress = if (npDurationMs > 0L) {
                     (playbackState.positionMs.toFloat() / npDurationMs).coerceIn(0f, 1f)
@@ -471,6 +472,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     },
                     loading = playbackState.isLoading,
                     levels = { levelsState.value },
+                    layout = npLayout,
                 )
             }
             composable(

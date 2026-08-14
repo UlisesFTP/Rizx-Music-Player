@@ -9,6 +9,7 @@ import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.DashboardProvider
 import fm.rizx.player.domain.provider.EnabledProviderStore
 import fm.rizx.player.domain.provider.ProviderKind
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -27,6 +28,8 @@ class DashboardRepositoryTest {
         override val id: String,
         private val tracks: List<Track> = emptyList(),
         private val failTracks: Boolean = false,
+        /** Simulates a source that hangs — the reason [DashboardRepositoryImpl.safe] has a timeout. */
+        private val stallMs: Long = 0L,
         private val stations: List<MoodStation> = emptyList(),
         private val stationTracks: Map<String, List<Track>> = emptyMap(),
         private val genres: Map<String, GenreFeed> = emptyMap(),
@@ -40,8 +43,10 @@ class DashboardRepositoryTest {
             if (stations.isNotEmpty()) add(DashboardCapability.MOOD_STATIONS)
             if (knowsGenres) add(DashboardCapability.GENRE_FEED)
         }
-        override suspend fun topTracks(limit: Int): List<Track> =
-            if (failTracks) throw RuntimeException("boom") else tracks
+        override suspend fun topTracks(limit: Int): List<Track> {
+            if (stallMs > 0) kotlinx.coroutines.delay(stallMs)
+            return if (failTracks) throw RuntimeException("boom") else tracks
+        }
         override suspend fun moodStations(limit: Int): List<MoodStation> = stations.take(limit)
         override suspend fun stationTracks(stationId: String, limit: Int): List<Track> =
             stationTracks[stationId] ?: throw RuntimeException("unknown station")
@@ -50,6 +55,36 @@ class DashboardRepositoryTest {
     }
 
     private fun track(title: String) = Track(title = title, source = ProviderRef("deezer", title))
+
+    @Test
+    fun `a hanging source is dropped instead of holding the whole feed`() = runTest {
+        // `runTest` skips virtual delay, so the stall is an hour of *virtual* time — far past the
+        // timeout, and instant to run. Before that timeout existed this test would simply never
+        // return: every section is awaited before the feed is handed back and before it is cached, so
+        // one hung source froze Home for every other platform too.
+        val registry = DefaultProviderRegistry().apply {
+            register(FakeDash("slow", tracks = listOf(track("A")), stallMs = 60 * 60_000L))
+            register(FakeDash("fast", tracks = listOf(track("B"))))
+        }
+
+        val feed = DashboardRepositoryImpl(registry, FakeEnabled()).homeFeed()
+
+        assertEquals(listOf("fast"), feed.topTracks.map { it.providerId })
+    }
+
+    @Test
+    fun `the active source ids follow the on-off toggles`() = runTest {
+        val registry = DefaultProviderRegistry().apply {
+            register(FakeDash("d1", tracks = listOf(track("A"))))
+            register(FakeDash("d2", tracks = listOf(track("B"))))
+        }
+
+        val repo = DashboardRepositoryImpl(registry, FakeEnabled(disabled = setOf("d2")))
+
+        // Home folds this into its cache key: a switched-off source has to change the key, or the
+        // cached feed keeps serving that platform's charts for the rest of the cache's life.
+        assertEquals(listOf("d1"), repo.activeSourceIds().first())
+    }
 
     @Test
     fun `fans out over all registered dashboard providers with attribution`() = runTest {

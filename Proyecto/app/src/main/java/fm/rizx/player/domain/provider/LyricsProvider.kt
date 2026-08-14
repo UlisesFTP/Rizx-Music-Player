@@ -20,4 +20,14 @@ interface LyricsProvider : ProviderDescriptor {
 
     /** Candidates for a free-text query, best match first. Empty when the provider can't search. */
     suspend fun searchLyrics(query: String): List<LyricsCandidate> = emptyList()
+
+    /**
+     * Fills in the pronunciation and the [language] translation of [lyrics], for a lyric written in a
+     * script the listener can't read. Capability-gated by its default, like [searchLyrics].
+     *
+     * Takes the lyrics rather than fetching its own, because the words on screen may well have come from
+     * a different provider: this adds a reading to *those* lines, matched line by line, and returns
+     * [lyrics] unchanged when it has nothing to add.
+     */
+    suspend fun readings(track: Track, lyrics: Lyrics, language: String): Lyrics = lyrics
 }

@@ -29,6 +29,7 @@ import fm.rizx.player.data.provider.SpotifyChartsDashboardProvider
 import fm.rizx.player.data.provider.SpotifyPlaylistProvider
 import fm.rizx.player.data.provider.YoutubePlaylistProvider
 import fm.rizx.player.data.provider.SoundcloudChartsDashboardProvider
+import fm.rizx.player.data.provider.YoutubeChartsDashboardProvider
 import fm.rizx.player.data.provider.SoundcloudMetadataProvider
 import fm.rizx.player.data.provider.SoundcloudStreamingProvider
 import fm.rizx.player.data.provider.YoutubeStreamingProvider
@@ -139,6 +140,17 @@ object ProviderModule {
             // SoundCloud's own chart kiosks — the fourth feed source, so "SoundCloud only" is a real
             // choice in the feed selector rather than an empty screen.
             register(SoundcloudChartsDashboardProvider(soundcloud))
+            // YouTube Music's charts, keyless over charts.youtube.com (ADR 0018). Top songs + top
+            // artists only; deliberately no mood stations — a second source of that capability would
+            // collapse station attribution and kill every mood tile. The feed selector picks this up
+            // from the registry on its own, so there is no Settings wiring to add.
+            register(
+                YoutubeChartsDashboardProvider(
+                    fm.rizx.player.data.remote.youtube.YoutubeChartsClient(okHttp, json),
+                    region,
+                    settings,
+                ),
+            )
             // Streaming providers in fallback priority (StreamingRepositoryImpl chains active-first,
             // then registration order): YouTube full tracks → Audius full tracks → iTunes 30s preview.
             // ADR 0014: native full-length YouTube audio. Gets NetworkMonitor + DataSaverState so quality

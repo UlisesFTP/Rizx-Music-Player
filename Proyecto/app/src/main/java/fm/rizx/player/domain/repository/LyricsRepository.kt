@@ -1,5 +1,6 @@
 package fm.rizx.player.domain.repository
 
+import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.model.TrackLyrics
@@ -17,6 +18,16 @@ interface LyricsRepository {
 
     /** Free-text candidates for the manual picker. Empty when no provider can search. */
     suspend fun search(query: String): List<LyricsCandidate>
+
+    /**
+     * Fills in the pronunciation and the [language] translation of lyrics already on screen, and
+     * remembers them.
+     *
+     * Separate from [lyricsFor] because it costs a request to an endpoint that rate-limits after roughly
+     * ten calls: it runs when the user asks to read the song a different way, never as part of opening
+     * it. Returns the enriched lyrics, or [lyrics] unchanged when nothing could be added.
+     */
+    suspend fun readings(track: Track, lyrics: Lyrics, language: String): Lyrics
 
     /** Pins [candidate] as *the* lyrics for [track], overriding automatic matching from now on. */
     suspend fun pin(track: Track, candidate: LyricsCandidate)

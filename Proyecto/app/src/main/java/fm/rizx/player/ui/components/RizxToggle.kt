@@ -12,16 +12,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.util.rememberRizxHaptics
 
-/** Sharp-cornered settings switch (48×28) with a square knob — brutalist ink border + snappy knob. */
+/**
+ * Sharp-cornered settings switch (48×28) with a square knob — brutalist ink border + snappy knob.
+ *
+ * [decorative] hides the knob from the accessibility tree. Every switch in this app lives inside a row
+ * that is itself tappable, and that row is what carries the name ("Crossfade") and the switch role. Left
+ * visible, the knob became a *second* focus stop with no name and no state — a screen-reader user heard
+ * the label and then an anonymous button. Decorative is therefore the norm here, not the exception; the
+ * default stays `false` so a standalone switch elsewhere keeps its own semantics.
+ */
 @Composable
 fun RizxToggle(
     checked: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    decorative: Boolean = false,
 ) {
     val c = RizxTheme.colors
     val haptics = rememberRizxHaptics()
@@ -33,6 +43,7 @@ fun RizxToggle(
     )
     Box(
         modifier
+            .then(if (decorative) Modifier.clearAndSetSemantics { } else Modifier)
             .size(width = 48.dp, height = 28.dp)
             .clip(RectangleShape)
             .background(if (checked) c.redAccent else c.elev2)

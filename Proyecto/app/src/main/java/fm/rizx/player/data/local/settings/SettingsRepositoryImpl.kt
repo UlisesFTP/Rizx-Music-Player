@@ -11,8 +11,10 @@ import fm.rizx.player.domain.model.AudioQualityMode
 import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.CanvasNetworkPolicy
 import fm.rizx.player.domain.model.CanvasQuality
+import fm.rizx.player.domain.model.LyricsDisplayMode
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.PlaybackResolverSettings
+import fm.rizx.player.domain.model.PlayerLayout
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.SpatialAudioMode
 import fm.rizx.player.domain.model.ThemeMode
@@ -58,6 +60,18 @@ class SettingsRepositoryImpl(
 
     override suspend fun setThemeMode(mode: ThemeMode) {
         dataStore.edit { it[Keys.THEME_MODE] = mode.name.lowercase() }
+    }
+
+    // Stored by name with an entries lookup (the house pattern), not like THEME_MODE's lowercased
+    // literals — that one predates the convention and is kept only because installs already hold it.
+    override val playerLayout: Flow<PlayerLayout> = pref { prefs ->
+        prefs[Keys.PLAYER_LAYOUT]
+            ?.let { name -> PlayerLayout.entries.firstOrNull { it.name == name } }
+            ?: DEFAULT_PLAYER_LAYOUT
+    }
+
+    override suspend fun setPlayerLayout(layout: PlayerLayout) {
+        dataStore.edit { it[Keys.PLAYER_LAYOUT] = layout.name }
     }
 
     override val activeMetadataProviderId: Flow<String?> = pref { it[Keys.ACTIVE_METADATA] }
@@ -307,11 +321,22 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.LYRICS_QUALITY] = quality.name }
     }
 
+    override val lyricsDisplayMode: Flow<LyricsDisplayMode> = pref { prefs ->
+        prefs[Keys.LYRICS_DISPLAY_MODE]
+            ?.let { name -> LyricsDisplayMode.entries.firstOrNull { it.name == name } }
+            ?: LyricsDisplayMode.ORIGINAL
+    }
+
+    override suspend fun setLyricsDisplayMode(mode: LyricsDisplayMode) {
+        dataStore.edit { it[Keys.LYRICS_DISPLAY_MODE] = mode.name }
+    }
+
     // `core.*` namespacing leaves room for future `plugin.*` settings (§7.4).
     private object Keys {
         // DARK_THEME is legacy — kept only so an existing install's old choice migrates into THEME_MODE.
         val DARK_THEME = booleanPreferencesKey("core.ui.darkTheme")
         val THEME_MODE = stringPreferencesKey("core.ui.themeMode")
+        val PLAYER_LAYOUT = stringPreferencesKey("core.ui.playerLayout")
         val ACTIVE_METADATA = stringPreferencesKey("core.providers.active.metadata")
         val ACTIVE_STREAMING = stringPreferencesKey("core.providers.active.streaming")
         val ACTIVE_LYRICS = stringPreferencesKey("core.providers.active.lyrics")
@@ -347,6 +372,7 @@ class SettingsRepositoryImpl(
         val RADIO_ALGORITHM = stringPreferencesKey("core.recs.radioAlgorithm")
         val FEED_PROVIDER = stringPreferencesKey("core.recs.feedProvider")
         val LYRICS_QUALITY = stringPreferencesKey("core.ui.lyricsQuality")
+        val LYRICS_DISPLAY_MODE = stringPreferencesKey("core.ui.lyricsDisplayMode")
     }
 
     companion object {
@@ -359,6 +385,9 @@ class SettingsRepositoryImpl(
          * mix comes back empty — so "next" can't dead-end.
          */
         val DEFAULT_RADIO_ALGORITHM = RadioMode.YOUTUBE
+
+        /** The arrangement every existing install already knows — an update must not move their buttons. */
+        val DEFAULT_PLAYER_LAYOUT = PlayerLayout.CLASSIC
 
         /** Sentinel for "blend every enabled dashboard source" — never a real provider id. */
         const val FEED_PROVIDER_ALL = "all"

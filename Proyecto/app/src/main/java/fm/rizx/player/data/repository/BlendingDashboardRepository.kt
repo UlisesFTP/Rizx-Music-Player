@@ -1,6 +1,7 @@
 package fm.rizx.player.data.repository
 
 import fm.rizx.player.data.artwork.TrackArtworkEnricher
+import fm.rizx.player.data.remote.youtube.YoutubeIds
 import fm.rizx.player.domain.model.AttributedResult
 import fm.rizx.player.domain.model.GenreFeed
 import fm.rizx.player.domain.model.HomeFeed
@@ -10,6 +11,7 @@ import fm.rizx.player.domain.repository.DashboardRepository
 import fm.rizx.player.domain.usecase.RecsBlender
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 
 /**
@@ -31,12 +33,21 @@ class BlendingDashboardRepository(
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : DashboardRepository {
 
+    /** Straight through: which sources are on is the inner fan-out's business, not the blend's. */
+    override fun activeSourceIds(): Flow<List<String>> = inner.activeSourceIds()
+
     /** On [io]: the blender normalizes (regex + Unicode NFD) every item of every section. */
     override suspend fun homeFeed(): HomeFeed = withContext(io) {
         val feed = inner.homeFeed()
         val tracks = if (feed.topTracks.size <= 1) feed.topTracks.flatMap { it.items } else blender.blendTracks(feed.topTracks)
         val visible = tracks.take(ENRICH_LIMIT)
-        val enriched = runCatching { artwork.enrich(visible) }.getOrDefault(visible) + tracks.drop(ENRICH_LIMIT)
+        // `upgradeFrom` matters for the YouTube charts source: its rows arrive *with* an image, so a
+        // plain "fill the blanks" enrich would leave every one of them on YouTube's small video
+        // thumbnail instead of the release cover. Same treatment `YoutubeMixSource` already gives its
+        // own rows. The enricher can't live in the charts provider itself — it walks the registry, so
+        // that would be a dependency cycle.
+        val enriched = runCatching { artwork.enrich(visible, upgradeFrom = setOf(YoutubeIds.STREAMING)) }
+            .getOrDefault(visible) + tracks.drop(ENRICH_LIMIT)
         HomeFeed(
             topTracks = withAttribution(feed.topTracks, enriched),
             topArtists = blended(feed.topArtists) { blender.blendArtists(it) },

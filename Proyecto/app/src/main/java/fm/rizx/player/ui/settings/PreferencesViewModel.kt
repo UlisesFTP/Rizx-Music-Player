@@ -16,6 +16,7 @@ import fm.rizx.player.domain.model.CanvasDiagnostics
 import fm.rizx.player.domain.model.CanvasNetworkPolicy
 import fm.rizx.player.domain.model.CanvasQuality
 import fm.rizx.player.domain.model.LyricsVisualQuality
+import fm.rizx.player.domain.model.PlayerLayout
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.playback.AudioEffectsController
 import fm.rizx.player.domain.provider.ProviderKind
@@ -101,6 +102,12 @@ class PreferencesViewModel @Inject constructor(
         settings.radioAlgorithm.asState(SettingsRepositoryImpl.DEFAULT_RADIO_ALGORITHM)
 
     fun setRadioAlgorithm(mode: RadioMode) { viewModelScope.launch { settings.setRadioAlgorithm(mode) } }
+
+    /** How Now Playing stacks its controls. Pure arrangement — no layout hides an action. */
+    val playerLayout: StateFlow<PlayerLayout> =
+        settings.playerLayout.asState(SettingsRepositoryImpl.DEFAULT_PLAYER_LAYOUT)
+
+    fun setPlayerLayout(layout: PlayerLayout) { viewModelScope.launch { settings.setPlayerLayout(layout) } }
 
     /** Which source fills Home: one dashboard provider's id, or `FEED_PROVIDER_ALL`. */
     val feedProvider: StateFlow<String> =

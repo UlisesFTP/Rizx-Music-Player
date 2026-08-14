@@ -36,4 +36,10 @@
     <string name="player_video_preview_on_none">Aperçu vidéo activé — indisponible pour ce titre</string>
     <string name="player_video_preview_turn_off">Désactiver l\'aperçu vidéo</string>
     <string name="player_video_preview">Aperçu vidéo</string>
+    <!-- Now Playing layout picker (Settings > Appearance) -->
+    <string name="pref_player_layout">Disposition du lecteur</string>
+    <string name="player_layout_classic">Classique</string>
+    <string name="player_layout_classic_caption">Progression, titre, commandes, puis j\'aime et ajouter à la liste en dessous.</string>
+    <string name="player_layout_compact">Compacte</string>
+    <string name="player_layout_compact_caption">J\'aime et ajouter à la liste encadrent le titre, au-dessus de la progression.</string>
 </resources>

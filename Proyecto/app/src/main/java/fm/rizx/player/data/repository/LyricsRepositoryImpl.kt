@@ -1,6 +1,7 @@
 package fm.rizx.player.data.repository
 
 import fm.rizx.player.data.local.store.LyricsStore
+import fm.rizx.player.data.lyrics.DeviceRomanizer
 import fm.rizx.player.data.lyrics.LyricsNormalizer
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
@@ -90,6 +91,41 @@ class LyricsRepositoryImpl(
             // A hand-picked candidate is rendered and cached without passing through `fetch`, so it has
             // to be normalised here or the karaoke view would get raw provider timings.
             .map { it.copy(lyrics = LyricsNormalizer.normalize(it.lyrics)) }
+    }
+
+    /**
+     * Asks each provider in turn to add a reading, and stops at the first one that does.
+     *
+     * Sequential, not raced like the others: this spends a rate-limited request rather than merely
+     * waiting on one, so there is no point in asking a second source before the first has failed. The
+     * device's own transliterator gets the last word, and only for the scripts nobody publishes a
+     * transcription for.
+     *
+     * The result replaces the words of the cached entry while leaving the user's offset and pin intact —
+     * these are the same lyrics, read differently, not a different match.
+     */
+    override suspend fun readings(track: Track, lyrics: Lyrics, language: String): Lyrics {
+        if (lyrics.lines.isEmpty()) return lyrics
+
+        var enriched = lyrics
+        for (provider in chain()) {
+            val answer = try {
+                withTimeoutOrNull(providerTimeoutMs) { provider.readings(track, enriched, language) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null // a broken provider loses its turn, exactly as it does everywhere else here
+            }
+            if (answer != null) enriched = answer
+            // A translation in the wrong language is not a translation: a cached English one must not
+            // stop the chain before the provider that could have answered in the language now asked for.
+            if (enriched.hasRomanization && enriched.translationLang == language) break
+        }
+        if (!enriched.hasRomanization) enriched = DeviceRomanizer.romanize(enriched)
+
+        if (enriched == lyrics) return lyrics
+        store?.replaceLyrics(track.source.identityKey, enriched)
+        return enriched
     }
 
     override suspend fun pin(track: Track, candidate: LyricsCandidate) {

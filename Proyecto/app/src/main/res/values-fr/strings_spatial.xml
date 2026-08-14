@@ -5,7 +5,7 @@
     <string name="spatial_waiting_speaker">En attente : nécessite un casque</string>
     <string name="spatial_waiting_format">En attente : indisponible sur ce morceau</string>
 
-    <string name="pref_spatial_caption">Mouvement et espace adaptés au genre et à l\'enregistrement lui-même. Conçu pour le casque.</string>
+    <string name="pref_spatial_caption">Mouvement et espace selon chaque enregistrement. Pour le casque.</string>
     <string name="pref_spatial_avoid_double">Éviter la double spatialisation</string>
     <string name="pref_spatial_avoid_double_caption">Met l\'effet en pause quand Android traite déjà l\'audio spatial.</string>
 

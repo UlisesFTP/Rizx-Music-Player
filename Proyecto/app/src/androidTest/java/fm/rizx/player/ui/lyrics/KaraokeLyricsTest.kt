@@ -87,6 +87,7 @@ class KaraokeLyricsTest {
         quality: LyricsVisualQuality = LyricsVisualQuality.HIGH,
         offsetMs: Long = 0L,
         onSeekMs: (Long) -> Unit = {},
+        lines: List<LyricLine> = this.lines,
         wrapper: @Composable (@Composable () -> Unit) -> Unit = { it() },
     ) {
         rule.setContent {
@@ -103,6 +104,67 @@ class KaraokeLyricsTest {
             }
         }
         settle()
+    }
+
+    /**
+     * Hangul, kanji+kana and Cyrillic — the alphabets this screen exists to handle, and the ones no
+     * other test here uses: every fixture above is ASCII.
+     *
+     * They are the hard case for the sweep, not for the layout. None of them break on spaces the way the
+     * measurement would like, Hangul composes from jamo, and the whole thing is drawn by re-clipping a
+     * text layout at a grapheme boundary — which is why it must be measured on a device, where the
+     * boundaries come from Android's ICU rather than the JVM's.
+     */
+    @Test
+    fun aLyricInAnotherAlphabetIsShownAndFollowed() {
+        val foreign = listOf(
+            LyricLine(
+                timeMs = 0,
+                text = "첫눈에 널 알아보게 됐어",
+                words = listOf(LyricWord(0, 2_000, "첫눈에 널 "), LyricWord(2_000, 4_000, "알아보게 됐어")),
+                endMs = 4_000,
+            ),
+            LyricLine(
+                timeMs = 4_000,
+                text = "沈むように溶けてゆくように",
+                words = listOf(LyricWord(4_000, 6_000, "沈むように"), LyricWord(6_000, 8_000, "溶けてゆくように")),
+                endMs = 8_000,
+            ),
+            LyricLine(timeMs = 8_000, text = "Тёплое место, но улицы ждут", endMs = 12_000),
+        )
+        start(lines = foreign)
+
+        playback.value = playing(1_000)
+        settle()
+        rule.onNodeWithText("첫눈에 널 알아보게 됐어").assertIsDisplayed()
+
+        // Mid-word on a line with no spaces to break at: the sweep has to cut inside a cluster run.
+        playback.value = playing(6_500)
+        settle()
+        rule.onNodeWithText("沈むように溶けてゆくように").assertIsDisplayed()
+
+        playback.value = playing(9_000)
+        settle()
+        rule.onNodeWithText("Тёплое место, но улицы ждут").assertIsDisplayed()
+    }
+
+    /**
+     * A pronunciation is the same line with different words in it and **no** word timings, which is what
+     * `Lyrics.inMode` produces. The list has to fall back to the uniform sweep rather than reusing spans
+     * that describe letters no longer on screen.
+     */
+    @Test
+    fun aRomanizedLineWithNoWordTimingsStillFollowsTheClock() {
+        val romanized = listOf(
+            LyricLine(timeMs = 0, text = "cheonnune neol arraboge dwaesseo", endMs = 4_000),
+            LyricLine(timeMs = 4_000, text = "shi zu mu yo u ni to ke te yu ku yo u ni", endMs = 8_000),
+        )
+        start(lines = romanized)
+
+        playback.value = playing(5_000)
+        settle()
+
+        rule.onNodeWithText("shi zu mu yo u ni to ke te yu ku yo u ni").assertIsDisplayed()
     }
 
     @Test

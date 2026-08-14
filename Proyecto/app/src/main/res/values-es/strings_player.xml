@@ -36,4 +36,10 @@
     <string name="player_video_preview_on_none">Vista previa de video activada — no disponible para esta canción</string>
     <string name="player_video_preview_turn_off">Desactivar vista previa de video</string>
     <string name="player_video_preview">Vista previa de video</string>
+    <!-- Now Playing layout picker (Settings > Appearance) -->
+    <string name="pref_player_layout">Diseño del reproductor</string>
+    <string name="player_layout_classic">Clásico</string>
+    <string name="player_layout_classic_caption">Progreso, título, controles y, debajo, me gusta y añadir a lista.</string>
+    <string name="player_layout_compact">Compacto</string>
+    <string name="player_layout_compact_caption">Me gusta y añadir a lista flanquean el título, sobre la barra de progreso.</string>
 </resources>

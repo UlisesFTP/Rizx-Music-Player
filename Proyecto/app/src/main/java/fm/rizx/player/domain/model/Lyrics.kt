@@ -27,6 +27,10 @@ data class LyricWord(val startMs: Long, val endMs: Long, val text: String)
  * from the next line for the ones that don't. Without it the last line of a song never ends and a long
  * instrumental break leaves the previous line lit, and there is nothing to sweep a line-timed lyric
  * across.
+ *
+ * [romanized] and [translated] are the two alternative readings of [text], for a lyric written in a
+ * script the listener can't read. Both default to `null` for the same reason [words] defaults to empty:
+ * these lyrics are cached as JSON, and everything already on disk has to keep decoding.
  */
 @Serializable
 data class LyricLine(
@@ -34,6 +38,10 @@ data class LyricLine(
     val text: String,
     val words: List<LyricWord> = emptyList(),
     val endMs: Long = 0L,
+    /** The same line in Latin letters — how it *sounds*, not what it means. */
+    val romanized: String? = null,
+    /** The same line in [Lyrics.translationLang]. */
+    val translated: String? = null,
 )
 
 /** How precisely a lyric is timed. Set by normalisation, never guessed by the UI. */
@@ -68,7 +76,21 @@ data class Lyrics(
     val sourceName: String = "",
     /** The provider positively declared the track has no words, as opposed to simply not knowing. */
     val instrumental: Boolean = false,
+    /**
+     * The language [LyricLine.translated] is written in, as a BCP-47 tag ("es").
+     *
+     * Stored rather than assumed because the translation is fetched for whatever language the app was
+     * in at the time, and a cached lyric outlives that choice: without this, switching the app to
+     * Portuguese would silently keep showing Spanish.
+     */
+    val translationLang: String? = null,
 ) {
+    /** At least one line has a pronunciation, so the reading is worth offering. */
+    val hasRomanization: Boolean get() = lines.any { !it.romanized.isNullOrBlank() }
+
+    /** At least one line has a translation. */
+    val hasTranslation: Boolean get() = lines.any { !it.translated.isNullOrBlank() }
+
     val syncType: LyricsSyncType
         get() = when {
             lines.any { it.words.isNotEmpty() } -> LyricsSyncType.WORD_SYNCED

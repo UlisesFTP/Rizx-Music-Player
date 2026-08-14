@@ -44,6 +44,69 @@ class LyricsTrackMatcherTest {
         assertEquals(emptySet<String>(), LyricsTrackMatcher.versionTags("The Remix Artist"))
     }
 
+    // ---- language tags ----
+
+    @Test
+    fun `a re-recording in another language is tagged with it`() {
+        // Verbatim from NetEase's answer for "BTS DNA" — all three of these outrank the Korean original.
+        assertEquals(setOf("japanese"), LyricsTrackMatcher.languageTags("DNA (Japanese Version)"))
+        assertEquals(setOf("japanese"), LyricsTrackMatcher.languageTags("DNA (Japanese ver.)"))
+        assertEquals(setOf("japanese"), LyricsTrackMatcher.languageTags("血、汗、涙 (Japanese ver.)"))
+        assertEquals(setOf("japanese"), LyricsTrackMatcher.languageTags("Spring Day - 日本語版"))
+    }
+
+    @Test
+    fun `a bare language in brackets counts, because that is all the qualifier says`() {
+        assertEquals(setOf("korean"), LyricsTrackMatcher.languageTags("DNA (Korean)"))
+        assertEquals(setOf("spanish"), LyricsTrackMatcher.languageTags("Bailando (Español)"))
+    }
+
+    @Test
+    fun `a language word inside a real title is not a language tag`() {
+        // The trap this rule exists for: tagging "French Kiss" would reject the one lyric that fits it.
+        assertEquals(emptySet<String>(), LyricsTrackMatcher.languageTags("French Kiss"))
+        assertEquals(emptySet<String>(), LyricsTrackMatcher.languageTags("Lady Gaga - French Kiss"))
+        assertEquals(emptySet<String>(), LyricsTrackMatcher.languageTags("Song (Spanish Guitar)"))
+        // "Denver" contains "ver" — a version marker with no language is still no language.
+        assertEquals(emptySet<String>(), LyricsTrackMatcher.languageTags("Song (Live in Denver)"))
+    }
+
+    @Test
+    fun `mandarin and chinese are the same language, so they agree`() {
+        assertEquals(
+            LyricsTrackMatcher.languageTags("Song (Mandarin Version)"),
+            LyricsTrackMatcher.languageTags("Song (Chinese Version)"),
+        )
+    }
+
+    // ---- the language gate ----
+
+    @Test
+    fun `the japanese re-recording is refused for the korean original`() {
+        // The bug in one assertion. Same artist, same title once the bracket is stripped, and 573 ms
+        // apart — every signal but the language agrees, and the wrong one carries word timings.
+        val ours = track("DNA", artist = "BTS", durationMs = 223_000)
+        val japanese = target("DNA (Japanese Version)", artist = "BTS (防弹少年团)", durationMs = 223_573)
+
+        assertNull(LyricsTrackMatcher.score(ours, japanese))
+    }
+
+    @Test
+    fun `and the korean original is refused when the japanese one is what is playing`() {
+        val ours = track("DNA (Japanese ver.)", artist = "BTS", durationMs = 223_573)
+
+        assertNull(LyricsTrackMatcher.score(ours, target("DNA", artist = "BTS", durationMs = 223_000)))
+        assertNotNull(LyricsTrackMatcher.score(ours, target("DNA (Japanese Version)", artist = "BTS", durationMs = 223_573)))
+    }
+
+    @Test
+    fun `the language gate leaves ordinary songs alone`() {
+        val ours = track("Yellow")
+
+        assertNotNull(LyricsTrackMatcher.score(ours, target("Yellow")))
+        assertNotNull(LyricsTrackMatcher.score(ours, target("Yellow (2000)")))
+    }
+
     // ---- the version gate ----
 
     @Test

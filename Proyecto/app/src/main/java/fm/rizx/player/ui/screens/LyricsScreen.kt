@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -56,10 +57,13 @@ import fm.rizx.player.ui.components.CodeLabel
 import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.DotMatrixSpinner
 import fm.rizx.player.ui.components.PulsingPlayButton
+import fm.rizx.player.ui.components.RizxChip
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.components.drawSeekLine
 import fm.rizx.player.ui.components.tintFor
+import fm.rizx.player.domain.lyrics.inMode
+import fm.rizx.player.domain.model.LyricsDisplayMode
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.lyrics.KaraokeLyricsList
 import fm.rizx.player.ui.player.LyricsContent
@@ -107,12 +111,14 @@ fun LyricsScreen(
                 onToggleSynced = vm::toggleSyncedMode,
             )
 
+            ReadingChips(state, vm::selectDisplayMode)
+
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 Crossfade(
-                    targetState = state.content to state.showSynced,
+                    targetState = Triple(state.content, state.showSynced, state.effectiveMode),
                     animationSpec = tween(280, easing = FastOutSlowInEasing),
                     label = "lyricsBody",
-                ) { (content, synced) ->
+                ) { (content, synced, mode) ->
                     when (content) {
                         LyricsContent.NoTrack -> Centered(stringResource(R.string.lyrics_no_track))
                         LyricsContent.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -121,16 +127,21 @@ fun LyricsScreen(
                         LyricsContent.Offline -> Centered(stringResource(R.string.lyrics_offline))
                         is LyricsContent.Empty -> NoLyrics(content.title, onSearch = vm::openSearch)
                         is LyricsContent.Error -> Centered(content.message)
-                        is LyricsContent.Ready -> when {
-                            content.lyrics.instrumental && content.lyrics.isEmpty -> Centered(stringResource(R.string.lyrics_instrumental))
-                            synced -> KaraokeLyricsList(
-                                lines = content.lyrics.lines,
-                                offsetMs = content.offsetMs,
-                                playback = vm.playbackState,
-                                quality = state.visualQuality,
-                                onSeekMs = onSeekMs,
-                            )
-                            else -> PlainLyrics(content.lyrics.plain ?: content.lyrics.lines.joinToString("\n") { it.text })
+                        is LyricsContent.Ready -> {
+                            // The chosen reading *is* the lyric as far as everything below here is
+                            // concerned: same timings, same list, different words.
+                            val shown = remember(content.lyrics, mode) { content.lyrics.inMode(mode) }
+                            when {
+                                shown.instrumental && shown.isEmpty -> Centered(stringResource(R.string.lyrics_instrumental))
+                                synced -> KaraokeLyricsList(
+                                    lines = shown.lines,
+                                    offsetMs = content.offsetMs,
+                                    playback = vm.playbackState,
+                                    quality = state.visualQuality,
+                                    onSeekMs = onSeekMs,
+                                )
+                                else -> PlainLyrics(shown.plain ?: shown.lines.joinToString("\n") { it.text })
+                            }
                         }
                     }
                 }
@@ -167,6 +178,45 @@ fun LyricsScreen(
             onDismiss = vm::closeSearch,
         )
     }
+}
+
+// ---- Reading switch ----
+
+/**
+ * Original · pronunciation · translation, for a lyric written in an alphabet the reader may not have.
+ *
+ * A row of its own rather than a fourth button in the header: at 320 dp the header's back button, cover,
+ * search and sync switch already leave the title about fifty of them, and a one-glyph icon would be a
+ * worse way to say "you are reading the romanization" than the word itself. It appears only for
+ * foreign-script songs, so the ordinary case pays nothing — no row, no request.
+ */
+@Composable
+private fun ReadingChips(state: LyricsUiState, onSelect: (LyricsDisplayMode) -> Unit) {
+    val modes = state.offeredModes
+    if (modes.size < 2) return
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        modes.forEach { mode ->
+            val pending = state.pendingMode == mode
+            RizxChip(
+                label = stringResource(readingLabel(mode)) + if (pending) "…" else "",
+                active = pending || state.effectiveMode == mode,
+                onClick = { onSelect(mode) },
+            )
+        }
+    }
+}
+
+private fun readingLabel(mode: LyricsDisplayMode): Int = when (mode) {
+    LyricsDisplayMode.ORIGINAL -> R.string.lyrics_reading_original
+    LyricsDisplayMode.PRONUNCIATION -> R.string.lyrics_reading_pronunciation
+    LyricsDisplayMode.TRANSLATION -> R.string.lyrics_reading_translation
 }
 
 // ---- Header ----

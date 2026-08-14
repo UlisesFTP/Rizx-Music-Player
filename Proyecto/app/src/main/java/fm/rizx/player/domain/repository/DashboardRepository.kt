@@ -5,6 +5,8 @@ import fm.rizx.player.domain.model.GenreFeed
 import fm.rizx.player.domain.model.HomeFeed
 import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.Track
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * Builds the [HomeFeed] by **fanning out** over all registered dashboard providers (Phase 19). Each
@@ -13,6 +15,16 @@ import fm.rizx.player.domain.model.Track
  */
 interface DashboardRepository {
     suspend fun homeFeed(): HomeFeed
+
+    /**
+     * The ids of the sources that would actually contribute right now — registered, of dashboard kind,
+     * and not switched off — re-emitting whenever that set changes.
+     *
+     * Home folds this into its cache key and refetches when it changes. Without it, turning a source
+     * on or off in Plugins left the cached feed in place for up to the cache's half-hour life: the
+     * setting appeared to do nothing. Defaulted to empty so decorators and fakes need not implement it.
+     */
+    fun activeSourceIds(): Flow<List<String>> = flowOf(emptyList())
 
     /**
      * Resolves a mood station to what it is playing right now, asking the provider that supplied it

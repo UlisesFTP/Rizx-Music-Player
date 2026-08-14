@@ -5,8 +5,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,8 +46,14 @@ fun <T> CaptionedOptionDialog(
         Column(
             Modifier
                 .fillMaxWidth()
+                // Scrollable because one caller's option list is not fixed: the Home-feed picker holds
+                // one row per registered dashboard source and grows with every plugin installed. Six
+                // captioned rows already reach the bottom of a short screen, and without this the last
+                // ones are simply unreachable — the dialog clips rather than scrolls.
+                .heightIn(max = MAX_HEIGHT)
                 .background(c.elev)
                 .border(1.5.dp, c.hardLine)
+                .verticalScroll(rememberScrollState())
                 .padding(bottom = 8.dp),
         ) {
             Text(
@@ -83,3 +92,6 @@ fun <T> CaptionedOptionDialog(
         }
     }
 }
+
+/** Leaves the dialog clearly inside a short screen, so it reads as a card rather than a full page. */
+private val MAX_HEIGHT = 520.dp

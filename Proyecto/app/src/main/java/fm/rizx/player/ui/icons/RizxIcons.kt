@@ -197,25 +197,36 @@ object RizxIcons {
         fill { moveTo(15f, 14f); horizontalLineTo(20f); verticalLineTo(20f); horizontalLineTo(15f); close() }
     }
 
+    /**
+     * "Lyrics": a squared speech bubble with two lines of text inside. It was three bare rules, which is
+     * the universal glyph for a *list* — next to a queue button that is also three rules, it said nothing
+     * about words being sung. The bubble is what carries the meaning; the rules inside keep the family's
+     * flat-bar idiom.
+     */
     val Lyrics = icon {
         stroke(2.2f) {
-            moveTo(5f, 6f); horizontalLineTo(19f); moveTo(5f, 11f); horizontalLineTo(19f)
-            moveTo(5f, 16f); horizontalLineTo(13f)
+            // Bubble: a rectangle with a tail dropping from the lower-left, drawn as one open path.
+            moveTo(3.5f, 4.5f); horizontalLineTo(20.5f); verticalLineTo(16f); horizontalLineTo(9.5f)
+            lineTo(6.5f, 19.5f); verticalLineTo(16f); horizontalLineTo(3.5f); close()
         }
+        fill { moveTo(6.5f, 8f); horizontalLineTo(17.5f); verticalLineTo(9.8f); horizontalLineTo(6.5f); close() }
+        fill { moveTo(6.5f, 11.6f); horizontalLineTo(14f); verticalLineTo(13.4f); horizontalLineTo(6.5f); close() }
     }
 
     /**
-     * "Cast / nearby devices": a screen outline (top + right + partial bottom) with two broadcast arcs and a
-     * filled node in the bottom-left corner — the universal cast glyph, drawn brutalist. Opens the system
-     * audio-output switcher.
+     * "Audio output / nearby devices": a loudspeaker cabinet with a woofer and a tweeter. It was the cast
+     * screen-and-arcs glyph, which promised *video casting*; what the button actually opens is Android's
+     * audio-output switcher — speaker, headphones, Bluetooth. A speaker says that, and it no longer reads
+     * as a near-duplicate of [Radio]'s arcs beside it.
      */
     val Devices = icon {
         stroke(2.2f) {
-            moveTo(4f, 10f); verticalLineTo(6f); horizontalLineTo(20f); verticalLineTo(18f); horizontalLineTo(11f)
-            moveTo(4f, 14f); arcToRelative(4f, 4f, 0f, false, true, 4f, 4f)
-            moveTo(4f, 10.5f); arcToRelative(7.5f, 7.5f, 0f, false, true, 7.5f, 7.5f)
+            moveTo(5.5f, 3.5f); horizontalLineTo(18.5f); verticalLineTo(20.5f); horizontalLineTo(5.5f); close()
         }
-        fill { moveTo(3.2f, 16.8f); horizontalLineTo(5.4f); verticalLineTo(19f); horizontalLineTo(3.2f); close() }
+        // Woofer: the big driver, hollow so the cabinet stays legible at 20dp.
+        stroke(2.2f) { moveTo(12f, 11f); arcToRelative(3.6f, 3.6f, 0f, true, true, 0f, 7.2f); arcToRelative(3.6f, 3.6f, 0f, true, true, 0f, -7.2f) }
+        // Tweeter: a solid square rather than a tiny circle, which would have vanished at icon size.
+        fill { moveTo(10.9f, 5.9f); horizontalLineTo(13.1f); verticalLineTo(8.1f); horizontalLineTo(10.9f); close() }
     }
 
     /**

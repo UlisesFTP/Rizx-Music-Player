@@ -48,6 +48,17 @@ class HomeViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    /**
+     * The cache key the fakes below add up to: default feed source, no dashboard sources reporting in
+     * (`FakeDash` keeps the interface default), `FakeForYou`'s country, and its undecided consent.
+     */
+    private val FAKE_CACHE_KEY = HomeViewModel.cacheKeyOf(
+        feedProvider = SettingsRepositoryImpl.DEFAULT_FEED_PROVIDER,
+        activeSources = emptyList(),
+        country = "México",
+        consent = null,
+    )
+
     private class FakeDash(val feed: suspend () -> HomeFeed) : DashboardRepository {
         override suspend fun homeFeed(): HomeFeed = feed()
     }
@@ -267,8 +278,10 @@ class HomeViewModelTest {
         runTest(mainDispatcherRule.dispatcher.scheduler) {
             val cache = store()
             val cached = HomeFeed(topTracks = listOf(AttributedResult("d", "Deezer", listOf(Track("From cache", source = ProviderRef("deezer", "1"))))))
-            // Written under the selection the ViewModel will read with — the cache is keyed by it.
-            cache.write(cached, emptyList(), SettingsRepositoryImpl.DEFAULT_FEED_PROVIDER)
+            // Written under the key the ViewModel will read with. Built through the shared helper
+            // rather than spelled out, so adding another input to the key can't quietly turn this into
+            // a test that always misses the cache and still passes for the wrong reason.
+            cache.write(cached, emptyList(), FAKE_CACHE_KEY)
             var networkCalls = 0
             val dash = FakeDash { networkCalls++; HomeFeed() }
 
@@ -286,7 +299,7 @@ class HomeViewModelTest {
             cache.write(
                 HomeFeed(topTracks = listOf(AttributedResult("d", "Deezer", listOf(Track("From cache", source = ProviderRef("deezer", "1")))))),
                 emptyList(),
-                SettingsRepositoryImpl.DEFAULT_FEED_PROVIDER,
+                FAKE_CACHE_KEY,
             )
             val vm = HomeViewModel(
                 FakeDash { throw AppError.Network("offline") },

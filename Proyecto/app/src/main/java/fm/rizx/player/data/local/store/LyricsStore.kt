@@ -18,6 +18,13 @@ data class StoredLyrics(
     /** The user picked this version by hand — it outranks anything a provider would match. */
     val pinned: Boolean = false,
     val fetchedAtIso: String,
+    /**
+     * Which generation of the matcher produced this entry — see [LyricsStore.SCHEMA].
+     *
+     * Defaulted, and it has to be: `read()` wraps the **whole file** in one `runCatching`, so a required
+     * new field would make every old entry fail to decode and take the pinned ones down with them.
+     */
+    val schema: Int = 0,
 )
 
 /**
@@ -60,7 +67,18 @@ class LyricsStore(
             offsetMs = if (pinned) 0L else previous?.offsetMs ?: 0L,
             pinned = pinned,
             fetchedAtIso = now().toString(),
+            schema = SCHEMA,
         )
+    }
+
+    /**
+     * Swaps the words of an entry that already exists, keeping the offset and the pin.
+     *
+     * Distinct from [put] because these are the *same* lyrics read a different way, not a new match:
+     * [put] resets the offset when pinning, which would throw away a correction the user dialled in.
+     */
+    suspend fun replaceLyrics(key: String, lyrics: Lyrics) = mutate { map ->
+        map[key]?.let { map[key] = it.copy(lyrics = lyrics, schema = SCHEMA) }
     }
 
     suspend fun setOffset(key: String, offsetMs: Long) = mutate { map ->
@@ -85,10 +103,18 @@ class LyricsStore(
     private fun loaded(): MutableMap<String, StoredLyrics> =
         entries ?: read().also { entries = it }
 
+    /**
+     * Reads the file, dropping anything an older generation of the matcher wrote.
+     *
+     * A cached lyric is the *answer* the matcher gave, so fixing the matcher doesn't fix what it already
+     * answered: without this, every song played before the fix keeps its wrong-language lyric forever.
+     * Pinned entries survive regardless — those are the user's own pick, not a match to re-run.
+     */
     private fun read(): MutableMap<String, StoredLyrics> = runCatching {
         if (!file.exists()) return@runCatching mutableMapOf()
         json.decodeFromString(PersistedLyrics.serializer(), file.readText())
             .entries
+            .filter { it.value.pinned || it.value.schema >= SCHEMA }
             .associate { it.key to it.value }
             .toMutableMap()
     }.getOrDefault(mutableMapOf())
@@ -125,9 +151,17 @@ class LyricsStore(
         }
     }
 
-    private companion object {
+    companion object {
         /** ~300 songs of text is a couple of MB at most, and covers any realistic offline listening set. */
-        const val MAX_ENTRIES = 300
+        private const val MAX_ENTRIES = 300
+
+        /**
+         * Bumped whenever a change makes previously-cached answers wrong.
+         *
+         * 1 — the matcher learned to refuse a re-recording in another language, so every lyric matched
+         * before it (a Japanese "DNA" against a Korean one) has to be looked up again.
+         */
+        const val SCHEMA = 1
     }
 }
 

@@ -7,7 +7,7 @@
     <string name="save_to_phone_also_phone_caption">Se copia a Música/Rizx con su carátula y sus datos, visible desde cualquier app. Ocupa el doble.</string>
 
     <string name="pref_save_to_phone">Guardar en el teléfono</string>
-    <string name="pref_save_to_phone_caption">Cada descarga se copia también a Música/Rizx, donde la encuentran tu gestor de archivos y otros reproductores.</string>
+    <string name="pref_save_to_phone_caption">Las descargas se copian también a Música/Rizx, donde otras apps las encuentran.</string>
 
     <string name="library_on_phone">En el teléfono</string>
     <string name="library_save_to_phone">Guardar</string>

@@ -5,9 +5,11 @@ import fm.rizx.player.domain.model.AudioQualityMode
 import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.CanvasNetworkPolicy
 import fm.rizx.player.domain.model.CanvasQuality
+import fm.rizx.player.domain.model.LyricsDisplayMode
 import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.SpatialAudioMode
+import fm.rizx.player.domain.model.PlayerLayout
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
@@ -27,6 +29,10 @@ class FakeSettingsRepository : SettingsRepository {
     val themeModeFlow = MutableStateFlow(ThemeMode.SYSTEM)
     override val themeMode: Flow<ThemeMode> = themeModeFlow
     override suspend fun setThemeMode(mode: ThemeMode) { themeModeFlow.value = mode }
+
+    val playerLayoutFlow = MutableStateFlow(PlayerLayout.CLASSIC)
+    override val playerLayout: Flow<PlayerLayout> = playerLayoutFlow
+    override suspend fun setPlayerLayout(layout: PlayerLayout) { playerLayoutFlow.value = layout }
 
     val activeMetadataFlow = MutableStateFlow<String?>(null)
     override val activeMetadataProviderId: Flow<String?> = activeMetadataFlow
@@ -154,4 +160,8 @@ class FakeSettingsRepository : SettingsRepository {
     val lyricsQualityFlow = MutableStateFlow(LyricsVisualQuality.AUTOMATIC)
     override val lyricsVisualQuality: Flow<LyricsVisualQuality> = lyricsQualityFlow
     override suspend fun setLyricsVisualQuality(quality: LyricsVisualQuality) { lyricsQualityFlow.value = quality }
+
+    val lyricsDisplayModeFlow = MutableStateFlow(LyricsDisplayMode.ORIGINAL)
+    override val lyricsDisplayMode: Flow<LyricsDisplayMode> = lyricsDisplayModeFlow
+    override suspend fun setLyricsDisplayMode(mode: LyricsDisplayMode) { lyricsDisplayModeFlow.value = mode }
 }

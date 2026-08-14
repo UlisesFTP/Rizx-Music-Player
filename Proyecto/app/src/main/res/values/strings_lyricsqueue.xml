@@ -28,6 +28,11 @@
     <string name="lyrics_word_badge">Word</string>
     <string name="lyrics_resume_autoscroll">Resume auto-scroll</string>
 
+    <!-- LyricsScreen: which reading of a foreign-script lyric is on screen -->
+    <string name="lyrics_reading_original">Original</string>
+    <string name="lyrics_reading_pronunciation">Pronunciation</string>
+    <string name="lyrics_reading_translation">Translation</string>
+
     <!-- Settings: how much the karaoke renderer is allowed to spend -->
     <string name="pref_lyrics_quality">Lyrics visual quality</string>
     <string name="lyrics_quality_automatic">Automatic</string>

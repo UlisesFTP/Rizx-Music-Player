@@ -7,7 +7,7 @@
   say "forced by" and "paused by", not "set to".
 -->
 <resources>
-    <string name="pref_data_saver_caption">Lower-bitrate audio, smaller artwork, no animated covers, and downloads wait for Wi-Fi.</string>
+    <string name="pref_data_saver_caption">Lower bitrate, smaller covers, and downloads wait for Wi-Fi.</string>
 
     <!-- Shown as the value of a row whose real setting is being overridden right now. -->
     <string name="pref_forced_by_data_saver">Forced by Data saver</string>
