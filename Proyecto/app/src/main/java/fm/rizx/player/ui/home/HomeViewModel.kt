@@ -140,6 +140,19 @@ class HomeViewModel @Inject constructor(
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** The one identity Home may animate; queue identity and engine state stay joined here, not in UI. */
+    val playbackIndicator: StateFlow<HomePlaybackIndicator> =
+        combine(queue.state, playback.state) { queueState, playbackState ->
+            HomePlaybackIndicator(
+                source = queueState.current?.track?.source,
+                isPlaying = playbackState.isPlaying,
+            )
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            HomePlaybackIndicator(),
+        )
+
     private val _state = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
     private val _isRefreshing = MutableStateFlow(false)
@@ -169,6 +182,17 @@ class HomeViewModel @Inject constructor(
                 pick = mixBuilder.pick(profile, sections),
             )
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeMixes())
+
+    /** Up to three typed, playable pages; pure selection keeps refreshes from reshuffling the pager. */
+    val heroes: StateFlow<List<HomeHeroItem>> =
+        combine(mixes, state) { homeMixes, ui ->
+            val content = ui as? HomeUiState.Content
+            homeHeroItems(
+                mixes = homeMixes.mixes,
+                feed = content?.feed ?: HomeFeed(),
+                sections = content?.forYouSections.orEmpty(),
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * The taste behind both of the above, read at the moment it is needed.
@@ -365,6 +389,13 @@ class HomeViewModel @Inject constructor(
         playback.playContext(mix.tracks, 0, QueueContext(kind = QueueSourceKind.PLAYLIST, label = label))
     }
 
+    /** Plays a For-you hero as the finite recommendation context the card promises. */
+    fun playRecommendation(section: ForYouSection, label: String) {
+        val tracks = section.heroTracks()
+        if (tracks.isEmpty()) return
+        playback.playContext(tracks, 0, QueueContext(kind = QueueSourceKind.PLAYLIST, label = label))
+    }
+
     /**
      * The speed dial's dice: one random song from the whole listening log — deeper than the grid
      * shows, still only songs this listener actually played — started as an auto-radio so it keeps
@@ -417,11 +448,8 @@ class HomeViewModel @Inject constructor(
             consent.toString(),
         ).joinToString("|")
 
-        /**
-         * Two full speed-dial pages: 17 songs + the dice = 18 cells = 2×9. The grid holds more than
-         * the old carousel because a wall of thumb-sized covers *is* the denser presentation.
-         */
-        private const val CONTINUE_ITEMS = 17
+        /** Six above-the-fold quick picks; Surprise reads the deeper history directly when tapped. */
+        private const val CONTINUE_ITEMS = QUICK_PICK_LIMIT
 
         /**
          * How deep the statistics read. The log keeps three hundred songs precisely so "you haven't

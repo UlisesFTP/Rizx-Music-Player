@@ -1,13 +1,17 @@
 package fm.rizx.player.ui.screens
 
+import android.animation.ValueAnimator
+import android.view.TextureView
 import fm.rizx.player.ui.components.SectionHeader
 import fm.rizx.player.ui.components.tileUrl
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -31,14 +35,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,16 +56,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fm.rizx.player.R
 import fm.rizx.player.domain.model.AlbumRef
@@ -91,18 +105,28 @@ import fm.rizx.player.ui.components.mosaicRows
 import fm.rizx.player.ui.components.mosaicWall
 import fm.rizx.player.ui.components.tintFor
 import fm.rizx.player.ui.home.HomeUiState
+import fm.rizx.player.ui.home.HomeHeroItem
+import fm.rizx.player.ui.home.HomeMoment
 import fm.rizx.player.ui.home.HomeViewModel
-import fm.rizx.player.ui.home.SpeedDial
+import fm.rizx.player.ui.home.QuickPickGrid
+import fm.rizx.player.ui.home.DiceFace
 import fm.rizx.player.ui.home.WovenBlock
+import fm.rizx.player.ui.home.homeMoment
 import fm.rizx.player.ui.home.weaveHome
 import fm.rizx.player.ui.icons.RizxIcons
+import fm.rizx.player.ui.player.CanvasPlacement
+import fm.rizx.player.ui.player.CanvasState
 import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
+import fm.rizx.player.ui.theme.code
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.paperElevation
 import fm.rizx.player.ui.theme.sg
 import fm.rizx.player.ui.theme.staggeredReveal
 import java.time.LocalDate
+import java.time.LocalTime
+import kotlin.math.absoluteValue
+import kotlinx.coroutines.delay
 
 /**
  * What the Home feed is showing: [All] is the overview — charts *and* the "For you" recommendations,
@@ -215,7 +239,7 @@ private fun playlistSubtitle(playlist: PlaylistRef): String =
  * re-loaded the very `dashboard.homeFeed()` this screen already holds, so they were a second copy of
  * this content; the tabs are the destination now.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onOpenSearch: () -> Unit,
@@ -225,6 +249,11 @@ fun HomeScreen(
     onOpenEditorialPlaylist: (PlaylistRef) -> Unit,
     onOpenStation: (providerId: String, station: MoodStation) -> Unit,
     onOpenAllMoods: () -> Unit,
+    canvasState: CanvasState = CanvasState(),
+    canvasEnabled: Boolean = false,
+    onShowHeroCanvas: (Track?, motionEnabled: Boolean) -> Unit = { _, _ -> },
+    onSetHeroCanvasVisible: (Boolean) -> Unit = {},
+    onAttachHeroCanvas: (TextureView) -> Unit = {},
     vm: HomeViewModel = hiltViewModel(),
 ) {
     val c = RizxTheme.colors
@@ -234,7 +263,18 @@ fun HomeScreen(
     // "For you" was) would throw on the way back from process death.
     var tabName by rememberSaveable { mutableStateOf(HomeTab.All.name) }
     val tab = HomeTab.entries.firstOrNull { it.name == tabName } ?: HomeTab.All
-    val listState = rememberSaveable(tabName, saver = LazyListState.Saver) { LazyListState() }
+    // One real saved state per tab. Keying a single rememberSaveable by tab name recreated it on every
+    // switch; keeping the fixed set alive is what actually restores each independent position.
+    val listStates = HomeTab.entries.associateWith { entry ->
+        rememberSaveable(entry.name, saver = LazyListState.Saver) { LazyListState() }
+    }
+    val listState = listStates.getValue(tab)
+    val motionEnabled = remember { ValueAnimator.areAnimatorsEnabled() }
+    val greeting = when (remember { homeMoment(LocalTime.now().hour) }) {
+        HomeMoment.MORNING -> stringResource(R.string.home_greeting_morning)
+        HomeMoment.AFTERNOON -> stringResource(R.string.home_greeting_afternoon)
+        HomeMoment.EVENING -> stringResource(R.string.home_greeting_evening)
+    }
     // Hoisted here because `tabContent`/`carousel` below are plain LazyListScope builders, not
     // @Composable functions — stringResource() can only be called from this composable scope.
     val topSongsTitle = stringResource(R.string.home_top_songs)
@@ -245,7 +285,10 @@ fun HomeScreen(
     val forYouLabel = stringResource(R.string.home_tab_for_you)
     val mixesTitle = stringResource(R.string.home_mixes_section)
     val continueTitle = stringResource(R.string.home_continue_listening)
+    val surpriseLabel = stringResource(R.string.home_surprise)
     val continueListening by vm.continueListening.collectAsStateWithLifecycle()
+    val playbackIndicator by vm.playbackIndicator.collectAsStateWithLifecycle()
+    val heroes by vm.heroes.collectAsStateWithLifecycle()
     // Localized titles for the personalized rows, resolved here for the same reason as above.
     val content = state as? HomeUiState.Content
     val forYouRows = content?.forYouSections.orEmpty().map { forYouTitle(it) to it }
@@ -256,6 +299,26 @@ fun HomeScreen(
     val forYouSkeletons = content?.forYouPending.orEmpty()
         .map { forYouTitle(it) }
         .filter { title -> forYouRows.none { it.first == title } }
+
+    val heroInViewport by remember(listState) {
+        derivedStateOf {
+            listState.layoutInfo.visibleItemsInfo.any { it.key == "pick-mosaic" }
+        }
+    }
+    var routeResumed by remember { mutableStateOf(false) }
+    LifecycleResumeEffect(Unit) {
+        routeResumed = true
+        onPauseOrDispose { routeResumed = false }
+    }
+    val homeCanvasVisible = routeResumed && heroInViewport && tab == HomeTab.All &&
+        content != null && heroes.isNotEmpty()
+    LaunchedEffect(homeCanvasVisible) { onSetHeroCanvasVisible(homeCanvasVisible) }
+    DisposableEffect(Unit) {
+        onDispose {
+            onSetHeroCanvasVisible(false)
+            onShowHeroCanvas(null, false)
+        }
+    }
 
     // ---- The mosaics ---------------------------------------------------------------------------
     // Built here, in composable scope, because every label and caption on them is localized; the wall
@@ -271,21 +334,23 @@ fun HomeScreen(
         mixSignature.hashCode() * 31 + LocalDate.now().toEpochDay().toInt()
     }
     val mosaicPadding = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 12.dp)
-    val heroMix = homeMixes.mixes.firstOrNull()
-    val hero: (@Composable () -> Unit)? = if (heroMix == null) null else {
+    val hero: (@Composable () -> Unit)? = if (heroes.isEmpty()) null else {
         {
-            val title = mixTitle(heroMix)
-            PickMosaic(
-                eyebrow = stringResource(R.string.home_rizx_pick),
-                title = title,
-                subtitle = heroMix.subject,
-                caption = mixCaption(heroMix),
-                playLabel = stringResource(R.string.home_play_now),
-                coverUrl = heroMix.leadTrack?.artwork.tileUrl(),
-                tintKey = heroMix.id,
-                weight = heroMix.weight,
-                modifier = mosaicPadding,
-                onClick = { vm.playMix(heroMix, title) },
+            HomeHeroPager(
+                heroes = heroes,
+                canvasState = canvasState,
+                canvasEnabled = canvasEnabled,
+                canvasVisible = homeCanvasVisible,
+                motionEnabled = motionEnabled,
+                onShowCanvas = onShowHeroCanvas,
+                onAttachCanvas = onAttachHeroCanvas,
+                onPlay = { item, label ->
+                    when (item) {
+                        is HomeHeroItem.Mix -> vm.playMix(item.mix, label)
+                        is HomeHeroItem.Featured -> vm.playFeatured(item.featured)
+                        is HomeHeroItem.Recommendation -> vm.playRecommendation(item.section, label)
+                    }
+                },
             )
         }
     }
@@ -383,11 +448,10 @@ fun HomeScreen(
                         Text("Rizx", style = sg(13, FontWeight.Bold, -0.05f), color = c.text)
                     }
                     Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.home_greeting), style = mr(12, FontWeight.SemiBold), color = c.muted)
+                        Text(greeting, style = mr(12, FontWeight.SemiBold), color = c.muted)
                         Text(stringResource(R.string.home_subtitle), style = sg(19, FontWeight.Bold, -0.01f), color = c.text)
                     }
                     RizxIconButton(RizxIcons.Search, stringResource(R.string.action_search), onOpenSearch, background = c.elev, border = c.line, iconSize = 21.dp)
-                    RizxIconButton(Icons.Filled.Refresh, stringResource(R.string.action_refresh), vm::refresh, background = c.elev, border = c.line, iconSize = 20.dp)
                     RizxIconButton(RizxIcons.Favorite, stringResource(R.string.home_liked_songs_cd), onOpenLikes, background = c.elev, border = c.line, iconSize = 20.dp, tint = c.redAccent)
                 }
             }
@@ -395,12 +459,13 @@ fun HomeScreen(
             when (val s = state) {
                 is HomeUiState.Content -> {
                     // Tabs only once there's a feed to filter — they'd be inert while loading or offline.
-                    item {
+                    stickyHeader(key = "home-tabs") {
                         Row(
                             Modifier
                                 .fillMaxWidth()
+                                .background(c.bg)
                                 .horizontalScroll(rememberScrollState())
-                                .padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 2.dp),
+                                .padding(start = 22.dp, end = 22.dp, top = 10.dp, bottom = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             HomeTab.entries.forEach { entry ->
@@ -413,7 +478,16 @@ fun HomeScreen(
                     // dial is none of them. It is local and instant, so there is no load state to wait
                     // for; an empty history draws nothing at all rather than an empty shelf.
                     if (tab == HomeTab.All) {
-                        speedDialSection(continueTitle, continueListening, vm::playTrack, vm::playSurprise)
+                        quickPickSection(
+                            title = continueTitle,
+                            surpriseLabel = surpriseLabel,
+                            tracks = continueListening,
+                            currentSource = playbackIndicator.source,
+                            isPlaying = playbackIndicator.isPlaying,
+                            motionEnabled = motionEnabled,
+                            onPlay = vm::playTrack,
+                            onSurprise = vm::playSurprise,
+                        )
                     }
                     tabContent(
                         s.feed, tab, onOpenAlbum, onOpenArtist, onOpenEditorialPlaylist, vm::playTrack,
@@ -451,13 +525,19 @@ fun HomeScreen(
                 // that same history outlive it too.
                 // Retry means "go to the network", not "re-read the cache we just failed to fill".
                 HomeUiState.Offline -> {
-                    speedDialSection(continueTitle, continueListening, vm::playTrack, vm::playSurprise)
+                    quickPickSection(
+                        continueTitle, surpriseLabel, continueListening, playbackIndicator.source,
+                        playbackIndicator.isPlaying, motionEnabled, vm::playTrack, vm::playSurprise,
+                    )
                     if (hero != null) item(key = "pick-mosaic") { hero() }
                     mosaicWall(mosaicTiles, layoutSeed)
                     item { HomeMessage(stringResource(R.string.home_offline_message), vm::refresh) }
                 }
                 is HomeUiState.Error -> {
-                    speedDialSection(continueTitle, continueListening, vm::playTrack, vm::playSurprise)
+                    quickPickSection(
+                        continueTitle, surpriseLabel, continueListening, playbackIndicator.source,
+                        playbackIndicator.isPlaying, motionEnabled, vm::playTrack, vm::playSurprise,
+                    )
                     if (hero != null) item(key = "pick-mosaic") { hero() }
                     mosaicWall(mosaicTiles, layoutSeed)
                     item { HomeMessage(s.message, vm::refresh) }
@@ -466,6 +546,151 @@ fun HomeScreen(
 
             item { Spacer(Modifier.height(LocalBottomInset.current + 16.dp)) }
         }
+        }
+    }
+}
+
+/** One user-driven hero pager. It never advances by itself and only its settled visible page gets video. */
+@Composable
+private fun HomeHeroPager(
+    heroes: List<HomeHeroItem>,
+    canvasState: CanvasState,
+    canvasEnabled: Boolean,
+    canvasVisible: Boolean,
+    motionEnabled: Boolean,
+    onShowCanvas: (Track?, Boolean) -> Unit,
+    onAttachCanvas: (TextureView) -> Unit,
+    onPlay: (HomeHeroItem, String) -> Unit,
+) {
+    if (heroes.isEmpty()) return
+    val c = RizxTheme.colors
+    val pagerState = rememberPagerState { heroes.size }
+    val active = heroes.getOrNull(pagerState.currentPage)
+
+    // A short dwell prevents a fast swipe from resolving every page it crosses. Cancelling this effect
+    // removes the Home request immediately; the shared coordinator then stops instead of buffering away.
+    LaunchedEffect(
+        active?.key,
+        pagerState.isScrollInProgress,
+        canvasVisible,
+        canvasEnabled,
+        motionEnabled,
+    ) {
+        if (!canvasVisible || !canvasEnabled || !motionEnabled || pagerState.isScrollInProgress) {
+            onShowCanvas(null, motionEnabled)
+            return@LaunchedEffect
+        }
+        delay(420)
+        if (!pagerState.isScrollInProgress) onShowCanvas(active?.anchor, motionEnabled)
+    }
+    DisposableEffect(Unit) { onDispose { onShowCanvas(null, motionEnabled) } }
+
+    Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        HorizontalPager(
+            state = pagerState,
+            contentPadding = PaddingValues(horizontal = 14.dp),
+            pageSpacing = 10.dp,
+        ) { page ->
+            val item = heroes[page]
+            val title = when (item) {
+                is HomeHeroItem.Mix -> mixTitle(item.mix)
+                is HomeHeroItem.Featured -> item.featured.playlist.name
+                is HomeHeroItem.Recommendation -> forYouTitle(item.section)
+            }
+            val eyebrow = when (item) {
+                is HomeHeroItem.Mix -> stringResource(R.string.home_rizx_pick)
+                is HomeHeroItem.Featured -> item.providerName
+                is HomeHeroItem.Recommendation -> stringResource(R.string.home_tab_for_you)
+            }
+            val subtitle = when (item) {
+                is HomeHeroItem.Mix -> item.mix.subject
+                is HomeHeroItem.Featured -> item.anchor.artists.joinToString { it.name }.ifBlank { item.providerName }
+                is HomeHeroItem.Recommendation -> item.anchor.artists.joinToString { it.name }.ifBlank { item.anchor.title }
+            }
+            val caption = when (item) {
+                is HomeHeroItem.Mix -> mixCaption(item.mix)
+                is HomeHeroItem.Featured -> playlistSubtitle(item.featured.playlist)
+                is HomeHeroItem.Recommendation -> pluralStringResource(
+                    R.plurals.home_playlist_tracks,
+                    item.tracks.size,
+                    item.tracks.size,
+                )
+            }
+            val weight = when (item) {
+                is HomeHeroItem.Mix -> item.mix.weight
+                is HomeHeroItem.Featured -> 0.72f
+                is HomeHeroItem.Recommendation -> 0.82f
+            }
+            val offset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                .absoluteValue.coerceIn(0f, 1f)
+            val isCanvasPage = page == pagerState.currentPage &&
+                canvasState.trackKey == item.anchor.source.identityKey &&
+                canvasState.hasCandidateFor(CanvasPlacement.HOME_HERO)
+            val videoAlpha by animateFloatAsState(
+                targetValue = if (
+                    page == pagerState.currentPage && canvasState.playingFor(CanvasPlacement.HOME_HERO)
+                ) 1f else 0f,
+                animationSpec = tween(240),
+                label = "homeCanvasFade",
+            )
+
+            PickMosaic(
+                eyebrow = eyebrow,
+                title = title,
+                subtitle = subtitle,
+                caption = caption,
+                playLabel = stringResource(R.string.home_play_now),
+                coverUrl = item.anchor.artwork.tileUrl(),
+                tintKey = item.anchor.source.identityKey,
+                weight = weight,
+                index = page + 1,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        if (motionEnabled) {
+                            scaleX = 1f - offset * 0.025f
+                            scaleY = 1f - offset * 0.025f
+                            alpha = 1f - offset * 0.18f
+                        }
+                    },
+                onClick = { onPlay(item, title) },
+                artworkOverlay = {
+                    if (isCanvasPage) {
+                        AndroidView(
+                            factory = { context -> TextureView(context).also(onAttachCanvas) },
+                            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = videoAlpha },
+                        )
+                        // The video is decorative; retain the same contrast floor as the static cover.
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.08f * videoAlpha)),
+                        )
+                    }
+                },
+            )
+        }
+
+        if (heroes.size > 1) {
+            Row(
+                Modifier.align(Alignment.CenterHorizontally).padding(top = 9.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                heroes.indices.forEach { page ->
+                    Box(
+                        Modifier
+                            .size(width = if (page == pagerState.currentPage) 22.dp else 8.dp, height = 4.dp)
+                            .background(if (page == pagerState.currentPage) c.redAccent else c.line2),
+                    )
+                }
+                Text(
+                    "${pagerState.currentPage + 1}/${heroes.size}",
+                    style = code(9, FontWeight.Bold),
+                    color = c.muted,
+                    modifier = Modifier.padding(start = 3.dp),
+                )
+            }
         }
     }
 }
@@ -1046,25 +1271,49 @@ private fun SkeletonLine(style: TextStyle, widthFraction: Float, top: Dp, alpha:
 }
 
 /**
- * "Continue listening" as the speed-dial wall: the section header (same key as any carousel header,
- * so the swap from the old strip was free) over the swipeable 3×3 grid. Local data — it outlives the
- * feed on the Offline/Error screens (which have no tabs) exactly as the carousel it replaced did.
- * On a loaded feed it belongs to the overview only; the category tabs list one kind of thing.
+ * Six immediate returns to the listener's own music. Surprise stays in the header instead of consuming
+ * a seventh grid cell, so every visible cover is something the user recognises.
  */
-private fun LazyListScope.speedDialSection(
+private fun LazyListScope.quickPickSection(
     title: String,
+    surpriseLabel: String,
     tracks: List<Track>,
+    currentSource: ProviderRef?,
+    isPlaying: Boolean,
+    motionEnabled: Boolean,
     onPlay: (Track) -> Unit,
     onSurprise: () -> Unit,
 ) {
     if (tracks.isEmpty()) return
-    item(key = "hdr-$title") {
-        SectionHeader(
-            title,
+    item(key = "hdr-quick-picks") {
+        Row(
             Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 8.dp),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SectionHeader(title, Modifier.weight(1f))
+            Row(
+                Modifier
+                    .height(48.dp)
+                    .background(RizxTheme.colors.elev)
+                    .border(1.dp, RizxTheme.colors.line, RectangleShape)
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = surpriseLabel
+                    }
+                    .clickableScale(scale = 0.96f, onClick = onSurprise)
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DiceFace(RizxTheme.colors.text, Modifier.size(18.dp))
+                Text(surpriseLabel.uppercase(), style = code(9, FontWeight.Bold), color = RizxTheme.colors.text)
+            }
+        }
     }
-    item(key = "speed-dial") { SpeedDial(tracks, onPlay, onSurprise) }
+    item(key = "quick-picks") {
+        QuickPickGrid(tracks, currentSource, isPlaying, motionEnabled, onPlay)
+    }
 }
 
 /** A For-you row of playable tracks (Mix / Because-you-like), in the standard carousel cell. */

@@ -113,6 +113,10 @@ class CanvasPlaybackController(private val context: Context) {
         val p = player ?: return
         if (visible) {
             if (current == null) return
+            // stop() deliberately returned the player to IDLE while hidden. Re-enter BUFFERING before
+            // prepare so the surface exists for the next first-frame callback instead of deadlocking
+            // behind an IDLE UI state.
+            state = State.BUFFERING
             p.playWhenReady = true
             if (p.playbackState == Player.STATE_IDLE) p.prepare()
         } else {

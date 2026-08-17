@@ -4,6 +4,7 @@ import fm.rizx.player.ui.player.shareTrack
 import fm.rizx.player.ui.player.openAudioOutputSwitcher
 import fm.rizx.player.ui.player.NowPlayingMenu
 import fm.rizx.player.ui.player.CanvasViewModel
+import fm.rizx.player.ui.player.CanvasPlacement
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.LaunchedEffect
@@ -117,6 +118,11 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     // Library (favorites + playlists) shared for the app-wide "add to playlist" picker.
     val libraryViewModel: LibraryViewModel = hiltViewModel()
     val playlists by libraryViewModel.playlistSummaries.collectAsStateWithLifecycle()
+    // One visual player for the whole activity. Home and Now Playing borrow it by placement; the
+    // coordinator gives Now Playing priority during navigation and stops whenever neither is visible.
+    val canvasViewModel: CanvasViewModel = hiltViewModel()
+    val canvasState by canvasViewModel.state.collectAsStateWithLifecycle()
+    val canvasOn by canvasViewModel.enabled.collectAsStateWithLifecycle()
     var addToPlaylistTrack: Track? by remember { mutableStateOf(null) }
     val backStackEntry by nav.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route
@@ -202,6 +208,21 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                         nav.navigate(Routes.station(providerId, station.id, station.title, station.artwork.tileUrl(thrifty)))
                     },
                     onOpenAllMoods = { nav.navigate(Routes.MOODS) },
+                    canvasState = canvasState,
+                    canvasEnabled = canvasOn,
+                    onShowHeroCanvas = { track, motionEnabled ->
+                        canvasViewModel.show(
+                            track = track,
+                            placement = CanvasPlacement.HOME_HERO,
+                            motionEnabled = motionEnabled,
+                        )
+                    },
+                    onSetHeroCanvasVisible = { visible ->
+                        canvasViewModel.setVisible(CanvasPlacement.HOME_HERO, visible)
+                    },
+                    onAttachHeroCanvas = { view ->
+                        canvasViewModel.attach(CanvasPlacement.HOME_HERO, view)
+                    },
                 )
             }
             composable(Routes.MOODS) {
@@ -374,23 +395,22 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                 popExitTransition = { slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(220)) },
             ) {
                 val np = currentItem
-                // Scoped to this back-stack entry, so the canvas player is released the moment you
-                // leave Now Playing rather than decoding video behind another screen.
-                val canvasViewModel: CanvasViewModel = hiltViewModel()
-                val canvasState by canvasViewModel.state.collectAsStateWithLifecycle()
-                val canvasOn by canvasViewModel.enabled.collectAsStateWithLifecycle()
                 val downloadStates by libraryViewModel.downloadStates.collectAsStateWithLifecycle()
                 val spatialRenderStates by libraryViewModel.spatialRenderStates.collectAsStateWithLifecycle()
                 val spatialRenderedKeys by libraryViewModel.spatialRenderedKeys.collectAsStateWithLifecycle()
                 val context = LocalContext.current
-                LaunchedEffect(np?.track?.source, canvasOn) { canvasViewModel.show(np?.track) }
+                LaunchedEffect(np?.track?.source, canvasOn) {
+                    canvasViewModel.show(np?.track, CanvasPlacement.NOW_PLAYING)
+                }
                 // The canvas only decodes while Now Playing is genuinely in front. This covers pressing
                 // Home, the screen switching off, and navigating anywhere else — all of which used to
                 // leave a second ExoPlayer buffering video behind the user's back, because the ViewModel's
                 // pause()/resume() pair was written and then never called from anywhere.
                 LifecycleResumeEffect(canvasViewModel) {
-                    canvasViewModel.setVisible(true)
-                    onPauseOrDispose { canvasViewModel.setVisible(false) }
+                    canvasViewModel.setVisible(CanvasPlacement.NOW_PLAYING, true)
+                    onPauseOrDispose {
+                        canvasViewModel.setVisible(CanvasPlacement.NOW_PLAYING, false)
+                    }
                 }
                 // Fall back to the track's metadata duration until the engine reports its own, so a
                 // restored (or still-buffering) track shows its real elapsed second immediately instead
@@ -439,8 +459,12 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     // Null until there is something to attach it to: the screen creates the surface on
                     // this, not on the fade, so the first frame has somewhere to land — but a song with
                     // no canvas must still not pay for a TextureView.
-                    canvasVideo = if (canvasState.hasCandidate) canvasViewModel::attach else null,
-                    canvasPlaying = canvasState.playing,
+                    canvasVideo = if (canvasState.hasCandidateFor(CanvasPlacement.NOW_PLAYING)) {
+                        { view -> canvasViewModel.attach(CanvasPlacement.NOW_PLAYING, view) }
+                    } else {
+                        null
+                    },
+                    canvasPlaying = canvasState.playingFor(CanvasPlacement.NOW_PLAYING),
                     queue = queue,
                     // Parity with the full Queue screen: tapping a drawer row must actually start that song
                     // (seek+play), not just move the cursor (goToId). The drawer used the cursor-only path.

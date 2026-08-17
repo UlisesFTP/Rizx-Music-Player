@@ -2,6 +2,9 @@
     <!-- Home screen: header -->
     <string name="home_logo_cd">Logo de Rizx</string>
     <string name="home_greeting">Buenas tardes</string>
+    <string name="home_greeting_morning">Buenos días</string>
+    <string name="home_greeting_afternoon">Buenas tardes</string>
+    <string name="home_greeting_evening">Buenas noches</string>
     <string name="home_subtitle">Éxitos y descubrimiento</string>
     <string name="home_liked_songs_cd">Me gusta</string>
 

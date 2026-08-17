@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -116,6 +117,7 @@ fun PickMosaic(
     modifier: Modifier = Modifier,
     index: Int = 1,
     onClick: () -> Unit = {},
+    artworkOverlay: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     val c = RizxTheme.colors
     Row(modifier.height(PICK_HEIGHT), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -156,11 +158,14 @@ fun PickMosaic(
                         Text(playLabel.uppercase(), style = code(11, FontWeight.Bold), color = c.text, maxLines = 1)
                     }
                 }
-                CoverArt(
-                    tintFor(tintKey), initial = title.take(1),
-                    Modifier.width(PICK_ART).fillMaxHeight(),
-                    initialSize = 44, imageUrl = coverUrl,
-                )
+                Box(Modifier.width(PICK_ART).fillMaxHeight()) {
+                    CoverArt(
+                        tintFor(tintKey), initial = title.take(1),
+                        Modifier.fillMaxSize(),
+                        initialSize = 44, imageUrl = coverUrl,
+                    )
+                    artworkOverlay?.invoke(this)
+                }
             }
         }
         MeterRail(index, weight)
