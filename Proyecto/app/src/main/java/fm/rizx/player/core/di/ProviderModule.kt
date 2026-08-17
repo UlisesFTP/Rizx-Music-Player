@@ -27,6 +27,8 @@ import fm.rizx.player.data.provider.NeteaseLyricsProvider
 import fm.rizx.player.data.provider.RizxUrlPlaylistProvider
 import fm.rizx.player.data.provider.SpotifyChartsDashboardProvider
 import fm.rizx.player.data.provider.SpotifyPlaylistProvider
+import fm.rizx.player.data.provider.SpotifyAlbumMetadataProvider
+import fm.rizx.player.data.provider.YoutubeMusicAlbumMetadataProvider
 import fm.rizx.player.data.provider.YoutubePlaylistProvider
 import fm.rizx.player.data.provider.SoundcloudChartsDashboardProvider
 import fm.rizx.player.data.provider.YoutubeChartsDashboardProvider
@@ -96,15 +98,11 @@ object ProviderModule {
         json: kotlinx.serialization.json.Json,
         appleRss: AppleMusicRssApi,
         region: RegionResolver,
+        spotifyPlaylists: SpotifyPlaylistProvider,
     ): ProviderRegistry {
         // One shared instance: registered as the URL-import provider and reused by the charts dashboard.
         // The pathfinder client is what lets an import go past the embed's 100 rows; it only engages for
         // playlists that actually hit that cap, so the charts path is unaffected.
-        val spotifyPlaylists = SpotifyPlaylistProvider(
-            okHttp,
-            json,
-            pathfinder = fm.rizx.player.data.remote.spotify.SpotifyPathfinderClient(okHttp, json),
-        )
         return DefaultProviderRegistry().apply {
             // The two fake *metadata* providers are gone: they were Phase-1 scaffolding that stayed
             // registered, and each carried an artificial `delay()`. Since `TrackArtworkEnricher` walks
@@ -149,6 +147,7 @@ object ProviderModule {
                     fm.rizx.player.data.remote.youtube.YoutubeChartsClient(okHttp, json),
                     region,
                     settings,
+                    extractor = youtube,
                 ),
             )
             // Streaming providers in fallback priority (StreamingRepositoryImpl chains active-first,
@@ -217,8 +216,28 @@ object ProviderModule {
 
     @Provides
     @Singleton
-    fun provideMetadataRepository(registry: ProviderRegistry): MetadataRepository =
-        MetadataRepositoryImpl(registry)
+    fun provideSpotifyPlaylistProvider(
+        okHttp: okhttp3.OkHttpClient,
+        json: kotlinx.serialization.json.Json,
+    ): SpotifyPlaylistProvider = SpotifyPlaylistProvider(
+        okHttp,
+        json,
+        pathfinder = fm.rizx.player.data.remote.spotify.SpotifyPathfinderClient(okHttp, json),
+    )
+
+    @Provides
+    @Singleton
+    fun provideMetadataRepository(
+        registry: ProviderRegistry,
+        spotifyPlaylists: SpotifyPlaylistProvider,
+        youtube: YoutubeExtractorClient,
+    ): MetadataRepository = MetadataRepositoryImpl(
+        registry,
+        detailProviders = listOf(
+            SpotifyAlbumMetadataProvider(spotifyPlaylists),
+            YoutubeMusicAlbumMetadataProvider(youtube),
+        ),
+    )
 
     /**
      * Turns a song's billing line into artist pages the active provider can actually open — one per

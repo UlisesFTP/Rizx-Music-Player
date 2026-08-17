@@ -15,6 +15,7 @@ data class YoutubePlaylistData(
     val name: String?,
     val uploaderName: String?,
     val items: List<StreamInfoItem>,
+    val thumbnails: List<org.schabi.newpipe.extractor.Image> = emptyList(),
     /** True when the playlist was longer than the import bounds and we stopped early. */
     val truncated: Boolean = false,
 )
@@ -43,6 +44,12 @@ interface YoutubeExtractorClient {
 
     /** Playlist results for a free-text query (blocking network) — the Search "Playlists" tab. */
     fun searchPlaylists(query: String, limit: Int): List<PlaylistInfoItem>
+
+    /** YouTube Music album rows. Empty by default so existing fake clients remain source-compatible. */
+    fun searchMusicAlbums(query: String, limit: Int): List<PlaylistInfoItem> = emptyList()
+
+    /** YouTube Music playlist rows. Empty by default so existing fake clients remain source-compatible. */
+    fun searchMusicPlaylists(query: String, limit: Int): List<PlaylistInfoItem> = emptyList()
 
     /**
      * The whole playlist at [playlistUrl] — `youtube.com/playlist?list=…`, `music.youtube.com/…`, or a
@@ -118,6 +125,21 @@ class NewPipeYoutubeExtractorClient(
         return info.relatedItems.filterIsInstance<PlaylistInfoItem>().take(limit)
     }
 
+    override fun searchMusicAlbums(query: String, limit: Int): List<PlaylistInfoItem> =
+        runPlaylistSearch(query, YoutubeSearchQueryHandlerFactory.MUSIC_ALBUMS, limit)
+
+    override fun searchMusicPlaylists(query: String, limit: Int): List<PlaylistInfoItem> =
+        runPlaylistSearch(query, YoutubeSearchQueryHandlerFactory.MUSIC_PLAYLISTS, limit)
+
+    private fun runPlaylistSearch(query: String, filter: String, limit: Int): List<PlaylistInfoItem> {
+        ensureInit()
+        val service = ServiceList.YouTube
+        val handler = service.searchQHFactory.fromQuery(query, listOf(filter), "")
+        return SearchInfo.getInfo(service, handler).relatedItems
+            .filterIsInstance<PlaylistInfoItem>()
+            .take(limit)
+    }
+
     override fun streamInfo(videoUrl: String): StreamInfo {
         ensureInit()
         return StreamInfo.getInfo(ServiceList.YouTube, videoUrl)
@@ -162,6 +184,7 @@ class NewPipeYoutubeExtractorClient(
             name = info.name,
             uploaderName = info.uploaderName,
             items = items.take(MAX_ITEMS),
+            thumbnails = info.thumbnails,
             truncated = stoppedEarly || page != null || items.size > MAX_ITEMS,
         )
     }

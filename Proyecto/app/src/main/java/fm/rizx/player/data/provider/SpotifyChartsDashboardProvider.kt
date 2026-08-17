@@ -4,6 +4,7 @@ import fm.rizx.player.core.region.RegionResolver
 import fm.rizx.player.data.remote.spotify.SpotifyChartIds
 import fm.rizx.player.data.remote.spotify.SpotifyIds
 import fm.rizx.player.domain.model.DashboardCapability
+import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.PlaylistPreview
 import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.model.Track
@@ -41,6 +42,7 @@ class SpotifyChartsDashboardProvider(
     override val name: String = "Spotify Charts"
     override val dashboardCapabilities: Set<DashboardCapability> = setOf(
         DashboardCapability.TOP_TRACKS,
+        DashboardCapability.TOP_ALBUMS,
         DashboardCapability.EDITORIAL_PLAYLISTS,
     )
 
@@ -59,6 +61,12 @@ class SpotifyChartsDashboardProvider(
         val preview = regionalTopOrGlobal() ?: return emptyList()
         return preview.tracks.take(limit)
     }
+
+    override suspend fun topAlbums(limit: Int): List<AlbumRef> =
+        regionalTopOrGlobal()?.tracks.orEmpty()
+            .mapNotNull { it.album }
+            .distinctBy { it.source.identityKey }
+            .take(limit)
 
     /**
      * The regional Top 50 and Viral 50, then Spotify's flagship editorial playlists.
@@ -96,7 +104,7 @@ class SpotifyChartsDashboardProvider(
         if (!isLeader) return deferred.await()
 
         val fetched = try {
-            playlists.fetchPlaylist(PLAYLIST_URL + playlistId)
+            playlists.fetchPlaylistForDashboard(PLAYLIST_URL + playlistId)
         } catch (e: CancellationException) {
             mutex.withLock { inFlight.remove(playlistId) }
             deferred.complete(null) // the followers must not inherit this leader's cancellation

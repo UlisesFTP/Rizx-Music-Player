@@ -5,6 +5,23 @@
     <string name="eq_unavailable_message">Lancez un titre pour utiliser l\'égaliseur.</string>
     <string name="eq_section_presets">PRÉRÉGLAGES</string>
     <string name="eq_section_bands">BANDES</string>
+    <string name="eq_preset_flat">Neutre</string>
+    <string name="eq_preset_bass">Basses</string>
+    <string name="eq_preset_treble">Aigus</string>
+    <string name="eq_preset_vocal">Voix</string>
+    <string name="eq_preset_loudness">Loudness</string>
+    <string name="eq_preset_pop">Pop</string>
+    <string name="eq_preset_rock">Rock</string>
+    <string name="eq_preset_hip_hop">Hip-hop</string>
+    <string name="eq_preset_electronic">Électronique</string>
+    <string name="eq_preset_latin">Latino</string>
+    <string name="eq_preset_rnb">R&amp;B</string>
+    <string name="eq_preset_jazz">Jazz</string>
+    <string name="eq_preset_classical">Classique</string>
+    <string name="eq_preset_acoustic">Acoustique</string>
+    <string name="eq_preset_metal">Metal</string>
+    <string name="eq_preset_podcast">Podcast</string>
+    <string name="eq_preset_night">Nuit</string>
 
     <!-- Automatic equalizer (a curve per song: its genre, then the song's own spectrum) -->
     <string name="pref_auto_eq">Égaliseur automatique</string>

@@ -198,12 +198,12 @@ class ForYouRepositoryImpl(
 
     private companion object {
         const val TASTE_LIMIT = 25
-        const val MIX_ROWS = 2
+        const val MIX_ROWS = 3
         const val ROW_ITEMS = 12
         const val MIN_ROW_ITEMS = 3
 
         /** One "Similar to" row per anchor — the feed's per-artist neighborhoods, like any streaming app. */
-        const val SIMILAR_ANCHORS = 2
+        const val SIMILAR_ANCHORS = 3
         const val RELATED_PER_SEED = 8
 
         /** How much of each half a row carries; interleaved in the UI, 12 cards max like every row. */

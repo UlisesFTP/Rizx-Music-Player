@@ -14,7 +14,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Home-feed source over SoundCloud's "Top 50" chart kiosk (keyless, via NewPipe).
+ * Home-feed source over SoundCloud's public "New & hot" chart kiosk (keyless, via NewPipe).
  *
  * Top tracks only: SoundCloud has no albums, and its other kiosk ("New & hot") also returns tracks,
  * so mapping it onto NEW_RELEASES — which the feed renders as albums — would misrepresent it.
@@ -31,7 +31,7 @@ class SoundcloudChartsDashboardProvider(
 
     override val id: String = SoundcloudIds.DASHBOARD
     override val kind: ProviderKind = ProviderKind.DASHBOARD
-    override val name: String = "SoundCloud"
+    override val name: String = "SoundCloud · New & hot"
     override val dashboardCapabilities: Set<DashboardCapability> =
         setOf(DashboardCapability.TOP_TRACKS)
 
@@ -54,6 +54,6 @@ class SoundcloudChartsDashboardProvider(
     private class CachedKiosk(val atMs: Long, val tracks: List<Track>)
 
     private companion object {
-        const val CHART_LIMIT = 30
+        const val CHART_LIMIT = 50
     }
 }

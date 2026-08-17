@@ -114,7 +114,7 @@ class AppleMusicDashboardProvider(
         /** Used when the user hasn't consented to sharing their region — a fixed, non-personal choice. */
         const val DEFAULT_STOREFRONT = "us"
 
-        private const val RSS_LIMIT = 25
+        private const val RSS_LIMIT = 50
         private const val SONGS = "songs"
         private const val ALBUMS = "albums"
         private const val PLAYLISTS = "playlists"

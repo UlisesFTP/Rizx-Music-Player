@@ -142,6 +142,8 @@ class HomeViewModel @Inject constructor(
 
     private val _state = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     /** Pure and stateless, like the blender it shares identity keys with — built, not injected. */
     private val deduper = HomeFeedDeduper()
@@ -241,7 +243,8 @@ class HomeViewModel @Inject constructor(
 
     private fun start(useCache: Boolean) {
         loadJob?.cancel()
-        loadJob = viewModelScope.launch {
+        _isRefreshing.value = !useCache && _state.value is HomeUiState.Content
+        val job = viewModelScope.launch {
             var selection = ""
             val cached = withContext(Dispatchers.IO) {
                 regionalConsent = forYou.regionalConsent.first()
@@ -308,6 +311,8 @@ class HomeViewModel @Inject constructor(
                 ?.takeIf { feedFailure == null }
                 ?.let { cache.write(it.feed, it.forYouSections, selection) }
         }
+        loadJob = job
+        job.invokeOnCompletion { _isRefreshing.value = false }
     }
 
     /**

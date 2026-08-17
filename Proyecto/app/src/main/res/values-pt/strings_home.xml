@@ -9,6 +9,7 @@
     <string name="home_tab_all">Tudo</string>
     <string name="home_tab_songs">Músicas</string>
     <string name="home_tab_for_you">Para você</string>
+    <string name="action_refresh">Atualizar feed</string>
     <string name="home_tab_albums">Álbuns</string>
     <string name="home_tab_artists">Artistas</string>
 

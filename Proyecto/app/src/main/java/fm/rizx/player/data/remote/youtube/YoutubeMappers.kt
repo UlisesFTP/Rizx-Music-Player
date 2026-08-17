@@ -1,6 +1,7 @@
 package fm.rizx.player.data.remote.youtube
 
 import fm.rizx.player.domain.model.ArtistCredit
+import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.Artwork
 import fm.rizx.player.domain.model.ArtworkPurpose
 import fm.rizx.player.domain.model.ArtworkSet
@@ -29,6 +30,9 @@ object YoutubeIds {
 
     /** Namespaced so a playlist ref can't collide with a video ref (same convention as `DeezerIds`). */
     fun playlist(id: String) = ProviderRef(STREAMING, "playlist:$id")
+
+    /** Music albums are importable playlists, but remain a distinct detail identity. */
+    fun album(id: String) = ProviderRef(STREAMING, "album:$id")
 }
 
 /**
@@ -177,6 +181,17 @@ fun PlaylistInfoItem.toPlaylistRefOrNull(): PlaylistRef? {
         artwork = thumbnails.toArtworkSet(),
         source = YoutubeIds.playlist(listId),
         trackCount = streamCount.takeIf { it >= 0 }?.toInt(),
+    )
+}
+
+/** A YouTube Music album search row backed by its importable official playlist. */
+fun PlaylistInfoItem.toMusicAlbumRefOrNull(): AlbumRef? {
+    val listId = url?.let { youtubePlaylistId(it) }?.takeIf { isImportableYoutubePlaylistId(it) } ?: return null
+    val title = name?.takeIf { it.isNotBlank() } ?: return null
+    return AlbumRef(
+        title = title,
+        artwork = thumbnails.toArtworkSet(),
+        source = YoutubeIds.album(listId),
     )
 }
 

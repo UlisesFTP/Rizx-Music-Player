@@ -42,6 +42,7 @@ class SpotifyPlaylistProviderTest {
         json = json,
         io = Dispatchers.Unconfined,
         embedUrlTemplate = server.url("/embed/playlist/").toString() + "%s",
+        albumEmbedUrlTemplate = server.url("/embed/album/").toString() + "%s",
         pathfinder = pathfinder,
     )
 
@@ -76,6 +77,13 @@ class SpotifyPlaylistProviderTest {
            }}}}}
            </script></body></html>
         """.trimIndent()
+
+    private fun albumHtml(tracks: String, name: String, coverArt: String): String =
+        """<script id="__NEXT_DATA__" type="application/json">
+           {"props":{"pageProps":{"state":{"data":{"entity":
+             {"type":"album","name":"$name",$coverArt"trackList":[$tracks]}
+           }}}}}
+           </script>""".trimIndent()
 
     /** Shape the live embed actually returns: width/height are usually null. */
     private fun coverArtJson(url: String) = """"coverArt":{"sources":[{"url":"$url","width":null,"height":null}]},"""
@@ -129,6 +137,27 @@ class SpotifyPlaylistProviderTest {
         val preview = provider().fetchPlaylist("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M")
 
         assertEquals(cover, preview.artwork.coverUrl())
+    }
+
+    @Test
+    fun `reads public album embed into an openable album detail`() = runBlocking {
+        val cover = "https://i.scdn.co/image/album-cover"
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                albumHtml(
+                    trackJson("65DbTqJKhbwqYbZ1Okr0rc", "Album song", "Artist", 232226),
+                    name = "Public Album",
+                    coverArt = coverArtJson(cover),
+                ),
+            ),
+        )
+
+        val album = provider().fetchAlbum(fm.rizx.player.data.remote.spotify.SpotifyIds.album("album123"))!!
+
+        assertEquals("Public Album", album.title)
+        assertEquals(cover, album.artwork.coverUrl())
+        assertEquals("Album song", album.tracks.single().title)
+        assertEquals(album.source, album.tracks.single().album?.source)
     }
 
     @Test

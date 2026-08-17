@@ -44,7 +44,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 class DashboardRepositoryImpl(
     private val registry: ProviderRegistry,
     private val enabled: EnabledProviderStore,
-    private val limit: Int = DEFAULT_LIMIT,
+    private val limits: DashboardFeedLimits = DashboardFeedLimits(),
     private val io: CoroutineDispatcher = Dispatchers.IO,
     private val selection: suspend () -> String = { SettingsRepositoryImpl.FEED_PROVIDER_ALL },
 ) : DashboardRepository {
@@ -156,17 +156,17 @@ class DashboardRepositoryImpl(
 
     private suspend fun contributionOf(p: DashboardProvider): Contribution = coroutineScope {
         val caps = p.dashboardCapabilities
-        val tracks = async { safe(DashboardCapability.TOP_TRACKS in caps) { p.topTracks(limit) } }
-        val artists = async { safe(DashboardCapability.TOP_ARTISTS in caps) { p.topArtists(limit) } }
-        val albums = async { safe(DashboardCapability.TOP_ALBUMS in caps) { p.topAlbums(limit) } }
+        val tracks = async { safe(DashboardCapability.TOP_TRACKS in caps) { p.topTracks(limits.tracks) } }
+        val artists = async { safe(DashboardCapability.TOP_ARTISTS in caps) { p.topArtists(limits.artists) } }
+        val albums = async { safe(DashboardCapability.TOP_ALBUMS in caps) { p.topAlbums(limits.albums) } }
         // Playlists get a far higher ceiling than the other sections. They have their own tab, which
         // is an inventory rather than a preview, and a provider's whole catalogue of them is cheap:
         // Apple's 45 come from one hourly-cached page plus one RSS call, Deezer's from its existing
         // chart response. The chart sections keep the small limit — those are per-item work.
-        val playlists = async { safe(DashboardCapability.EDITORIAL_PLAYLISTS in caps) { p.editorialPlaylists(PLAYLIST_LIMIT) } }
-        val releases = async { safe(DashboardCapability.NEW_RELEASES in caps) { p.newReleases(limit) } }
-        val featured = async { safe(DashboardCapability.FEATURED_PLAYLISTS in caps) { p.featuredPlaylists(FEATURED_LIMIT) } }
-        val stations = async { safe(DashboardCapability.MOOD_STATIONS in caps) { p.moodStations(STATION_LIMIT) } }
+        val playlists = async { safe(DashboardCapability.EDITORIAL_PLAYLISTS in caps) { p.editorialPlaylists(limits.playlists) } }
+        val releases = async { safe(DashboardCapability.NEW_RELEASES in caps) { p.newReleases(limits.releases) } }
+        val featured = async { safe(DashboardCapability.FEATURED_PLAYLISTS in caps) { p.featuredPlaylists(limits.featured) } }
+        val stations = async { safe(DashboardCapability.MOOD_STATIONS in caps) { p.moodStations(limits.stations) } }
         Contribution(
             p.id, p.name,
             tracks.await(), artists.await(), albums.await(), playlists.await(), releases.await(),
@@ -217,22 +217,18 @@ class DashboardRepositoryImpl(
     )
 
     companion object {
-        private const val DEFAULT_LIMIT = 12
-
-        /** Enough for every country chart plus a platform's curated rows, per provider. */
-        private const val PLAYLIST_LIMIT = 60
-
-        /** Full-width cards — two is a shelf, five would be the whole Home. */
-        private const val FEATURED_LIMIT = 2
-
-        /**
-         * The provider's whole station list. Home draws a preview of it and puts the rest behind
-         * "See all", so capping here would only hide stations from that screen too — and they all
-         * arrive in the single `/radio/lists` call the section already makes.
-         */
-        private const val STATION_LIMIT = 100
-
         /** How long any one section may take before it is dropped. See [safe] for why it exists. */
         private const val SECTION_TIMEOUT_MS = 12_000L
     }
 }
+
+/** Internal feed-depth policy; previews apply their own smaller display cap in the UI. */
+data class DashboardFeedLimits(
+    val tracks: Int = 50,
+    val artists: Int = 40,
+    val albums: Int = 40,
+    val playlists: Int = 60,
+    val releases: Int = 30,
+    val featured: Int = 2,
+    val stations: Int = 100,
+)

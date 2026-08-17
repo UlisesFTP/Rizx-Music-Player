@@ -6,6 +6,9 @@ import fm.rizx.player.domain.model.GenreFeed
 import fm.rizx.player.domain.model.MoodStation
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Track
+import fm.rizx.player.domain.model.AlbumRef
+import fm.rizx.player.domain.model.ArtistRef
+import fm.rizx.player.domain.model.PlaylistRef
 import fm.rizx.player.domain.provider.DashboardProvider
 import fm.rizx.player.domain.provider.EnabledProviderStore
 import fm.rizx.player.domain.provider.ProviderKind
@@ -117,6 +120,33 @@ class DashboardRepositoryTest {
     fun `no dashboard providers yields an empty feed`() = runTest {
         val feed = DashboardRepositoryImpl(DefaultProviderRegistry(), FakeEnabled()).homeFeed()
         assertTrue(feed.isEmpty)
+    }
+
+    @Test
+    fun `home requests the section specific feed depths`() = runTest {
+        val requested = mutableMapOf<String, Int>()
+        val provider = object : DashboardProvider {
+            override val id = "limits"
+            override val kind = ProviderKind.DASHBOARD
+            override val name = id
+            override val dashboardCapabilities = DashboardCapability.entries.toSet()
+            override suspend fun topTracks(limit: Int): List<Track> { requested["tracks"] = limit; return emptyList() }
+            override suspend fun topArtists(limit: Int): List<ArtistRef> { requested["artists"] = limit; return emptyList() }
+            override suspend fun topAlbums(limit: Int): List<AlbumRef> { requested["albums"] = limit; return emptyList() }
+            override suspend fun editorialPlaylists(limit: Int): List<PlaylistRef> { requested["playlists"] = limit; return emptyList() }
+            override suspend fun newReleases(limit: Int): List<AlbumRef> { requested["releases"] = limit; return emptyList() }
+            override suspend fun moodStations(limit: Int): List<MoodStation> { requested["stations"] = limit; return emptyList() }
+        }
+        val registry = DefaultProviderRegistry().apply { register(provider) }
+
+        DashboardRepositoryImpl(registry, FakeEnabled()).homeFeed()
+
+        assertEquals(50, requested["tracks"])
+        assertEquals(40, requested["artists"])
+        assertEquals(40, requested["albums"])
+        assertEquals(60, requested["playlists"])
+        assertEquals(30, requested["releases"])
+        assertEquals(100, requested["stations"])
     }
 
     @Test

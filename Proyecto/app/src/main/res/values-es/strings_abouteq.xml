@@ -5,6 +5,23 @@
     <string name="eq_unavailable_message">Reproduce una canción para usar el ecualizador.</string>
     <string name="eq_section_presets">PREAJUSTES</string>
     <string name="eq_section_bands">BANDAS</string>
+    <string name="eq_preset_flat">Plano</string>
+    <string name="eq_preset_bass">Graves</string>
+    <string name="eq_preset_treble">Agudos</string>
+    <string name="eq_preset_vocal">Voz</string>
+    <string name="eq_preset_loudness">Sonoridad</string>
+    <string name="eq_preset_pop">Pop</string>
+    <string name="eq_preset_rock">Rock</string>
+    <string name="eq_preset_hip_hop">Hip-hop</string>
+    <string name="eq_preset_electronic">Electrónica</string>
+    <string name="eq_preset_latin">Latina</string>
+    <string name="eq_preset_rnb">R&amp;B</string>
+    <string name="eq_preset_jazz">Jazz</string>
+    <string name="eq_preset_classical">Clásica</string>
+    <string name="eq_preset_acoustic">Acústica</string>
+    <string name="eq_preset_metal">Metal</string>
+    <string name="eq_preset_podcast">Podcast</string>
+    <string name="eq_preset_night">Noche</string>
 
     <!-- Automatic equalizer (a curve per song: its genre, then the song's own spectrum) -->
     <string name="pref_auto_eq">Ecualizador automático</string>

@@ -86,6 +86,34 @@ class MetadataRepositoryTest {
     }
 
     @Test
+    fun `album detail uses the owner before the active provider`() = runTest {
+        val activeAlbum = Album("Wrong catalogue", source = ProviderRef("deezer", "album:9"))
+        val appleAlbum = Album("Apple owner", source = ProviderRef("applemusic", "album:9"))
+        val active = object : MetadataProvider {
+            override val id = "deezer"
+            override val kind = ProviderKind.METADATA
+            override val name = id
+            override val searchCapabilities = setOf(SearchCapability.UNIFIED)
+            override val detailCapabilities = setOf(DetailCapability.ALBUM_DETAIL)
+            override suspend fun search(params: SearchParams) = SearchResults()
+            override suspend fun albumDetail(source: ProviderRef) = activeAlbum
+        }
+        val owner = object : MetadataProvider {
+            override val id = "apple-catalogue"
+            override val kind = ProviderKind.METADATA
+            override val name = id
+            override val ownedNamespaces = setOf("applemusic")
+            override val searchCapabilities = setOf(SearchCapability.ALBUMS)
+            override val detailCapabilities = setOf(DetailCapability.ALBUM_DETAIL)
+            override suspend fun search(params: SearchParams) = SearchResults()
+            override suspend fun albumDetail(source: ProviderRef) = appleAlbum
+        }
+        val registry = DefaultProviderRegistry().apply { register(active); register(owner) }
+
+        assertEquals("Apple owner", MetadataRepositoryImpl(registry).albumDetail(ProviderRef("applemusic", "album:9"))?.title)
+    }
+
+    @Test
     fun `throws when no metadata provider is active`() = runTest {
         val repo = MetadataRepositoryImpl(DefaultProviderRegistry())
         var thrown = false

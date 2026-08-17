@@ -49,5 +49,9 @@ object SpotifyChartIds {
         "37i9dQZF1DX0XUsuxWHRQd" to "RapCaviar",
         "37i9dQZF1DWY7IeIP1cdjF" to "Baila Reggaeton",
         "37i9dQZF1DWXRqgorJj26U" to "Rock Classics",
+        "37i9dQZF1DX10zKzsJ2jva" to "Viva Latino",
+        "37i9dQZF1DX4dyzvuaRJ0n" to "mint",
+        "37i9dQZF1DWUa8ZRTfalHk" to "Pop Rising",
+        "37i9dQZF1DX4SBhb3fqCJd" to "Are & Be",
     )
 }

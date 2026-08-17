@@ -3,6 +3,8 @@ package fm.rizx.player.data.provider
 import fm.rizx.player.FakeSettingsRepository
 import fm.rizx.player.core.region.RegionResolver
 import fm.rizx.player.data.remote.youtube.YoutubeChartsClient
+import fm.rizx.player.data.remote.youtube.YoutubeExtractorClient
+import fm.rizx.player.data.remote.youtube.YoutubePlaylistData
 import fm.rizx.player.domain.model.coverUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -15,6 +17,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
+import org.schabi.newpipe.extractor.stream.StreamInfo
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
 
 /**
  * YouTube Music charts. The fixture is **trimmed from a real `charts.youtube.com` response**, keeping
@@ -49,6 +55,33 @@ class YoutubeChartsDashboardProviderTest {
 
     private fun enqueueCharts() =
         server.enqueue(MockResponse().setResponseCode(200).setBody(FIXTURE))
+
+    private class FakeMusicSearch : YoutubeExtractorClient {
+        var albumCalls = 0
+        var playlistCalls = 0
+        private fun rows(count: Int) = (1..count).map { index ->
+            val listId = "PL" + index.toString().padStart(32, '0')
+            PlaylistInfoItem(
+                ServiceList.YouTube.serviceId,
+                "https://music.youtube.com/playlist?list=$listId",
+                "Collection $index",
+            )
+        }
+        override fun searchSongs(query: String, limit: Int) = emptyList<StreamInfoItem>()
+        override fun searchVideos(query: String, limit: Int) = emptyList<StreamInfoItem>()
+        override fun searchPlaylists(query: String, limit: Int) = emptyList<PlaylistInfoItem>()
+        override fun searchMusicAlbums(query: String, limit: Int): List<PlaylistInfoItem> {
+            albumCalls++
+            return rows(20).take(limit)
+        }
+        override fun searchMusicPlaylists(query: String, limit: Int): List<PlaylistInfoItem> {
+            playlistCalls++
+            return rows(30).take(limit)
+        }
+        override fun streamInfo(videoUrl: String): StreamInfo = error("not used")
+        override fun playlist(playlistUrl: String) = YoutubePlaylistData(null, null, emptyList())
+        override fun mix(videoId: String, limit: Int) = emptyList<StreamInfoItem>()
+    }
 
     @Test
     fun `parses the real chart shape into tracks and artists`() = runBlocking {
@@ -129,6 +162,30 @@ class YoutubeChartsDashboardProviderTest {
 
         // Memoized: the second row must not re-fetch the page the first one already paid for.
         assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `music albums and playlists are deduplicated limited and cached`() = runBlocking {
+        enqueueCharts()
+        val extractor = FakeMusicSearch()
+        val p = YoutubeChartsDashboardProvider(
+            client = YoutubeChartsClient(
+                client = OkHttpClient(),
+                json = Json { ignoreUnknownKeys = true; isLenient = true },
+                io = Dispatchers.Unconfined,
+                endpoint = server.url("/youtubei/v1/browse").toString(),
+            ),
+            region = RegionResolver(listOf({ "mx" })),
+            settings = settings,
+            extractor = extractor,
+        )
+
+        assertEquals(10, p.topAlbums(10).size)
+        assertEquals(10, p.topAlbums(10).size)
+        assertEquals(10, p.editorialPlaylists(10).size)
+        assertEquals(10, p.editorialPlaylists(10).size)
+        assertEquals(2, extractor.albumCalls)
+        assertEquals(3, extractor.playlistCalls)
     }
 
     @Test

@@ -9,6 +9,8 @@ import fm.rizx.player.data.remote.spotify.spotifyPlaylistId
 import fm.rizx.player.data.remote.spotify.toArtworkSet
 import fm.rizx.player.data.remote.spotify.toTrackOrNull
 import fm.rizx.player.domain.model.PlaylistPreview
+import fm.rizx.player.domain.model.Album
+import fm.rizx.player.domain.model.AlbumRef
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.provider.PlaylistProvider
 import fm.rizx.player.domain.provider.ProviderKind
@@ -47,6 +49,8 @@ class SpotifyPlaylistProvider(
     private val io: CoroutineDispatcher = Dispatchers.IO,
     /** `%s` = playlist id. Overridden only by tests (to point at a local server). */
     private val embedUrlTemplate: String = EMBED_URL,
+    /** `%s` = album id. Public embed, overridden by fixture tests. */
+    private val albumEmbedUrlTemplate: String = ALBUM_EMBED_URL,
     /** Null disables paging entirely (the pre-existing embed-only behaviour). */
     private val pathfinder: SpotifyPathfinderClient? = null,
 ) : PlaylistProvider {
@@ -58,7 +62,34 @@ class SpotifyPlaylistProvider(
     override fun canHandle(url: String): Boolean =
         url.contains("spotify", ignoreCase = true) && spotifyPlaylistId(url) != null
 
-    override suspend fun fetchPlaylist(url: String): PlaylistPreview {
+    override suspend fun fetchPlaylist(url: String): PlaylistPreview = fetchPlaylistInternal(url, enrichFirstPage = false)
+
+    /**
+     * Dashboard-only path: asks Pathfinder for page zero even when the embed has fewer than 100 rows.
+     * Those rows carry album identity and cover art, which lets the chart expose real album cards.
+     */
+    suspend fun fetchPlaylistForDashboard(url: String): PlaylistPreview =
+        fetchPlaylistInternal(url, enrichFirstPage = true)
+
+    suspend fun fetchAlbum(source: fm.rizx.player.domain.model.ProviderRef): Album? = withContext(io) {
+        if (source.provider != SpotifyIds.PROVIDER || !source.id.startsWith("album:")) return@withContext null
+        val albumId = source.id.substringAfter(':').takeIf { it.isNotBlank() } ?: return@withContext null
+        val entity = parseEmbed(get(albumEmbedUrlTemplate.format(albumId)))
+            ?.props?.pageProps?.state?.data?.entity?.takeIf { it.type == ALBUM_TYPE } ?: return@withContext null
+        val artwork = entity.coverArt.toArtworkSet()
+        val ref = AlbumRef(entity.name.orEmpty(), artwork = artwork, source = source)
+        val tracks = entity.trackList.mapNotNull { it.toTrackOrNull() }
+            .map { track -> track.copy(album = ref, artwork = track.artwork ?: artwork) }
+        Album(
+            title = entity.name?.takeIf { it.isNotBlank() } ?: return@withContext null,
+            artwork = artwork,
+            tracks = tracks,
+            totalTracks = tracks.size,
+            source = source,
+        )
+    }
+
+    private suspend fun fetchPlaylistInternal(url: String, enrichFirstPage: Boolean): PlaylistPreview {
         val playlistId = spotifyPlaylistId(url)
             ?: throw AppError.ProviderFailure(name, "no playlist id in URL")
         return try {
@@ -69,7 +100,8 @@ class SpotifyPlaylistProvider(
                 val embedTracks = entity.trackList.mapNotNull { it.toTrackOrNull() }
                 if (embedTracks.isEmpty()) throw AppError.ProviderFailure(name, "no readable tracks (is the playlist private?)")
                 val token = next.props.pageProps.state.settings?.session?.accessToken
-                val tracks = extend(playlistId, embedTracks, token)
+                val head = if (enrichFirstPage) enrichHead(playlistId, embedTracks, token) else embedTracks
+                val tracks = extend(playlistId, head, token)
                 PlaylistPreview(
                     name = entity.name?.takeIf { it.isNotBlank() } ?: "Spotify playlist",
                     description = describe(entity, imported = tracks.size),
@@ -88,6 +120,17 @@ class SpotifyPlaylistProvider(
         } catch (e: Exception) {
             throw AppError.ProviderFailure(name, e.message ?: "playlist import failed", e)
         }
+    }
+
+    private fun enrichHead(playlistId: String, embedTracks: List<Track>, token: String?): List<Track> {
+        val client = pathfinder ?: return embedTracks
+        if (token.isNullOrBlank()) return embedTracks
+        val rich = client.contents(playlistId, token, 0, PAGE_SIZE)?.items.orEmpty()
+            .filter { it.itemV2?.__typename == TRACK_ITEM_TYPE }
+            .mapNotNull { it.itemV2?.data?.toTrackOrNull() }
+        if (rich.isEmpty()) return embedTracks
+        val byId = rich.associateBy { it.source.identityKey }
+        return embedTracks.map { byId[it.source.identityKey] ?: it }
     }
 
     /** Pulls the `__NEXT_DATA__` JSON out of the embed HTML. */
@@ -159,8 +202,10 @@ class SpotifyPlaylistProvider(
         private const val PAGE_SIZE = 100
 
         private const val PLAYLIST_TYPE = "playlist"
+        private const val ALBUM_TYPE = "album"
         private const val TRACK_ITEM_TYPE = "TrackResponseWrapper"
         const val EMBED_URL = "https://open.spotify.com/embed/playlist/%s"
+        const val ALBUM_EMBED_URL = "https://open.spotify.com/embed/album/%s"
         private val NEXT_DATA =
             Regex("""<script id="__NEXT_DATA__"[^>]*>(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
     }

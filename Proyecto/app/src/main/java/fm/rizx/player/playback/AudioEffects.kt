@@ -138,7 +138,21 @@ class AudioEffects @Inject constructor(
         val eq = equalizer ?: return
         runCatching {
             val range = eq.bandLevelRange
-            EqPresets.levels(preset, eq.numberOfBands.toInt(), range[1].toInt())
+            EqPresets.levels(
+                preset = preset,
+                bands = (0 until eq.numberOfBands).map { index ->
+                    val band = index.toShort()
+                    val edges = runCatching { eq.getBandFreqRange(band) }.getOrNull()
+                    EqBandRange(
+                        index = index,
+                        centerHz = eq.getCenterFreq(band) / 1000,
+                        lowHz = edges?.getOrNull(0)?.let { it / 1000 } ?: 0,
+                        highHz = edges?.getOrNull(1)?.let { it / 1000 } ?: 0,
+                    )
+                },
+                minMillibel = range[0].toInt(),
+                maxMillibel = range[1].toInt(),
+            )
                 .forEachIndexed { i, mb -> eq.setBandLevel(i.toShort(), mb.coerceIn(range[0].toInt(), range[1].toInt()).toShort()) }
         }
         persistCurrent(eq)

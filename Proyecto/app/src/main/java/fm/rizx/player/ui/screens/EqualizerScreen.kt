@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -38,6 +39,7 @@ import fm.rizx.player.domain.model.EqualizerState
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.settings.EqualizerViewModel
+import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.code
 import fm.rizx.player.ui.theme.mr
@@ -85,7 +87,10 @@ fun EqualizerScreen(onBack: () -> Unit, vm: EqualizerViewModel = hiltViewModel()
         // would overwrite it.
         Presets(enabled = state.enabled && !state.auto, onPreset = vm::applyPreset)
         Bands(state = state, editable = !state.auto, onBand = vm::setBand)
-        Spacer(Modifier.height(60.dp))
+        // The mini-player is floating above this screen, so a fixed spacer leaves the last band trapped
+        // behind it. RizxApp measures the complete floating chrome (including system navigation); the
+        // extra margin lets the final slider scroll comfortably above it.
+        Spacer(Modifier.height(LocalBottomInset.current + 16.dp))
     }
 }
 
@@ -138,7 +143,7 @@ private fun Presets(enabled: Boolean, onPreset: (EqPreset) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         EqPreset.entries.forEach { preset ->
             Text(
-                preset.name.lowercase().replaceFirstChar { it.uppercase() },
+                stringResource(preset.labelResource()),
                 style = mr(13, FontWeight.SemiBold),
                 color = if (enabled) c.text else c.muted,
                 modifier = Modifier
@@ -150,6 +155,27 @@ private fun Presets(enabled: Boolean, onPreset: (EqPreset) -> Unit) {
             )
         }
     }
+}
+
+@StringRes
+private fun EqPreset.labelResource(): Int = when (this) {
+    EqPreset.FLAT -> R.string.eq_preset_flat
+    EqPreset.BASS -> R.string.eq_preset_bass
+    EqPreset.TREBLE -> R.string.eq_preset_treble
+    EqPreset.VOCAL -> R.string.eq_preset_vocal
+    EqPreset.LOUDNESS -> R.string.eq_preset_loudness
+    EqPreset.POP -> R.string.eq_preset_pop
+    EqPreset.ROCK -> R.string.eq_preset_rock
+    EqPreset.HIP_HOP -> R.string.eq_preset_hip_hop
+    EqPreset.ELECTRONIC -> R.string.eq_preset_electronic
+    EqPreset.LATIN -> R.string.eq_preset_latin
+    EqPreset.RNB -> R.string.eq_preset_rnb
+    EqPreset.JAZZ -> R.string.eq_preset_jazz
+    EqPreset.CLASSICAL -> R.string.eq_preset_classical
+    EqPreset.ACOUSTIC -> R.string.eq_preset_acoustic
+    EqPreset.METAL -> R.string.eq_preset_metal
+    EqPreset.PODCAST -> R.string.eq_preset_podcast
+    EqPreset.NIGHT -> R.string.eq_preset_night
 }
 
 @Composable

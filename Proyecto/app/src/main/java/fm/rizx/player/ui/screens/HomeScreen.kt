@@ -28,11 +28,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -105,6 +110,7 @@ import java.time.LocalDate
  */
 enum class HomeTab(val labelRes: Int) {
     All(R.string.home_tab_all),
+    ForYou(R.string.home_tab_for_you),
     Songs(R.string.home_tab_songs),
     // Playlists earn a tab now that the feed carries sixty-odd of them (Apple's Top 100 per country,
     // its curated rows, Spotify's editorial, Deezer's regionals). Without a destination the overview
@@ -116,6 +122,7 @@ enum class HomeTab(val labelRes: Int) {
 
 /** How many items a carousel previews on the [HomeTab.All] overview before "See all". */
 private const val PREVIEW_ITEMS = 10
+private const val FOR_YOU_PREVIEW_ROWS = 3
 
 /**
  * Station tiles at the foot of the feed before "See all" — six rows of the mosaic. The provider
@@ -208,6 +215,7 @@ private fun playlistSubtitle(playlist: PlaylistRef): String =
  * re-loaded the very `dashboard.homeFeed()` this screen already holds, so they were a second copy of
  * this content; the tabs are the destination now.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onOpenSearch: () -> Unit,
@@ -221,10 +229,12 @@ fun HomeScreen(
 ) {
     val c = RizxTheme.colors
     val state by vm.state.collectAsStateWithLifecycle()
+    val isRefreshing by vm.isRefreshing.collectAsStateWithLifecycle()
     // Saved by name, not as the enum itself: restoring a constant that a later version removed (as
     // "For you" was) would throw on the way back from process death.
     var tabName by rememberSaveable { mutableStateOf(HomeTab.All.name) }
     val tab = HomeTab.entries.firstOrNull { it.name == tabName } ?: HomeTab.All
+    val listState = rememberSaveable(tabName, saver = LazyListState.Saver) { LazyListState() }
     // Hoisted here because `tabContent`/`carousel` below are plain LazyListScope builders, not
     // @Composable functions — stringResource() can only be called from this composable scope.
     val topSongsTitle = stringResource(R.string.home_top_songs)
@@ -339,7 +349,12 @@ fun HomeScreen(
             "Rizx", style = sg(120, FontWeight.Bold, -0.05f), color = c.text.copy(alpha = 0.06f),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
         )
-        LazyColumn(Modifier.fillMaxSize().statusBarsPadding()) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = vm::refresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             item {
                 Row(
                     Modifier.fillMaxWidth().padding(start = 22.dp, end = 14.dp, top = 12.dp),
@@ -372,6 +387,7 @@ fun HomeScreen(
                         Text(stringResource(R.string.home_subtitle), style = sg(19, FontWeight.Bold, -0.01f), color = c.text)
                     }
                     RizxIconButton(RizxIcons.Search, stringResource(R.string.action_search), onOpenSearch, background = c.elev, border = c.line, iconSize = 21.dp)
+                    RizxIconButton(Icons.Filled.Refresh, stringResource(R.string.action_refresh), vm::refresh, background = c.elev, border = c.line, iconSize = 20.dp)
                     RizxIconButton(RizxIcons.Favorite, stringResource(R.string.home_liked_songs_cd), onOpenLikes, background = c.elev, border = c.line, iconSize = 20.dp, tint = c.redAccent)
                 }
             }
@@ -449,6 +465,7 @@ fun HomeScreen(
             }
 
             item { Spacer(Modifier.height(LocalBottomInset.current + 16.dp)) }
+        }
         }
     }
 }
@@ -528,10 +545,11 @@ private fun LazyListScope.tabContent(
             val strips = buildList {
                 // One entry per personalized row, real or the skeleton standing in for it — keyed by the
                 // title, so the skeleton is woven into exactly the slot its row will land in.
-                forYouRows.forEach { (title, section) ->
+                forYouRows.take(FOR_YOU_PREVIEW_ROWS).forEach { (title, section) ->
                     add(Strip("fy-$title") { forYouStrip(title, section, onPlay, onOpenAlbum, onOpenArtist) })
                 }
-                forYouSkeletons.forEach { title -> add(Strip("fy-$title") { skeletonCarousel(title) }) }
+                forYouSkeletons.take((FOR_YOU_PREVIEW_ROWS - forYouRows.size).coerceAtLeast(0))
+                    .forEach { title -> add(Strip("fy-$title") { skeletonCarousel(title) }) }
                 if (discover != null) add(Strip("daily-pick") { item(key = "daily-pick") { discover() } })
                 // The featured shelf: whole cards, not covers — each already deduped against the wall
                 // and the playlist carousel (the deduper lets the card claim first).
@@ -585,6 +603,7 @@ private fun LazyListScope.tabContent(
                                 )
                                 CellTitle(playlist.name)
                                 CellSubtitle(playlistSubtitle(playlist))
+                                SourceBadge(playlist.source.provider)
                             }
                         }
                     },
@@ -603,6 +622,7 @@ private fun LazyListScope.tabContent(
                                 )
                                 CellTitle(track.title)
                                 CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })
+                                SourceBadge(track.source.provider)
                             }
                         }
                     },
@@ -618,6 +638,7 @@ private fun LazyListScope.tabContent(
                                 )
                                 CellTitle(album.title)
                                 CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+                                SourceBadge(album.source.provider)
                             }
                         }
                     },
@@ -632,6 +653,7 @@ private fun LazyListScope.tabContent(
                                     initialSize = 38, circle = true, imageUrl = artist.artwork.tileUrl(),
                                 )
                                 CellTitle(artist.name, centered = true)
+                                SourceBadge(artist.source.provider)
                             }
                         }
                     },
@@ -649,6 +671,7 @@ private fun LazyListScope.tabContent(
                                 )
                                 CellTitle(album.title)
                                 CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+                                SourceBadge(album.source.provider)
                             }
                         }
                     },
@@ -706,6 +729,19 @@ private fun LazyListScope.tabContent(
             }
         }
 
+        HomeTab.ForYou -> {
+            if (forYouRows.isEmpty() && forYouSkeletons.isEmpty()) {
+                item { HomeEmpty(stringResource(R.string.home_empty_picks)) }
+            }
+            if (hero != null) item(key = "for-you-hero") { hero() }
+            forYouRows.forEach { (title, section) ->
+                forYouStrip(title, section, onPlay, onOpenAlbum, onOpenArtist, showAll = true)
+            }
+            forYouSkeletons.forEach { title -> skeletonCarousel(title) }
+            if (discover != null) item(key = "for-you-daily-pick") { discover() }
+            mosaicWall(mosaicTiles, layoutSeed)
+        }
+
         HomeTab.Playlists -> {
             val playlists = feed.editorialPlaylists.flatMap { it.items }
             if (playlists.isEmpty()) item { HomeEmpty(stringResource(R.string.home_empty_playlists)) }
@@ -718,6 +754,7 @@ private fun LazyListScope.tabContent(
                     )
                     CellTitle(playlist.name)
                     CellSubtitle(playlistSubtitle(playlist))
+                    SourceBadge(playlist.source.provider)
                 }
             }
         }
@@ -734,6 +771,7 @@ private fun LazyListScope.tabContent(
                     )
                     CellTitle(track.title)
                     CellSubtitle(track.artists.joinToString { it.name }.ifEmpty { "—" })
+                    SourceBadge(track.source.provider)
                 }
             }
         }
@@ -750,6 +788,7 @@ private fun LazyListScope.tabContent(
                     )
                     CellTitle(album.title)
                     CellSubtitle(album.artists.firstOrNull()?.name ?: stringResource(R.string.home_generic_album))
+                    SourceBadge(album.source.provider)
                 }
             }
         }
@@ -765,6 +804,7 @@ private fun LazyListScope.tabContent(
                         initialSize = 42, circle = true, imageUrl = artist.artwork.tileUrl(),
                     )
                     CellTitle(artist.name, centered = true)
+                    SourceBadge(artist.source.provider)
                 }
             }
         }
@@ -790,9 +830,10 @@ private fun LazyListScope.forYouStrip(
     onPlay: (Track) -> Unit,
     onOpenAlbum: (ProviderRef) -> Unit,
     onOpenArtist: (ProviderRef) -> Unit,
+    showAll: Boolean = false,
 ) = when (section) {
-    is ForYouSection.Mix -> trackCarousel(title, section.items, onPlay)
-    is ForYouSection.BecauseYouLike -> trackCarousel(title, section.items, onPlay)
+    is ForYouSection.Mix -> trackCarousel(title, section.items, onPlay, showAll)
+    is ForYouSection.BecauseYouLike -> trackCarousel(title, section.items, onPlay, showAll)
     // The anchor's neighborhood: similar artists as circles, records by them as squares, one mixed
     // strip — the reference feeds' "Similar to <artist>" shape.
     is ForYouSection.SimilarTo -> carousel(
@@ -805,6 +846,7 @@ private fun LazyListScope.forYouStrip(
                 else -> cell.hashCode()
             }
         },
+        itemLimit = if (showAll) Int.MAX_VALUE else PREVIEW_ITEMS,
     ) { cell ->
         when (cell) {
             is ArtistRef -> CarouselCell(onClick = { onOpenArtist(cell.source) }, centered = true) {
@@ -887,7 +929,7 @@ private fun <T> LazyListScope.carousel(
         SectionHeader(
             title,
             Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 8.dp),
-            action = stringResource(R.string.action_see_all),
+            action = "${stringResource(R.string.action_see_all)} · ${items.size}",
             onAction = { onSeeAll(tab) },
         )
     }
@@ -908,6 +950,7 @@ private fun <T> LazyListScope.carousel(
 private fun <T> LazyListScope.carousel(
     title: String,
     items: List<T>,
+    itemLimit: Int = PREVIEW_ITEMS,
     key: (T) -> Any,
     cell: @Composable (T) -> Unit,
 ) {
@@ -923,7 +966,7 @@ private fun <T> LazyListScope.carousel(
             contentPadding = PaddingValues(horizontal = 22.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            items(items.take(PREVIEW_ITEMS), key = key) { item -> cell(item) }
+            items(items.take(itemLimit), key = key) { item -> cell(item) }
         }
     }
 }
@@ -1025,8 +1068,17 @@ private fun LazyListScope.speedDialSection(
 }
 
 /** A For-you row of playable tracks (Mix / Because-you-like), in the standard carousel cell. */
-private fun LazyListScope.trackCarousel(title: String, tracks: List<Track>, onPlay: (Track) -> Unit) =
-    carousel(title, tracks, key = { it.source.identityKey }) { track ->
+private fun LazyListScope.trackCarousel(
+    title: String,
+    tracks: List<Track>,
+    onPlay: (Track) -> Unit,
+    showAll: Boolean = false,
+) = carousel(
+    title,
+    tracks,
+    itemLimit = if (showAll) Int.MAX_VALUE else PREVIEW_ITEMS,
+    key = { it.source.identityKey },
+) { track ->
         CarouselCell(onClick = { onPlay(track) }) {
             HomeCover(
                 track.source.id, initial = null,
@@ -1145,6 +1197,25 @@ private fun CellSubtitle(text: String) = Text(
     maxLines = 1,
     overflow = TextOverflow.Ellipsis,
 )
+
+@Composable
+private fun SourceBadge(provider: String) {
+    val c = RizxTheme.colors
+    val label = when (provider.lowercase()) {
+        "spotify" -> "Spotify"
+        "applemusic", "itunes" -> "Apple Music"
+        "youtube" -> "YouTube Music"
+        "soundcloud" -> "SoundCloud"
+        else -> "Rizx"
+    }
+    Text(
+        label.uppercase(),
+        style = sg(9, FontWeight.Bold, 0.04f),
+        color = c.text2,
+        modifier = Modifier.padding(top = 5.dp).border(1.dp, c.line2).padding(horizontal = 6.dp, vertical = 3.dp),
+        maxLines = 1,
+    )
+}
 
 @Composable
 private fun HomeEmpty(text: String) = Text(
