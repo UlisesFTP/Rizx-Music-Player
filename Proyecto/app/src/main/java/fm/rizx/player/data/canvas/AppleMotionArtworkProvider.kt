@@ -4,6 +4,7 @@ import fm.rizx.player.data.remote.itunes.ItunesApi
 import fm.rizx.player.data.remote.itunes.ItunesResultDto
 import fm.rizx.player.domain.canvas.CanvasMatchTarget
 import fm.rizx.player.domain.canvas.CanvasTrackMatcher
+import fm.rizx.player.domain.match.RecordingIdentity
 import fm.rizx.player.domain.model.CanvasAspect
 import fm.rizx.player.domain.model.CanvasCandidate
 import fm.rizx.player.domain.model.CanvasQuality
@@ -68,9 +69,23 @@ class AppleMotionArtworkProvider(
         // and its best track match for "Blinding Lights" is the **single**, which has no motion artwork
         // at all while "After Hours" has both cuts. Verified live: album 1488408555 → nothing,
         // 1499378108 → square + tall. Stopping at the top row was silently losing most of the catalogue.
-        for ((collectionId, row, score) in candidateAlbums(track).take(MAX_ALBUM_LOOKUPS)) {
-            val motion = motionArtwork(collectionId) ?: continue
-            return@withContext candidates(motion, preferredAspect, row.trackName, row.artistName, row.trackTimeMillis, score)
+        val rows = searchRows(track)
+        for (match in rankedAlbums(track, rows).take(MAX_ALBUM_LOOKUPS)) {
+            val motion = motionArtwork(match.collectionId) ?: continue
+            return@withContext candidates(motion, preferredAspect, match.title, match.artist, match.durationMs, match.score)
+        }
+
+        // Last resort, one extra request: iTunes *search* simply does not index parts of the catalogue
+        // — "MR INTERNACIONAL" exists on the INCÓMODO album page yet no search phrasing returns it, and
+        // Peso Pluma's GÉNESIS LP is invisible to entity=album search while `lookup(artistId,
+        // entity=album)` lists it happily (verified live, 2026-08-19). So when the search rows named
+        // our artist but none matched, ask that artist's own album list for the album the track says
+        // it is from. Gated on knowing the album title; the artist row is proof of identity.
+        for (album in artistAlbums(track, rows).take(MAX_ALBUM_LOOKUPS)) {
+            val motion = motionArtwork(album.collectionId!!) ?: continue
+            return@withContext candidates(
+                motion, preferredAspect, track.title, album.artistName, track.durationMs, SIBLING_SCORE,
+            )
         }
         emptyList()
     }
@@ -121,35 +136,93 @@ class AppleMotionArtworkProvider(
         return source.id.removePrefix(ALBUM_PREFIX).takeIf { it != source.id }?.toLongOrNull()
     }
 
-    /**
-     * The albums worth asking about, best first: album id, the row it came from, and the match score.
-     *
-     * Ordered by **full album before single or EP**, then by score. A single is very often the better
-     * *track* match — same title, same artist, same length — and almost never the one carrying motion
-     * artwork, so leading with it wastes the one lookup that mattered.
-     */
-    private suspend fun candidateAlbums(track: Track): List<Triple<Long, ItunesResultDto, Int>> {
+    /** The raw song-search rows for this track, once — every matching strategy reads the same list. */
+    private suspend fun searchRows(track: Track): List<ItunesResultDto> {
         val artist = track.artists.firstOrNull()?.name
         // The de-channelled name, so a track credited to "TheCranberriesTV" still finds The Cranberries.
         val term = listOfNotNull(artist?.let { ArtistNameMatching.searchName(it) }, track.title)
             .joinToString(" ")
             .trim()
         if (term.isEmpty()) return emptyList()
+        return itunes.search(term = term, limit = CANDIDATES).results
+    }
 
-        val rows = itunes.search(term = term, limit = CANDIDATES).results
-            .filter { it.collectionId != null }
+    /** An album worth fetching: its id, what to stamp on the candidate, and how sure we are. */
+    private data class AlbumMatch(
+        val collectionId: Long,
+        val title: String?,
+        val artist: String?,
+        val durationMs: Long?,
+        val score: Int,
+        val standalone: Boolean,
+    )
 
-        return rows.mapNotNull { row ->
+    /**
+     * The albums worth asking about, best first, from two readings of the same rows:
+     *
+     * 1. **Direct** — the row *is* our track (matcher-accepted), so its album is our album.
+     * 2. **Sibling** — the row is a *different* song, but its album is the one our track says it is
+     *    from ([RecordingIdentity.sharesArtwork] + the artist billed on it). Motion artwork belongs
+     *    to the album, so the row's own identity does not matter — what it carries is the
+     *    `collectionId` that iTunes' search index refuses to hand over for the track itself.
+     *    Verified live: no phrasing returns "MR INTERNACIONAL", but its INCÓMODO siblings turn up,
+     *    and the INCÓMODO page has both motion cuts.
+     *
+     * Ordered by **full album before single or EP**, then by score. A single is very often the better
+     * *track* match — same title, same artist, same length — and almost never the one carrying motion
+     * artwork, so leading with it wastes the one lookup that mattered.
+     */
+    private fun rankedAlbums(track: Track, rows: List<ItunesResultDto>): List<AlbumMatch> {
+        val withAlbum = rows.filter { it.collectionId != null }
+        val direct = withAlbum.mapNotNull { row ->
             val score = CanvasTrackMatcher.score(
                 track,
                 CanvasMatchTarget(row.trackName.orEmpty(), row.artistName, row.trackTimeMillis),
             ) ?: return@mapNotNull null
             val corroborated = CanvasTrackMatcher.sameRecording(track, row.trackName.orEmpty(), row.artistName)
             if (!CanvasTrackMatcher.accepts(score, corroborated)) return@mapNotNull null
-            Triple(row.collectionId!!, row, score)
+            AlbumMatch(row.collectionId!!, row.trackName, row.artistName, row.trackTimeMillis, score, isStandaloneRelease(row.collectionName))
         }
-            .distinctBy { it.first }
-            .sortedWith(compareBy({ if (isStandaloneRelease(it.second.collectionName)) 1 else 0 }, { -it.third }))
+        val siblings = withAlbum.filter { albumSibling(track, it) }.map { row ->
+            AlbumMatch(row.collectionId!!, track.title, row.artistName, track.durationMs, SIBLING_SCORE, isStandaloneRelease(row.collectionName))
+        }
+        // Direct first into the dedup: when both readings point at one album, keep the surer entry.
+        return (direct + siblings)
+            .distinctBy { it.collectionId }
+            .sortedWith(compareBy({ if (it.standalone) 1 else 0 }, { -it.score }))
+    }
+
+    /** Whether this row's album is the album our track says it is from, billed to our artist. */
+    private fun albumSibling(track: Track, row: ItunesResultDto): Boolean {
+        val ourAlbum = track.album?.title?.takeIf { it.isNotBlank() } ?: return false
+        val rowAlbum = row.collectionName?.takeIf { it.isNotBlank() } ?: return false
+        if (!RecordingIdentity.sharesArtwork(ourAlbum, rowAlbum)) return false
+        return artistMatches(track, row.artistName)
+    }
+
+    /**
+     * The artist's own album list, filtered to the album this track says it is from.
+     *
+     * The `artistId` comes from a search row billed to our artist — identity established by the
+     * catalogue itself, not by trusting the search ranking. Only consulted when the song search
+     * produced nothing fetchable, so it costs one `lookup` on exactly the tracks that were coming
+     * back empty-handed before.
+     */
+    private suspend fun artistAlbums(track: Track, rows: List<ItunesResultDto>): List<ItunesResultDto> {
+        if (track.album?.title.isNullOrBlank()) return emptyList()
+        val artistId = rows.firstOrNull { it.artistId != null && artistMatches(track, it.artistName) }
+            ?.artistId ?: return emptyList()
+        return itunes.lookup(id = artistId.toString(), entity = "album", limit = ARTIST_ALBUM_LIMIT)
+            .results
+            .filter { it.collectionId != null && albumSibling(track, it) }
+            .distinctBy { it.collectionId }
+    }
+
+    /** True when [billed] names (or includes, in a joined billing) one of the track's artists. */
+    private fun artistMatches(track: Track, billed: String?): Boolean {
+        if (billed.isNullOrBlank()) return false
+        val credits = ArtistNameMatching.credits(billed)
+        return track.artists.any { ours -> credits.any { ArtistNameMatching.sameArtist(ours.name, it) } }
     }
 
     /** `"After Hours"` vs `"Blinding Lights - Single"` / `"… - EP"`, as Apple names them. */
@@ -208,6 +281,15 @@ class AppleMotionArtworkProvider(
 
         /** The track told us its own album; there is nothing left to be unsure about. */
         const val OWNED_SCORE = 100
+
+        /**
+         * A sibling-row or artist-lookup match: the album was identified through its name and billing
+         * rather than through this exact recording, so it advertises the corroborated tier, not 100.
+         */
+        const val SIBLING_SCORE = CanvasTrackMatcher.CORROBORATE
+
+        /** Enough for a prolific artist's LPs — Peso Pluma's lookup returns 102 rows. */
+        const val ARTIST_ALBUM_LIMIT = 120
 
         /**
          * How many album pages to try before giving up. Three covers the usual shape — single, studio

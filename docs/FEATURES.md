@@ -27,8 +27,10 @@ Deezer track are all just `Track`s with different `ProviderRef` sources.
 - **Synced & karaoke lyrics** — timed lyrics with word-by-word / letter-by-letter highlighting where a
   source carries that resolution (LRCLIB, NetEase, KuGou, Musixmatch — all keyless), falling back to
   line-synced or prose lyrics otherwise.
-- **Canvas** — an animated cover behind Now Playing built from the song's own (muted) music video, with an
-  anti-static filter that rejects still-image uploads; network/quality/battery policies live in Settings.
+- **Animated covers** — purpose-made motion album artwork from Apple Music and TIDAL behind Now Playing,
+  falling back to the song's own (muted) music video when no animated album cover exists, with an
+  anti-static filter that rejects still-image uploads; per-source toggles and network/quality/battery
+  policies live in Settings.
 - **Instant transport** — resolved stream URLs are cached per track identity and the next queue item is
   prefetched, so skips, seeks and rewinds are near-instant.
 - **Audio cache** — recently played songs replay from a local Media3 cache (keyed by track identity, never

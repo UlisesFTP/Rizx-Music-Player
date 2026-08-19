@@ -60,10 +60,13 @@ enum class CanvasNetworkPolicy {
  * looks. The gate still clamps it — see `CanvasGate.quality` — because mobile data and a low-RAM device
  * overrule a preference.
  */
+// The tiers are sized to Apple's actual motion ladder (360/408/456/486/768/960/1080/1920/2160 —
+// there is NO 720 rung, so a 720 cap silently meant 486). AUTO at 1080 lands on the rung the tier
+// name promises; HIGH at 2160 admits the 4K cut where one ships, still bitrate-guarded by the player.
 enum class CanvasQuality(val maxHeight: Int) {
     DATA_SAVER(360),
-    AUTO(720),
-    HIGH(1080),
+    AUTO(1080),
+    HIGH(2160),
 }
 
 /**
@@ -79,6 +82,8 @@ data class CanvasPreferences(
     val quality: CanvasQuality = CanvasQuality.AUTO,
     /** Apple's purpose-made motion album artwork. On by default: it is the one that actually loops. */
     val appleEnabled: Boolean = true,
+    /** TIDAL's animated album covers — purpose-made loops too, used when Apple has none. */
+    val tidalEnabled: Boolean = true,
     /**
      * The music-video fallback. On by default, and separately switchable because it is the source that
      * can be *wrong* — Apple either has this album's loop or it doesn't, whereas YouTube is a search.

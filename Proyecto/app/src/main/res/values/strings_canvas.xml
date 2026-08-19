@@ -10,14 +10,16 @@
     <string name="pref_canvas_sources">Sources</string>
     <string name="pref_canvas_apple">Apple motion artwork</string>
     <string name="pref_canvas_apple_caption">A loop made for the album cover. The one that actually animates.</string>
+    <string name="pref_canvas_tidal">TIDAL animated cover</string>
+    <string name="pref_canvas_tidal_caption">Animated album covers when available. Used when Apple has none.</string>
     <string name="pref_canvas_youtube">YouTube music video</string>
     <string name="pref_canvas_youtube_caption">Used when Apple has none. Found by search, so it can be wrong.</string>
 
     <string name="pref_canvas_quality">Quality</string>
     <string name="canvas_quality_auto">Automatic</string>
-    <string name="canvas_quality_auto_caption">Up to 720. A sensible size for art under a scrim.</string>
+    <string name="canvas_quality_auto_caption">Up to 1080. Sharp on any phone; a loop costs a few MB.</string>
     <string name="canvas_quality_high">High</string>
-    <string name="canvas_quality_high_caption">Up to 1080. Only Apple\'s artwork goes this high.</string>
+    <string name="canvas_quality_high_caption">Up to 4K when the artwork ships that big. The heaviest option.</string>
     <string name="canvas_quality_saver">Data saver</string>
     <string name="canvas_quality_saver_caption">The smallest usable size. Also forced on mobile data.</string>
 

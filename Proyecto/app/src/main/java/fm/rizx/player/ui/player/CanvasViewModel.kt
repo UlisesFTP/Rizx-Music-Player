@@ -14,6 +14,7 @@ import fm.rizx.player.domain.model.CanvasResolution
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.repository.CanvasRepository
 import fm.rizx.player.domain.repository.SettingsRepository
+import fm.rizx.player.playback.canvas.CanvasMediaCache
 import fm.rizx.player.playback.canvas.CanvasPlaybackController
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,7 +66,10 @@ class CanvasViewModel @Inject constructor(
     private val _state = MutableStateFlow(CanvasState())
     val state: StateFlow<CanvasState> = _state.asStateFlow()
 
-    private val controller = CanvasPlaybackController(context).apply {
+    private val controller = CanvasPlaybackController(
+        context,
+        dataSourceFactory = CanvasMediaCache.dataSourceFactory(context),
+    ).apply {
         setVisible(false)
         onState = { playerState -> _state.update { it.copy(player = playerState) } }
         onVideoInfo = { info -> recordVideoInfo(info) }
@@ -211,6 +215,32 @@ class CanvasViewModel @Inject constructor(
         )
         _state.update { it.copy(diagnostics = merged) }
         canvas.report(merged)
+    }
+
+    /** The last identity handed to [prefetch], so a song on repeat costs one resolve, not many. */
+    private var prefetchedKey: String? = null
+
+    /**
+     * Warms the resolution cache for the song that just started playing, so opening Now Playing shows
+     * its canvas immediately instead of after an iTunes search and an album-page scrape.
+     *
+     * Fills the repository cache and nothing else — the player, the surface and the state machine are
+     * untouched, and every policy gate (data saver, metered, battery) is applied inside `resolve`, so
+     * a blocked canvas costs zero requests here too. Failures are swallowed: this is an optimization,
+     * and the real resolve when the screen opens remains the authority.
+     */
+    fun prefetch(track: Track) {
+        val key = track.source.identityKey
+        if (key == prefetchedKey) return
+        prefetchedKey = key
+        viewModelScope.launch {
+            val prefs = canvasPreferencesFor(
+                canvas.preferences.first(),
+                CanvasPlacement.NOW_PLAYING,
+                motionEnabled = true,
+            ) ?: return@launch
+            runCatching { canvas.resolve(track, prefs, CanvasAspect.SQUARE) }
+        }
     }
 
     /** The Now Playing overflow menu controls the existing master preference. */

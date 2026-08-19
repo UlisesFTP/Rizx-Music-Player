@@ -287,15 +287,41 @@ class CanvasRepositoryTest {
     }
 
     @Test
-    fun `switching both sources off costs no round trip at all`() = runTest {
-        val apple = Fake(id = "apple", priority = 10)
+    fun `tidal switched off is skipped like any other source`() = runTest {
+        val tidal = Fake(id = "tidal", priority = 20)
         val youtube = Fake(id = "youtube", priority = 100)
 
-        val result = repo(apple, youtube)
-            .resolve(track(), on.copy(appleEnabled = false, youtubeEnabled = false))
+        val result = repo(tidal, youtube).resolve(track(), on.copy(tidalEnabled = false))
+
+        assertEquals("youtube", result.candidate?.providerId)
+        assertEquals(0, tidal.calls)
+    }
+
+    @Test
+    fun `switching every source off costs no round trip at all`() = runTest {
+        val apple = Fake(id = "apple", priority = 10)
+        val tidal = Fake(id = "tidal", priority = 20)
+        val youtube = Fake(id = "youtube", priority = 100)
+
+        val result = repo(apple, tidal, youtube)
+            .resolve(track(), on.copy(appleEnabled = false, tidalEnabled = false, youtubeEnabled = false))
 
         assertEquals(CanvasBlockReason.DISABLED, result.diagnostics.blockedBy)
         assertEquals(0, apple.calls)
+        assertEquals(0, tidal.calls)
         assertEquals(0, youtube.calls)
+    }
+
+    @Test
+    fun `excluding tidal after a playback failure is its own cache row`() = runTest {
+        val tidal = Fake(id = "tidal", priority = 20)
+        val youtube = Fake(id = "youtube", priority = 100)
+        val repo = repo(tidal, youtube)
+
+        assertEquals("tidal", repo.resolve(track(), on).candidate?.providerId)
+        // The player exhausted TIDAL's MP4 → same track, tidal excluded → the fallback answer must
+        // come from YouTube and must not overwrite the primary entry.
+        assertEquals("youtube", repo.resolve(track(), on, exclude = setOf("tidal")).candidate?.providerId)
+        assertEquals("tidal", repo.resolve(track(), on).candidate?.providerId)
     }
 }

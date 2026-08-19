@@ -130,4 +130,55 @@ class CanvasProviderRegistryTest {
     fun `no providers at all is simply no canvas`() = runTest {
         assertTrue(CanvasProviderRegistry(emptyList()).resolve().isEmpty())
     }
+
+    // ---- The three-source chain this feature exists for: apple 10 → tidal 20 → youtube 100 ----
+
+    @Test
+    fun `apple answering means tidal and youtube are never asked`() = runTest {
+        val apple = Fake("apple", priority = 10, result = candidate("apple"))
+        val tidal = Fake("tidal", priority = 20, result = candidate("tidal"))
+        val youtube = Fake("youtube", priority = 100, result = candidate("youtube"))
+
+        val result = CanvasProviderRegistry(listOf(youtube, tidal, apple)).resolve() // order via priority, not list
+
+        assertEquals("apple", result.single().providerId)
+        assertEquals(0, tidal.calls)
+        assertEquals(0, youtube.calls)
+    }
+
+    @Test
+    fun `apple empty and tidal answering leaves youtube out of it`() = runTest {
+        val apple = Fake("apple", priority = 10)
+        val tidal = Fake("tidal", priority = 20, result = candidate("tidal"))
+        val youtube = Fake("youtube", priority = 100, result = candidate("youtube"))
+
+        val result = CanvasProviderRegistry(listOf(apple, tidal, youtube)).resolve()
+
+        assertEquals("tidal", result.single().providerId)
+        assertEquals(1, apple.calls)
+        assertEquals(0, youtube.calls)
+    }
+
+    @Test
+    fun `apple and tidal empty falls through to youtube`() = runTest {
+        val apple = Fake("apple", priority = 10)
+        val tidal = Fake("tidal", priority = 20)
+        val youtube = Fake("youtube", priority = 100, result = candidate("youtube"))
+
+        assertEquals("youtube", CanvasProviderRegistry(listOf(apple, tidal, youtube)).resolve().single().providerId)
+    }
+
+    @Test
+    fun `tidal blowing up never reaches the audio - youtube still runs`() = runTest {
+        val apple = Fake("apple", priority = 10)
+        val tidal = Fake("tidal", priority = 20, error = IOException("HTTP 500"))
+        val youtube = Fake("youtube", priority = 100, result = candidate("youtube"))
+        var failed: String? = null
+
+        val result = CanvasProviderRegistry(listOf(apple, tidal, youtube))
+            .resolve(track(), CanvasAspect.LANDSCAPE, CanvasQuality.DATA_SAVER) { provider, _ -> failed = provider.id }
+
+        assertEquals("youtube", result.single().providerId)
+        assertEquals("tidal", failed)
+    }
 }

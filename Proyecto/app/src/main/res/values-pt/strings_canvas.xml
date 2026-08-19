@@ -9,14 +9,16 @@
     <string name="pref_canvas_sources">Fontes</string>
     <string name="pref_canvas_apple">Arte animada da Apple</string>
     <string name="pref_canvas_apple_caption">Um laço feito para a capa. É o que realmente se anima.</string>
+    <string name="pref_canvas_tidal">Capa animada do TIDAL</string>
+    <string name="pref_canvas_tidal_caption">Capas de álbum animadas quando existem. Usada quando a Apple não tem.</string>
     <string name="pref_canvas_youtube">Videoclipe do YouTube</string>
     <string name="pref_canvas_youtube_caption">Usado quando a Apple não tem. É buscado, então pode errar.</string>
 
     <string name="pref_canvas_quality">Qualidade</string>
     <string name="canvas_quality_auto">Automática</string>
-    <string name="canvas_quality_auto_caption">Até 720. Um tamanho sensato para arte sob um degradê.</string>
+    <string name="canvas_quality_auto_caption">Até 1080. Nítido em qualquer tela; um laço pesa alguns MB.</string>
     <string name="canvas_quality_high">Alta</string>
-    <string name="canvas_quality_high_caption">Até 1080. Só a arte da Apple chega tão alto.</string>
+    <string name="canvas_quality_high_caption">Até 4K quando a arte existe nesse tamanho. A opção mais pesada.</string>
     <string name="canvas_quality_saver">Economia de dados</string>
     <string name="canvas_quality_saver_caption">O menor tamanho utilizável. Também forçado em dados móveis.</string>
 

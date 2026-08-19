@@ -9,14 +9,16 @@
     <string name="pref_canvas_sources">Sources</string>
     <string name="pref_canvas_apple">Pochette animée d\'Apple</string>
     <string name="pref_canvas_apple_caption">Une boucle faite pour la pochette. C\'est celle qui bouge vraiment.</string>
+    <string name="pref_canvas_tidal">Pochette animée de TIDAL</string>
+    <string name="pref_canvas_tidal_caption">Pochettes d\'album animées quand elles existent. Utilisée quand Apple n\'en a pas.</string>
     <string name="pref_canvas_youtube">Clip YouTube</string>
     <string name="pref_canvas_youtube_caption">Utilisé quand Apple n\'a rien. Trouvé par recherche, donc faillible.</string>
 
     <string name="pref_canvas_quality">Qualité</string>
     <string name="canvas_quality_auto">Automatique</string>
-    <string name="canvas_quality_auto_caption">Jusqu\'à 720. Une taille raisonnable sous un dégradé.</string>
+    <string name="canvas_quality_auto_caption">Jusqu\'à 1080. Net sur tout écran ; une boucle pèse quelques Mo.</string>
     <string name="canvas_quality_high">Élevée</string>
-    <string name="canvas_quality_high_caption">Jusqu\'à 1080. Seule la pochette d\'Apple monte si haut.</string>
+    <string name="canvas_quality_high_caption">Jusqu\'à la 4K quand la pochette existe à cette taille. Le plus lourd.</string>
     <string name="canvas_quality_saver">Économiseur de données</string>
     <string name="canvas_quality_saver_caption">La plus petite taille utilisable. Forcée en données mobiles.</string>
 

@@ -133,6 +133,10 @@ class FakeSettingsRepository : SettingsRepository {
     override val canvasAppleEnabled: Flow<Boolean> = canvasAppleFlow
     override suspend fun setCanvasAppleEnabled(enabled: Boolean) { canvasAppleFlow.value = enabled }
 
+    val canvasTidalFlow = MutableStateFlow(true)
+    override val canvasTidalEnabled: Flow<Boolean> = canvasTidalFlow
+    override suspend fun setCanvasTidalEnabled(enabled: Boolean) { canvasTidalFlow.value = enabled }
+
     val canvasYoutubeFlow = MutableStateFlow(true)
     override val canvasYoutubeEnabled: Flow<Boolean> = canvasYoutubeFlow
     override suspend fun setCanvasYoutubeEnabled(enabled: Boolean) { canvasYoutubeFlow.value = enabled }

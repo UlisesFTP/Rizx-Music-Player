@@ -250,11 +250,17 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.CANVAS_QUALITY] = quality.name }
     }
 
-    // Both sources on by default — the canvas switch above is the one that costs data.
+    // All sources on by default — the canvas switch above is the one that costs data.
     override val canvasAppleEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_APPLE] ?: true }
 
     override suspend fun setCanvasAppleEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.CANVAS_APPLE] = enabled }
+    }
+
+    override val canvasTidalEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_TIDAL] ?: true }
+
+    override suspend fun setCanvasTidalEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.CANVAS_TIDAL] = enabled }
     }
 
     override val canvasYoutubeEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_YOUTUBE] ?: true }
@@ -365,6 +371,7 @@ class SettingsRepositoryImpl(
         val CANVAS_BATTERY_SAVER = booleanPreferencesKey("core.ui.canvasBatterySaver")
         val CANVAS_QUALITY = stringPreferencesKey("core.ui.canvasQuality")
         val CANVAS_APPLE = booleanPreferencesKey("core.ui.canvasApple")
+        val CANVAS_TIDAL = booleanPreferencesKey("core.ui.canvasTidal")
         val CANVAS_YOUTUBE = booleanPreferencesKey("core.ui.canvasYoutube")
         val SYNCED_LYRICS = booleanPreferencesKey("core.ui.syncedLyrics")
         val AUDIO_CACHE_BYTES = longPreferencesKey("core.cache.audioBytes")

@@ -414,11 +414,13 @@ class YoutubeCanvasProviderTest {
     fun `each quality tier takes the best rung that fits its cap`() = runBlocking {
         // In practice YouTube serves one muxed rung (itag 18, 360p), so this mostly changes nothing
         // there — the tiers earn their keep on Apple's HLS ladder. The mapper still has to honour them.
+        // AUTO's cap is 1080 now (Apple's ladder has no 720 rung, so 720 quietly meant 486²) —
+        // both upper tiers take the 1080 file here; DATA_SAVER still keeps YouTube at 360.
         val streams = listOf(video("sd", "360p"), video("hd", "720p"), video("fhd", "1080p"))
         val client = FakeClient(info = { infoWith(muxed = streams) })
 
         assertEquals("fhd", provider(client).canvasFor(youtubeTrack(), CanvasQuality.HIGH)?.mediaUrl)
-        assertEquals("hd", provider(client).canvasFor(youtubeTrack(), CanvasQuality.AUTO)?.mediaUrl)
+        assertEquals("fhd", provider(client).canvasFor(youtubeTrack(), CanvasQuality.AUTO)?.mediaUrl)
         assertEquals("sd", provider(client).canvasFor(youtubeTrack(), CanvasQuality.DATA_SAVER)?.mediaUrl)
     }
 

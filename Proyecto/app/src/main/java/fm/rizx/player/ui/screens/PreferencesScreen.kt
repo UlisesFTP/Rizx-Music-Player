@@ -123,6 +123,7 @@ fun PreferencesScreen(
     val canvasOnBatterySaver by vm.canvasOnBatterySaver.collectAsStateWithLifecycle()
     val canvasQuality by vm.canvasQuality.collectAsStateWithLifecycle()
     val canvasApple by vm.canvasApple.collectAsStateWithLifecycle()
+    val canvasTidal by vm.canvasTidal.collectAsStateWithLifecycle()
     val canvasYoutube by vm.canvasYoutube.collectAsStateWithLifecycle()
     val canvasDiagnostics by vm.canvasDiagnostics.collectAsStateWithLifecycle()
     val playerLayout by vm.playerLayout.collectAsStateWithLifecycle()
@@ -532,6 +533,7 @@ fun PreferencesScreen(
             quality = canvasQuality,
             onBatterySaver = canvasOnBatterySaver,
             appleEnabled = canvasApple,
+            tidalEnabled = canvasTidal,
             youtubeEnabled = canvasYoutube,
             diagnostics = canvasDiagnostics,
             onSetEnabled = vm::setCanvasEnabled,
@@ -539,6 +541,7 @@ fun PreferencesScreen(
             onSetQuality = vm::setCanvasQuality,
             onSetBatterySaver = vm::setCanvasOnBatterySaver,
             onSetApple = vm::setCanvasApple,
+            onSetTidal = vm::setCanvasTidal,
             onSetYoutube = vm::setCanvasYoutube,
             onDismiss = { canvasDialogOpen = false },
         )
@@ -775,6 +778,7 @@ private fun CanvasDialog(
     quality: CanvasQuality,
     onBatterySaver: Boolean,
     appleEnabled: Boolean,
+    tidalEnabled: Boolean,
     youtubeEnabled: Boolean,
     diagnostics: CanvasDiagnostics,
     onSetEnabled: (Boolean) -> Unit,
@@ -782,6 +786,7 @@ private fun CanvasDialog(
     onSetQuality: (CanvasQuality) -> Unit,
     onSetBatterySaver: (Boolean) -> Unit,
     onSetApple: (Boolean) -> Unit,
+    onSetTidal: (Boolean) -> Unit,
     onSetYoutube: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -809,13 +814,20 @@ private fun CanvasDialog(
             )
             if (enabled) {
                 DialogSectionLabel(stringResource(R.string.pref_canvas_sources))
-                // Two switches, because the two sources fail differently. Apple either has this album's
-                // loop or it hasn't; YouTube is a search, and a search is the thing that can be wrong.
+                // One switch per source, because they fail differently. Apple and TIDAL either have
+                // this album's loop or they haven't; YouTube is a search, and a search is the thing
+                // that can be wrong.
                 DialogToggleRow(
                     title = stringResource(R.string.pref_canvas_apple),
                     caption = stringResource(R.string.pref_canvas_apple_caption),
                     checked = appleEnabled,
                     onToggle = { onSetApple(!appleEnabled) },
+                )
+                DialogToggleRow(
+                    title = stringResource(R.string.pref_canvas_tidal),
+                    caption = stringResource(R.string.pref_canvas_tidal_caption),
+                    checked = tidalEnabled,
+                    onToggle = { onSetTidal(!tidalEnabled) },
                 )
                 DialogToggleRow(
                     title = stringResource(R.string.pref_canvas_youtube),

@@ -11,8 +11,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import fm.rizx.player.domain.model.CanvasCandidate
 import fm.rizx.player.domain.model.CanvasQuality
 
@@ -30,7 +32,11 @@ import fm.rizx.player.domain.model.CanvasQuality
  * from Compose: the screen hands over a surface and never sees the player.
  */
 @OptIn(UnstableApi::class)
-class CanvasPlaybackController(private val context: Context) {
+class CanvasPlaybackController(
+    private val context: Context,
+    /** Byte cache in front of the network ([CanvasMediaCache]); null streams plain, as tests do. */
+    private val dataSourceFactory: DataSource.Factory? = null,
+) {
 
     /** What the surface should be showing. */
     enum class State { IDLE, BUFFERING, PLAYING }
@@ -151,6 +157,12 @@ class CanvasPlaybackController(private val context: Context) {
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
             .setMaxVideoSize(quality.maxHeight, quality.maxHeight)
             .setMaxVideoBitrate(quality.maxHeight * BITRATE_PER_LINE)
+            // Take the best rung the caps allow instead of letting ABR guess: a canvas is a few
+            // seconds long and fully buffered before adaptation would ever climb, so ABR's opening
+            // estimate — 486² on a gigabit connection — was also its final answer. Forcing the top of
+            // the *capped* ladder costs a one-time 1-4 MB and is what the quality tiers promise.
+            // DATA_SAVER keeps ABR: on a metered or weak connection the guess is the frugal choice.
+            .setForceHighestSupportedBitrate(quality != CanvasQuality.DATA_SAVER)
             .build()
         p.setMediaItem(MediaItem.fromUri(url))
         p.prepare()
@@ -222,6 +234,8 @@ class CanvasPlaybackController(private val context: Context) {
     }
 
     private fun build(): ExoPlayer = ExoPlayer.Builder(context)
+        // Reads (and fills) the canvas byte cache, so a loop is fetched once and replayed from disk.
+        .apply { dataSourceFactory?.let { setMediaSourceFactory(DefaultMediaSourceFactory(it)) } }
         // ~5 s instead of ExoPlayer's default ~50 s. This is a short silent loop under a scrim: the
         // default buffer would pull tens of megabytes for a video nobody watches closely, on top of the
         // audio stream the same song is already streaming. The single biggest data saving in the feature.

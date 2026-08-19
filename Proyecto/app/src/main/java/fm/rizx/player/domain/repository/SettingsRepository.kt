@@ -191,6 +191,10 @@ interface SettingsRepository {
     val canvasAppleEnabled: Flow<Boolean>
     suspend fun setCanvasAppleEnabled(enabled: Boolean)
 
+    /** TIDAL's animated album covers as a canvas source. On by default; used when Apple has none. */
+    val canvasTidalEnabled: Flow<Boolean>
+    suspend fun setCanvasTidalEnabled(enabled: Boolean)
+
     /**
      * YouTube's music video as the canvas fallback. On by default, and separately switchable because it
      * is the source that can be *wrong*: Apple either has this album's loop or it hasn't, whereas

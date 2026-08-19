@@ -9,14 +9,16 @@
     <string name="pref_canvas_sources">Fuentes</string>
     <string name="pref_canvas_apple">Arte animado de Apple</string>
     <string name="pref_canvas_apple_caption">Un bucle hecho para la portada. Es el que de verdad se anima.</string>
+    <string name="pref_canvas_tidal">Portada animada de TIDAL</string>
+    <string name="pref_canvas_tidal_caption">Portadas de álbum animadas cuando existen. Se usa cuando Apple no tiene.</string>
     <string name="pref_canvas_youtube">Video musical de YouTube</string>
     <string name="pref_canvas_youtube_caption">Se usa cuando Apple no tiene. Se busca, así que puede fallar.</string>
 
     <string name="pref_canvas_quality">Calidad</string>
     <string name="canvas_quality_auto">Automática</string>
-    <string name="canvas_quality_auto_caption">Hasta 720. Un tamaño sensato para arte bajo un degradado.</string>
+    <string name="canvas_quality_auto_caption">Hasta 1080. Nítido en cualquier pantalla; un bucle pesa unos MB.</string>
     <string name="canvas_quality_high">Alta</string>
-    <string name="canvas_quality_high_caption">Hasta 1080. Sólo el arte de Apple llega tan alto.</string>
+    <string name="canvas_quality_high_caption">Hasta 4K cuando el arte existe en ese tamaño. La opción más pesada.</string>
     <string name="canvas_quality_saver">Ahorro de datos</string>
     <string name="canvas_quality_saver_caption">El tamaño mínimo utilizable. También se fuerza con datos móviles.</string>
 

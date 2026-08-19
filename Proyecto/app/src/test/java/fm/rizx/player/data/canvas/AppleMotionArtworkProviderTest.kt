@@ -36,8 +36,12 @@ class AppleMotionArtworkProviderTest {
     @Before fun start() { server = MockWebServer(); server.start() }
     @After fun stop() { server.shutdown() }
 
-    private class FakeItunes(private val rows: List<ItunesResultDto>) : ItunesApi {
+    private class FakeItunes(
+        private val rows: List<ItunesResultDto>,
+        private val albumRows: List<ItunesResultDto> = emptyList(),
+    ) : ItunesApi {
         var terms = mutableListOf<String>()
+        var lookups = mutableListOf<String>()
         override suspend fun search(
             term: String,
             media: String,
@@ -48,7 +52,7 @@ class AppleMotionArtworkProviderTest {
         ) = ItunesSearchResponse(rows.size, rows).also { terms += term }
 
         override suspend fun lookup(id: String, entity: String, limit: Int, country: String?) =
-            ItunesSearchResponse()
+            ItunesSearchResponse(albumRows.size, albumRows).also { lookups += "$id:$entity" }
     }
 
     private fun row(
@@ -57,12 +61,14 @@ class AppleMotionArtworkProviderTest {
         durationMs: Long = 200_040,
         collectionId: Long? = 1499385848,
         collectionName: String = "After Hours",
+        artistId: Long? = null,
     ) = ItunesResultDto(
         collectionId = collectionId,
         trackName = title,
         artistName = artist,
         collectionName = collectionName,
         trackTimeMillis = durationMs,
+        artistId = artistId,
     )
 
     private fun track(title: String = "Blinding Lights", artist: String = "The Weeknd") = Track(
@@ -257,15 +263,100 @@ class AppleMotionArtworkProviderTest {
     private fun resolveAgainstServer(
         aspect: CanvasAspect,
         rows: List<ItunesResultDto> = listOf(row()),
+    ) = resolveWith(track(), FakeItunes(rows), aspect)
+
+    private fun resolveWith(
+        track: Track,
+        itunes: FakeItunes,
+        aspect: CanvasAspect = CanvasAspect.SQUARE,
     ) = runBlocking {
         val base = server.url("/").toString().removeSuffix("/")
         val provider = AppleMotionArtworkProvider(
-            itunes = FakeItunes(rows),
+            itunes = itunes,
             client = client,
             storefront = { "us" },
             io = Dispatchers.Unconfined,
             albumUrl = { _, id -> "$base/album/$id" },
         )
-        provider.resolve(track(), aspect, CanvasQuality.DATA_SAVER)
+        provider.resolve(track, aspect, CanvasQuality.DATA_SAVER)
+    }
+
+    // ---- Search-index blind spots (regional mexicano, verified live 2026-08-19): the row for the
+    // ---- track never comes back, but a sibling from the same album — or the artist's own album
+    // ---- list — still leads to the page that carries the motion artwork.
+
+    /** The track as it plays in the app: sourced from Deezer, knowing its album by *name* only. */
+    private fun regionalTrack() = Track(
+        title = "MR INTERNACIONAL",
+        artists = listOf(ArtistCredit("Tito Double P")),
+        durationMs = 180_000,
+        album = AlbumRef(title = "INCÓMODO", source = ProviderRef("deezer", "alb")),
+        source = ProviderRef("deezer", "9"),
+    )
+
+    @Test
+    fun `a sibling from the right album rescues a track the search cannot find`() {
+        server.enqueue(MockResponse().setBody(albumPage()))
+        // iTunes returns other songs; one of them lives on the album our track names.
+        val itunes = FakeItunes(
+            listOf(
+                row(title = "Sin Tanto Royo", artist = "Luis R Conriquez & Tito Double P", collectionName = "Corridos Bélicos, Vol. IV", collectionId = 555),
+                row(title = "5-7", artist = "Tito Double P & Junior H", collectionName = "INCÓMODO", collectionId = 1761411580),
+            ),
+        )
+
+        val cs = resolveWith(regionalTrack(), itunes)
+
+        assertTrue(cs.isNotEmpty())
+        assertEquals("the sibling tier, not a fake 100", 80, cs.first().score)
+        assertEquals("only the named album's page is fetched", 1, server.requestCount)
+        assertTrue("no lookup needed when a sibling already answered", itunes.lookups.isEmpty())
+    }
+
+    @Test
+    fun `the artist's own album list is the last resort when search returns nothing useful`() {
+        server.enqueue(MockResponse().setBody(albumPage()))
+        val itunes = FakeItunes(
+            // Our artist is billed on a row, so the artistId is trustworthy — but no row matches the
+            // track or its album.
+            rows = listOf(row(title = "Chiquita", artist = "Neton Vega & Tito Double P", collectionName = "Mi Vida Mi Muerte", collectionId = 111, artistId = 222)),
+            albumRows = listOf(
+                ItunesResultDto(collectionId = 333, collectionName = "INCÓMODO", artistName = "Tito Double P"),
+                ItunesResultDto(collectionId = 334, collectionName = "ACOMODO", artistName = "Tito Double P"),
+            ),
+        )
+
+        val cs = resolveWith(regionalTrack(), itunes)
+
+        assertTrue(cs.isNotEmpty())
+        assertEquals(listOf("222:album"), itunes.lookups)
+        assertEquals("only INCÓMODO's page, never ACOMODO's", 1, server.requestCount)
+    }
+
+    @Test
+    fun `a live edition or another artist's album is not the album the track named`() {
+        // (A *deluxe* is deliberately accepted — deluxe editions ship under the original cover, so
+        // RecordingIdentity.sharesArtwork lets them donate artwork. Live/tribute may not.)
+        val itunes = FakeItunes(
+            rows = listOf(row(title = "Chiquita", artist = "Neton Vega & Tito Double P", collectionName = "Mi Vida Mi Muerte", collectionId = 111, artistId = 222)),
+            albumRows = listOf(
+                ItunesResultDto(collectionId = 333, collectionName = "INCÓMODO (En Vivo)", artistName = "Tito Double P"),
+                ItunesResultDto(collectionId = 334, collectionName = "INCÓMODO", artistName = "A Tribute Band"),
+            ),
+        )
+
+        assertTrue(resolveWith(regionalTrack(), itunes).isEmpty())
+        assertEquals("nothing qualified, so no page is fetched", 0, server.requestCount)
+    }
+
+    @Test
+    fun `a track that does not know its album gets neither sibling nor lookup`() {
+        val itunes = FakeItunes(
+            rows = listOf(row(title = "5-7", artist = "Tito Double P & Junior H", collectionName = "INCÓMODO", collectionId = 777, artistId = 222)),
+        )
+
+        assertTrue(resolveWith(regionalTrack().copy(album = null), itunes).isEmpty())
+        assertTrue(itunes.lookups.isEmpty())
+        assertEquals(0, server.requestCount)
     }
 }

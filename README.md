@@ -36,8 +36,8 @@ native Android architecture. It streams full-length tracks from free, **keyless*
   the recording's own width, weight and tempo. Off by default, toggles live mid-song, and stands down by
   itself over the phone's speaker. It is *not* Atmos, multichannel, HRTF or a quality improvement.
 - 🎤 **Karaoke lyrics** — timed lyrics up to word-by-word / letter-by-letter precision (LRCLIB, NetEase,
-  KuGou, Musixmatch), with a live spectrum waveform seek bar and an animated **canvas** built from the
-  song's own muted music video.
+  KuGou, Musixmatch), with a live spectrum waveform seek bar and animated **covers** — motion album
+  artwork from Apple Music and TIDAL, with a muted music-video fallback.
 - 🧠 **On-device recommendations** — a local listening log (plays/skips/completions) drives daily mixes,
   "Similar to …" rows, and endless radio (YouTube Music mixes or Deezer artist radio). Nothing about
   your listening leaves the phone.

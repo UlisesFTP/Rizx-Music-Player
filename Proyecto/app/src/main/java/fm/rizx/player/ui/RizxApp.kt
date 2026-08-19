@@ -124,6 +124,15 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     val canvasViewModel: CanvasViewModel = hiltViewModel()
     val canvasState by canvasViewModel.state.collectAsStateWithLifecycle()
     val canvasOn by canvasViewModel.enabled.collectAsStateWithLifecycle()
+    // Warm the canvas for whatever starts playing, so opening Now Playing is instant instead of
+    // waiting on an iTunes search. Keyed on identity — the delay makes skipping through a queue
+    // cancel the stale warm-ups instead of firing one per song passed.
+    LaunchedEffect(canvasOn, currentItem?.track?.source) {
+        val track = currentItem?.track ?: return@LaunchedEffect
+        if (!canvasOn) return@LaunchedEffect
+        kotlinx.coroutines.delay(1_200)
+        canvasViewModel.prefetch(track)
+    }
     var addToPlaylistTrack: Track? by remember { mutableStateOf(null) }
     val backStackEntry by nav.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route

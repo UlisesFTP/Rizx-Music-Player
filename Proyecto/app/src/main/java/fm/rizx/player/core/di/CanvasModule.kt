@@ -9,6 +9,7 @@ import fm.rizx.player.data.canvas.AppleMotionArtworkProvider
 import fm.rizx.player.data.canvas.CanvasPolicy
 import fm.rizx.player.data.canvas.CanvasProviderRegistry
 import fm.rizx.player.data.canvas.CanvasResolutionCache
+import fm.rizx.player.data.canvas.TidalCanvasProvider
 import fm.rizx.player.data.canvas.YoutubeCanvasProvider
 import fm.rizx.player.data.remote.itunes.ItunesApi
 import fm.rizx.player.data.remote.youtube.YoutubeExtractorClient
@@ -38,8 +39,11 @@ object CanvasModule {
      * YouTube can only offer the *music video*, and for the auto-generated "topic" uploads that make up
      * most of the catalogue that video is a still image, which is why nothing appeared to move before.
      *
-     * Spotify's and Tidal's canvas endpoints still need an account token, so they are not here — not out
-     * of caution, but because there is no keyless way in.
+     * **TIDAL sits between them.** TIDAL's album `videoCover` is purpose-made motion artwork too,
+     * discovered through its search endpoint with the embed player's public token — no account, no
+     * OAuth, no user key. That endpoint/token is not a stable public developer contract and may stop
+     * working at any time; the provider is best-effort by design and its failure falls through
+     * silently to YouTube. (Spotify's canvas endpoint still needs an account token, so it stays out.)
      */
     @Provides
     @Singleton
@@ -50,6 +54,7 @@ object CanvasModule {
     ): CanvasProviderRegistry = CanvasProviderRegistry(
         listOf(
             AppleMotionArtworkProvider(itunes, client),
+            TidalCanvasProvider(client),
             YoutubeCanvasProvider(youtube),
         ),
     )

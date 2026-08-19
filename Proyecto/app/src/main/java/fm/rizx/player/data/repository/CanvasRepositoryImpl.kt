@@ -49,7 +49,11 @@ class CanvasRepositoryImpl(
         settings.canvasNetworkPolicy,
         settings.canvasOnBatterySaver,
         settings.canvasQuality,
-        combine(settings.canvasAppleEnabled, settings.canvasYoutubeEnabled) { apple, youtube -> apple to youtube },
+        combine(
+            settings.canvasAppleEnabled,
+            settings.canvasTidalEnabled,
+            settings.canvasYoutubeEnabled,
+        ) { apple, tidal, youtube -> Triple(apple, tidal, youtube) },
     ) { enabled, network, onBatterySaver, quality, sources ->
         CanvasPreferences(
             enabled = enabled,
@@ -57,7 +61,8 @@ class CanvasRepositoryImpl(
             allowOnBatterySaver = onBatterySaver,
             quality = quality,
             appleEnabled = sources.first,
-            youtubeEnabled = sources.second,
+            tidalEnabled = sources.second,
+            youtubeEnabled = sources.third,
         )
     }
 
@@ -174,6 +179,7 @@ class CanvasRepositoryImpl(
     /** The sources the user switched off in Settings. */
     private fun disabledSources(preferences: CanvasPreferences): Set<String> = buildSet {
         if (!preferences.appleEnabled) add(APPLE)
+        if (!preferences.tidalEnabled) add(TIDAL)
         if (!preferences.youtubeEnabled) add(YOUTUBE)
     }
 
@@ -184,9 +190,10 @@ class CanvasRepositoryImpl(
         const val GENERIC_ERROR = "Couldn't load a canvas for this song."
 
         const val APPLE = "apple"
+        const val TIDAL = "tidal"
         const val YOUTUBE = "youtube"
 
-        /** Both sources off is the same outcome as the feature being off, and costs no round trip. */
-        const val ALL_SOURCES = 2
+        /** Every source off is the same outcome as the feature being off, and costs no round trip. */
+        const val ALL_SOURCES = 3
     }
 }

@@ -65,6 +65,7 @@ class PreferencesViewModel @Inject constructor(
     val canvasOnBatterySaver: StateFlow<Boolean> = settings.canvasOnBatterySaver.asState(false)
     val canvasQuality: StateFlow<CanvasQuality> = settings.canvasQuality.asState(CanvasQuality.AUTO)
     val canvasApple: StateFlow<Boolean> = settings.canvasAppleEnabled.asState(true)
+    val canvasTidal: StateFlow<Boolean> = settings.canvasTidalEnabled.asState(true)
     val canvasYoutube: StateFlow<Boolean> = settings.canvasYoutubeEnabled.asState(true)
 
     /** What the last lookup did. Read from the repository, which outlives the Now Playing screen. */
@@ -88,6 +89,10 @@ class PreferencesViewModel @Inject constructor(
 
     fun setCanvasApple(enabled: Boolean) {
         viewModelScope.launch { settings.setCanvasAppleEnabled(enabled) }
+    }
+
+    fun setCanvasTidal(enabled: Boolean) {
+        viewModelScope.launch { settings.setCanvasTidalEnabled(enabled) }
     }
 
     fun setCanvasYoutube(enabled: Boolean) {
