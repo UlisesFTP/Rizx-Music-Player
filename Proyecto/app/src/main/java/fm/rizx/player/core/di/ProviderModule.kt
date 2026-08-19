@@ -6,6 +6,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import fm.rizx.player.BuildConfig
 import fm.rizx.player.core.region.RegionResolver
 import fm.rizx.player.data.provider.AppleMusicDashboardProvider
 import fm.rizx.player.data.provider.AppleMusicMetadataProvider
@@ -164,15 +165,17 @@ object ProviderModule {
             // The chain still reaches them when every real source misses, which is the no-network path.
             register(FakeStreamingProvider())
             register(FakeStreamingProviderB())
-            // Lyrics providers, in fallback order — and order is priority, because activation is
-            // first-wins and `LyricsRepositoryImpl` walks the chain from the active one.
-            // The three karaoke sources come first (word-by-word timings, which the screen can light up
-            // progressively), then LRCLIB for line timings, then lyrics.ovh as the prose floor.
-            // NetEase leads: keyless, quick, and the most reliable of the word-timed three.
+            // Lyrics providers. Every one is raced by `LyricsRepositoryImpl`, and a word-timed answer wins
+            // outright whoever sends it, so this order only decides *ties* — and activation, which is
+            // first-wins. LRCLIB leads: it looks a song up by artist + title + duration, so when it
+            // answers, it answers about this recording. The three word-timed sources (NetEase, KuGou,
+            // Musixmatch) search by free text and score the results, which is how a K-pop track used to
+            // land on a cover with the same title whenever they tied LRCLIB on line timings.
+            // lyrics.ovh is the prose floor.
+            register(LrcLibProvider(lrcLib))
             register(NeteaseLyricsProvider(netease))
             register(KugouLyricsProvider(kugou))
             register(MusixmatchLyricsProvider(musixmatch))
-            register(LrcLibProvider(lrcLib))
             register(LyricsOvhProvider(lyricsOvh))
             // Playlist import-by-URL providers (Phase 22). Service-specific first; the file provider is
             // last because its canHandle is broad (any http URL ending .json/.csv, gist/pastebin/raw).
@@ -183,7 +186,7 @@ object ProviderModule {
             // Apple's editorial playlists. Registered as a real PlaylistProvider so the cards the
             // dashboard emits can actually be opened — a card that opens empty is worse than absent.
             register(AppleMusicPlaylistProvider(applePlaylistPage, appleCatalogue))
-            register(RizxUrlPlaylistProvider(okHttp))
+            register(RizxUrlPlaylistProvider(okHttp, shareBaseUrl = BuildConfig.SHARE_BASE_URL))
             // Restore the persisted active selection over first-wins (preserve-then-reconcile, §4):
             // apply a persisted id only when it is actually registered; otherwise pick a sensible real
             // default. Metadata defaults to Deezer and streaming to YouTube so a fresh install searches
@@ -203,7 +206,7 @@ object ProviderModule {
                 // Same preserve-then-reconcile for lyrics, now that there is a real choice to make.
                 val lyricsApplied = settings.activeLyricsProviderId.first()
                     ?.let { runCatching { setActive(ProviderKind.LYRICS, it) }.isSuccess } ?: false
-                if (!lyricsApplied) runCatching { setActive(ProviderKind.LYRICS, NeteaseLyricsProvider.ID) }
+                if (!lyricsApplied) runCatching { setActive(ProviderKind.LYRICS, LrcLibProvider.ID) }
             }
         }
     }

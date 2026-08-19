@@ -12,6 +12,14 @@ import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.repository.DownloadRepository
 import fm.rizx.player.domain.repository.PlaylistRepository
+import fm.rizx.player.domain.repository.PlaylistExportArtifact
+import fm.rizx.player.domain.repository.PlaylistExportFormat
+import fm.rizx.player.domain.repository.PlaylistExportRepository
+import fm.rizx.player.domain.share.PlaylistShare
+import fm.rizx.player.domain.share.PlaylistShareRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import fm.rizx.player.domain.repository.QueueRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +38,8 @@ class PlaylistDetailViewModel @Inject constructor(
     private val queue: QueueRepository,
     private val playback: PlaybackController,
     private val downloads: DownloadRepository,
+    private val exports: PlaylistExportRepository,
+    private val shares: PlaylistShareRepository,
 ) : ViewModel() {
 
     private val playlistId: String = checkNotNull(savedStateHandle["playlistId"])
@@ -45,6 +55,16 @@ class PlaylistDetailViewModel @Inject constructor(
     }
 
     val downloadStates: StateFlow<Map<String, DownloadState>> = downloads.states
+
+    data class ShareUiState(
+        val isWorking: Boolean = false,
+        val link: PlaylistShare? = null,
+        val error: String? = null,
+    )
+
+    private val _shareState = MutableStateFlow(ShareUiState())
+    val shareState: StateFlow<ShareUiState> = _shareState.asStateFlow()
+    val cloudSharingConfigured: Boolean get() = shares.configured
 
     fun removeItem(itemId: String) {
         viewModelScope.launch { playlists.removeItem(playlistId, itemId) }
@@ -89,4 +109,28 @@ class PlaylistDetailViewModel @Inject constructor(
 
     /** JSON export of this playlist for the file picker to write, or null if it no longer exists. */
     suspend fun exportJson(): String? = playlists.exportPlaylist(playlistId)
+
+    suspend fun export(format: PlaylistExportFormat): PlaylistExportArtifact? = exports.export(playlistId, format)
+
+    fun createShareLink(captchaToken: String? = null) {
+        if (_shareState.value.isWorking) return
+        viewModelScope.launch {
+            _shareState.update { it.copy(isWorking = true, error = null) }
+            runCatching { shares.create(playlistId, captchaToken) }
+                .onSuccess { link -> _shareState.value = ShareUiState(link = link) }
+                .onFailure { error -> _shareState.value = ShareUiState(error = error.message ?: "No se pudo crear el enlace") }
+        }
+    }
+
+    fun revokeShare() {
+        val id = _shareState.value.link?.id ?: return
+        viewModelScope.launch {
+            _shareState.update { it.copy(isWorking = true, error = null) }
+            runCatching { shares.revoke(id) }
+                .onSuccess { _shareState.value = ShareUiState() }
+                .onFailure { error -> _shareState.update { it.copy(isWorking = false, error = error.message) } }
+        }
+    }
+
+    fun clearShareError() = _shareState.update { it.copy(error = null) }
 }

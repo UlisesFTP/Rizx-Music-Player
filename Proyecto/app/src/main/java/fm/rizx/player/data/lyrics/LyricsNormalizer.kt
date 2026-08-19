@@ -35,11 +35,39 @@ object LyricsNormalizer {
         val repaired = lyrics.lines
             .map { it.repairWords() }
             .sortedBy(LyricLine::timeMs)
+            .withoutLeadingCredits()
         val gated = if (repaired.isWordSyncedEnough()) repaired else repaired.map { it.copy(words = emptyList()) }
         val closed = gated.withLineEnds()
 
         return if (closed == lyrics.lines) lyrics else lyrics.copy(lines = closed)
     }
+
+    /**
+     * Drops the credits KuGou and NetEase files open with — "作词：Pdogg", "Lyrics by：David Stewart",
+     * "Produced by：…" — each a *timed* line, so the karaoke view would open on a screen of them and
+     * sweep across a producer's name. Only the run at the top goes; once a real line has been seen,
+     * nothing after it is touched, so a lyric that happens to sing the words "written by" is safe.
+     * Every line dropped is a credit by its shape (a role, then a colon), never by its content.
+     */
+    private fun List<LyricLine>.withoutLeadingCredits(): List<LyricLine> {
+        val first = indexOfFirst { it.text.isNotBlank() && !CREDIT_LINE.containsMatchIn(it.text) }
+        return if (first <= 0) this else drop(first)
+    }
+
+    /**
+     * A credit line, by shape. Either a role word — in either script, optionally followed by its
+     * translation ("作曲 Composer") or a second role ("Vocal Production/Engineering") — then ":" or
+     * "："; or a bracketed list of names separated by slashes, which is how KuGou files open
+     * ("(Harley Streten/Gregory Hein/JPEGMAFIA)"). The roles are the ones the two Chinese catalogues
+     * actually write; the English forms are how KuGou renders them for K-pop.
+     */
+    private val CREDIT_LINE = Regex(
+        """^\s*(?:(?:作词|作曲|编曲|作詞|編曲|词|曲|制作人|监制|混音|母带|录音|吉他|贝斯|鼓|键盘|和声|出品|发行|""" +
+        """(?:OP|SP|Lyrics?|Composed?|Composer|Arranged?|Arrangement|Music|Words|Written|Produced?|Producer|""" +
+        """Production|Mixed|Mixing|Mastered|Mastering|Recorded|Recording|Engineer(?:ed|ing)?|Vocals?|Chorus|""" +
+        """Guitars?|Bass|Drums|Keyboards?|Synth|Programming|Additional|Publisher)\b)[^:：]{0,40}[:：]|\(.*/.*/.*)""",
+        RegexOption.IGNORE_CASE,
+    )
 
     /** Sorts a line's words, closes their ends, and drops the lot when they can't drive a sweep. */
     private fun LyricLine.repairWords(): LyricLine {

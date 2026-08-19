@@ -46,7 +46,7 @@ class KugouLyricsProvider(
             withContext(io) {
                 val candidates = api.search(query, track.durationMs).candidates
                 val best = candidates.bestFor(track) ?: return@withContext null
-                lyricsFor(best)
+                lyricsFor(best.candidate, track)?.copy(matchScore = best.score)
             }
         }
     }
@@ -75,8 +75,8 @@ class KugouLyricsProvider(
      * The candidate that is the same recording, not merely the same length — see [LyricsTrackMatcher].
      * KuGou already filters server-side by duration, so this mostly decides between near-identical hits.
      */
-    private fun List<KugouCandidateDto>.bestFor(track: Track): KugouCandidateDto? =
-        LyricsTrackMatcher.bestOf(track, this) { candidate ->
+    private fun List<KugouCandidateDto>.bestFor(track: Track): LyricsTrackMatcher.Scored<KugouCandidateDto>? =
+        LyricsTrackMatcher.pick(track, this) { candidate ->
             LyricsMatchTarget(
                 title = candidate.song.orEmpty(),
                 artist = candidate.singer.orEmpty(),
@@ -84,11 +84,18 @@ class KugouLyricsProvider(
             )
         }
 
-    private suspend fun lyricsFor(candidate: KugouCandidateDto): Lyrics? {
+    /**
+     * The file behind a candidate — checked against the song it claims to be. KuGou's listing for
+     * "Dynamite" by BTS at 3:19 can carry the krc of "Dynamite (EDM Remix)": nothing in the metadata
+     * says so, but the file's own first line does, in the "Title - Artist" header these files open
+     * with. When that header names a version the track doesn't have, this is not the file we want.
+     */
+    private suspend fun lyricsFor(candidate: KugouCandidateDto, track: Track? = null): Lyrics? {
         val id = candidate.id ?: return null
         val key = candidate.accesskey ?: return null
         val lines = KrcParser.parseEncoded(api.download(id, key).content)
         if (lines.isEmpty()) return null
+        if (track != null && LyricsTrackMatcher.headerContradicts(track, lines.first().text)) return null
         return Lyrics(lines = lines, sourceName = NAME)
     }
 

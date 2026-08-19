@@ -155,6 +155,42 @@ class LyricsRepositoryTest {
     }
 
     @Test
+    fun `a word-timed hit from a doubtful match waits, and loses to a certain line-timed one`() = runTest {
+        // NetEase's word-timed English cover of FAKE LOVE, filed as "Ysabelle Cuevas, Bts", against
+        // LRCLIB's exact match in Korean. The cover carries a penalty in its match score; the exact
+        // match carries none. Timings do not outrank certainty.
+        val doubtful = FakeLyrics("netease", wordSynced("For you I could pretend").copy(matchScore = 126_528))
+        val certain = FakeLyrics("lrclib", synced("널 위해서라면").copy(matchScore = null), delayMs = 2_000)
+        val registry = DefaultProviderRegistry().apply { register(doubtful); register(certain) }
+
+        val result = LyricsRepositoryImpl(registry, providerTimeoutMs = 10_000).lyricsFor(track())
+
+        assertEquals("널 위해서라면", result?.lyrics?.lines?.first()?.text)
+    }
+
+    @Test
+    fun `but a doubtful word-timed match is still shown when nothing better exists`() = runTest {
+        val doubtful = FakeLyrics("netease", wordSynced("some words").copy(matchScore = 126_528))
+        val registry = DefaultProviderRegistry().apply { register(doubtful) }
+
+        val result = LyricsRepositoryImpl(registry, providerTimeoutMs = 10_000).lyricsFor(track())
+
+        assertEquals("some words", result?.lyrics?.lines?.first()?.text)
+    }
+
+    @Test
+    fun `a certain match with a little duration drift still counts as certain`() = runTest {
+        val close = FakeLyrics("kugou", wordSynced("close enough").copy(matchScore = 4_000))
+        val slow = FakeLyrics("slow", synced("late"), delayMs = 4_000)
+        val registry = DefaultProviderRegistry().apply { register(slow); register(close) }
+
+        val result = LyricsRepositoryImpl(registry, providerTimeoutMs = 10_000).lyricsFor(track())
+
+        assertEquals("close enough", result?.lyrics?.lines?.first()?.text)
+        assertTrue(testScheduler.currentTime < 1_000)
+    }
+
+    @Test
     fun `every provider timing out reads as no lyrics, not as an error`() = runTest {
         val registry = DefaultProviderRegistry().apply {
             register(FakeLyrics("a", synced("x"), delayMs = 60_000))

@@ -18,9 +18,15 @@ import java.io.IOException
  * (spec 012). Handles `.json` / `.csv` / gist / raw-hosting URLs, GETs the body via the shared
  * [OkHttpClient], and decodes any supported format with [PlaylistTransfer.decodeImport] (Rizx export,
  * Nuclear playlist, or Exportify CSV). Registered last, so the service-specific providers match first.
+ *
+ * It is also the importer for **Rizx share links** (spec 021): a link the app hands out is
+ * `<shareBaseUrl>/<token>`, and GETting it returns the shared playlist's Rizx JSON document, which the
+ * same decode path already understands. Without this rule no provider matched a share URL (it has no
+ * file extension), so pasting one showed "Error al importar" before any network call was made.
  */
 class RizxUrlPlaylistProvider(
     private val client: OkHttpClient,
+    shareBaseUrl: String = "",
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PlaylistProvider {
 
@@ -28,8 +34,12 @@ class RizxUrlPlaylistProvider(
     override val kind: ProviderKind = ProviderKind.PLAYLISTS
     override val name: String = "Playlist file (URL)"
 
+    /** Normalized share-link prefix; blank when the install has no share backend configured. */
+    private val shareBase = shareBaseUrl.trim().trimEnd('/').lowercase()
+
     override fun canHandle(url: String): Boolean {
         val u = url.lowercase()
+        if (shareBase.isNotEmpty() && u.startsWith("$shareBase/")) return true
         return u.startsWith("http") &&
             (u.endsWith(".json") || u.endsWith(".csv") || u.contains("gist") || u.contains("pastebin") || u.contains("raw."))
     }

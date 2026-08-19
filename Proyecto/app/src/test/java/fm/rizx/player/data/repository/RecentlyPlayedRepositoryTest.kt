@@ -2,6 +2,7 @@ package fm.rizx.player.data.repository
 
 import fm.rizx.player.data.local.db.RecentlyPlayedDao
 import fm.rizx.player.data.local.db.RecentlyPlayedEntity
+import fm.rizx.player.data.local.db.SyncOutboxEntity
 import fm.rizx.player.domain.model.Daypart
 import fm.rizx.player.domain.model.PlayOutcome
 import fm.rizx.player.domain.model.ProviderRef
@@ -29,8 +30,12 @@ class RecentlyPlayedRepositoryTest {
         val rows = MutableStateFlow<Map<String, RecentlyPlayedEntity>>(emptyMap())
         private fun key(e: RecentlyPlayedEntity) = "${e.provider}:${e.sourceId}"
         override suspend fun upsert(entry: RecentlyPlayedEntity) { rows.value = rows.value + (key(entry) to entry) }
+        override suspend fun insertSyncOperation(operation: SyncOutboxEntity) = Unit
         override suspend fun find(provider: String, sourceId: String): RecentlyPlayedEntity? =
             rows.value["$provider:$sourceId"]
+        override suspend fun delete(provider: String, sourceId: String) {
+            rows.value = rows.value - "$provider:$sourceId"
+        }
         override fun observe(limit: Int): Flow<List<RecentlyPlayedEntity>> =
             rows.map { m -> m.values.sortedByDescending { it.playedAtIso }.take(limit) }
         override suspend fun prune(keep: Int) {

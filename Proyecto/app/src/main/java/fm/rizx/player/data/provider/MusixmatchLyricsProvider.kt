@@ -51,7 +51,7 @@ class MusixmatchLyricsProvider(
                 val best = hits.filter { it.hasRichsync }.bestFor(track)
                     ?: hits.bestFor(track)
                     ?: return@withContext null
-                lyricsFor(best)
+                lyricsFor(best.candidate)?.copy(matchScore = best.score)
             }
         }
     }
@@ -95,7 +95,7 @@ class MusixmatchLyricsProvider(
                 // been answering 503 while the crowd endpoints below were perfectly reachable.
                 val hits = client.searchByTitle(track.title, artist, MAX_RESULTS)
                     .ifEmpty { client.search(query, MAX_RESULTS) }
-                val hit = hits.bestFor(track) ?: return@withContext lyrics
+                val hit = hits.bestFor(track)?.candidate ?: return@withContext lyrics
                 val translated = client.crowdReadings(hit.trackId, language)
                 val romanized =
                     if (lyrics.hasRomanization) emptyMap() else client.crowdReadings(hit.trackId, ROMAJI)
@@ -109,8 +109,8 @@ class MusixmatchLyricsProvider(
         } ?: lyrics
     }
 
-    private fun List<MusixmatchTrack>.bestFor(track: Track): MusixmatchTrack? =
-        LyricsTrackMatcher.bestOf(track, this) { hit ->
+    private fun List<MusixmatchTrack>.bestFor(track: Track): LyricsTrackMatcher.Scored<MusixmatchTrack>? =
+        LyricsTrackMatcher.pick(track, this) { hit ->
             LyricsMatchTarget(
                 title = hit.title,
                 artist = hit.artist,

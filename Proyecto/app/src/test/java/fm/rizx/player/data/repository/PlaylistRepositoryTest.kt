@@ -4,6 +4,7 @@ import fm.rizx.player.data.local.db.PlaylistDao
 import fm.rizx.player.data.local.db.PlaylistEntity
 import fm.rizx.player.data.local.db.PlaylistItemEntity
 import fm.rizx.player.data.local.db.PlaylistSummaryRow
+import fm.rizx.player.data.local.db.SyncOutboxEntity
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.provider.DefaultProviderRegistry
 import fm.rizx.player.domain.model.PlaylistPreview
@@ -34,10 +35,13 @@ class PlaylistRepositoryTest {
     private class FakePlaylistDao : PlaylistDao {
         val playlists = MutableStateFlow<Map<String, PlaylistEntity>>(emptyMap())
         val items = MutableStateFlow<List<PlaylistItemEntity>>(emptyList())
+        val operations = mutableListOf<SyncOutboxEntity>()
 
         override suspend fun insertPlaylist(playlist: PlaylistEntity) {
             playlists.value = playlists.value + (playlist.id to playlist)
         }
+        override suspend fun insertItems(items: List<PlaylistItemEntity>) { this.items.value += items }
+        override suspend fun insertSyncOperation(operation: SyncOutboxEntity) { operations += operation }
         override suspend fun updatePlaylist(playlist: PlaylistEntity) {
             playlists.value = playlists.value + (playlist.id to playlist)
         }
@@ -64,6 +68,7 @@ class PlaylistRepositoryTest {
         }
         override suspend fun insertItem(item: PlaylistItemEntity) { items.value = items.value + item }
         override suspend fun deleteItem(itemId: String) { items.value = items.value.filterNot { it.id == itemId } }
+        override suspend fun deleteItems(playlistId: String) { items.value = items.value.filterNot { it.playlistId == playlistId } }
         override fun observeItems(playlistId: String): Flow<List<PlaylistItemEntity>> =
             items.map { list -> list.filter { it.playlistId == playlistId }.sortedBy { it.sortOrder } }
         override suspend fun getItems(playlistId: String): List<PlaylistItemEntity> =

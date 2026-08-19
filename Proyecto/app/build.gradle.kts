@@ -26,6 +26,13 @@ val keystoreProps = Properties().apply {
  */
 fun keystoreProp(name: String): String? = keystoreProps.getProperty(name)?.trim()?.takeIf { it.isNotEmpty() }
 
+/** Public runtime configuration only. Secrets stay in Supabase/Google/SMTP, never in the APK. */
+fun publicConfig(name: String): String =
+    providers.gradleProperty(name).orElse(providers.environmentVariable(name)).orElse("").get()
+
+fun quotedBuildConfig(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
 android {
     namespace = "fm.rizx.player"
 
@@ -45,6 +52,12 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        buildConfigField("String", "SUPABASE_URL", quotedBuildConfig(publicConfig("RIZX_SUPABASE_URL")))
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", quotedBuildConfig(publicConfig("RIZX_SUPABASE_PUBLISHABLE_KEY")))
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", quotedBuildConfig(publicConfig("RIZX_GOOGLE_WEB_CLIENT_ID")))
+        buildConfigField("String", "SHARE_BASE_URL", quotedBuildConfig(publicConfig("RIZX_SHARE_BASE_URL")))
+        buildConfigField("String", "TURNSTILE_CHALLENGE_URL", quotedBuildConfig(publicConfig("RIZX_TURNSTILE_CHALLENGE_URL")))
     }
 
     signingConfigs {
@@ -205,6 +218,13 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+
+    // Optional account/sync slice (spec 021): platform sign-in, reliable offline outbox and on-device QR.
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
+    implementation("com.google.zxing:core:3.5.3")
 
     // Image loading (real cover art): Coil for Compose
     implementation("io.coil-kt:coil-compose:2.7.0")

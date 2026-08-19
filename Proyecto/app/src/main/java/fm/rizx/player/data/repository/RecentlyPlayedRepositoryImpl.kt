@@ -2,7 +2,9 @@ package fm.rizx.player.data.repository
 
 import fm.rizx.player.data.local.db.RecentlyPlayedDao
 import fm.rizx.player.data.local.db.RecentlyPlayedEntity
+import fm.rizx.player.data.local.db.SyncOutboxEntity
 import fm.rizx.player.data.local.store.TrackJson
+import fm.rizx.player.data.local.store.PortableTrackSanitizer
 import fm.rizx.player.domain.model.Daypart
 import fm.rizx.player.domain.model.PlayOutcome
 import fm.rizx.player.domain.model.PlayStat
@@ -13,6 +15,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.ZoneId
+import java.util.UUID
+import kotlinx.serialization.json.Json
 
 /**
  * Room-backed [RecentlyPlayedRepository]. Each play upserts by `ProviderRef` identity (so replays bump
@@ -27,6 +31,8 @@ class RecentlyPlayedRepositoryImpl(
     private val dao: RecentlyPlayedDao,
     private val nowIso: () -> String = { Instant.now().toString() },
     private val zone: () -> ZoneId = { ZoneId.systemDefault() },
+    private val newId: () -> String = { UUID.randomUUID().toString() },
+    private val json: Json = Json { encodeDefaults = true },
 ) : RecentlyPlayedRepository {
 
     override fun recent(limit: Int): Flow<List<Track>> =
@@ -39,17 +45,17 @@ class RecentlyPlayedRepositoryImpl(
         val now = nowIso()
         val part = daypartOf(now)
         val existing = dao.find(track.source.provider, track.source.id)
-        dao.upsert(
-            existing?.bump(now, part, TrackJson.encodeTrack(track))
+        val updated =
+            existing?.bump(now, part, TrackJson.encodeTrack(PortableTrackSanitizer.sanitize(track)))
                 ?: RecentlyPlayedEntity(
                     provider = track.source.provider,
                     sourceId = track.source.id,
-                    trackJson = TrackJson.encodeTrack(track), // strips ephemeral stream state
+                    trackJson = TrackJson.encodeTrack(PortableTrackSanitizer.sanitize(track)),
                     playedAtIso = now,
                     playCount = 1,
                     firstPlayedAtIso = now,
-                ).withDaypart(part, 1),
-        )
+                ).withDaypart(part, 1)
+        dao.upsertWithJournal(updated, journal(updated, now))
         dao.prune(MAX_ENTRIES)
     }
 
@@ -59,16 +65,22 @@ class RecentlyPlayedRepositoryImpl(
      */
     override suspend fun recordOutcome(source: ProviderRef, listenedMs: Long, outcome: PlayOutcome) {
         val existing = dao.find(source.provider, source.id) ?: return
-        dao.upsert(
-            existing.copy(
+        val now = nowIso()
+        val updated = existing.copy(
                 msListened = existing.msListened + listenedMs.coerceAtLeast(0),
                 completedCount = existing.completedCount + if (outcome == PlayOutcome.COMPLETED) 1 else 0,
                 skipCount = existing.skipCount + if (outcome == PlayOutcome.SKIPPED) 1 else 0,
-            ),
-        )
+            )
+        dao.upsertWithJournal(updated, journal(updated, now))
     }
 
     override suspend fun clear() = dao.clear()
+
+    private fun journal(entry: RecentlyPlayedEntity, now: String) = SyncOutboxEntity(
+        operationId = newId(), entityType = "TASTE", entityId = "${entry.provider}:${entry.sourceId}",
+        operation = "UPSERT", payloadJson = json.encodeToString(RecentlyPlayedEntity.serializer(), entry),
+        createdAtIso = now,
+    )
 
     // ---- Row arithmetic ---------------------------------------------------------------------------
 

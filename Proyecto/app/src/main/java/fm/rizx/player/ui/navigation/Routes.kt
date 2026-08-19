@@ -73,6 +73,7 @@ object Routes {
     const val QUEUE = "queue"
     const val SOURCES = "sources"
     const val SETTINGS = "settings"
+    const val ACCOUNT = "account"
     const val ABOUT = "about"
     const val LICENSES = "licenses"
     const val EQUALIZER = "equalizer"

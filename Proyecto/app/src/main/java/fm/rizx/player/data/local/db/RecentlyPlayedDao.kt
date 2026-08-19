@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -13,12 +14,24 @@ interface RecentlyPlayedDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: RecentlyPlayedEntity)
 
+    @Insert
+    suspend fun insertSyncOperation(operation: SyncOutboxEntity)
+
+    @Transaction
+    suspend fun upsertWithJournal(entry: RecentlyPlayedEntity, operation: SyncOutboxEntity) {
+        upsert(entry)
+        insertSyncOperation(operation)
+    }
+
     /**
      * The row for one track, or null. The repository reads it before writing so the v4 counters are
      * *summed* rather than replaced — `REPLACE` overwrites the whole row, including them.
      */
     @Query("SELECT * FROM recently_played WHERE provider = :provider AND sourceId = :sourceId")
     suspend fun find(provider: String, sourceId: String): RecentlyPlayedEntity?
+
+    @Query("DELETE FROM recently_played WHERE provider = :provider AND sourceId = :sourceId")
+    suspend fun delete(provider: String, sourceId: String)
 
     @Query("SELECT * FROM recently_played ORDER BY playedAtIso DESC LIMIT :limit")
     fun observe(limit: Int): Flow<List<RecentlyPlayedEntity>>

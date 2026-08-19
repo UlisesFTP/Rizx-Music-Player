@@ -26,31 +26,38 @@ native Android architecture. It streams full-length tracks from free, **keyless*
   each with embedded cover/artist/album tags; segmented multi-connection fetching; optional publishing
   into the shared `Music/Rizx` folder so every other app can see the files.
 - ▶️ **Real background playback** — a single `MediaSessionService`-owned ExoPlayer with a system media
-  notification, lock-screen controls, gapless/crossfade, loudness normalization, adaptive quality, an
+  notification, lock-screen controls, gapless/crossfade, an optional fixed loudness boost, adaptive quality, an
   optional **Hi-Res mode** (Opus 160k, 32-bit float output, DAC readout), and
   **resume-after-process-death** (returns to the exact second).
 - 🎛️ **Automatic equalizer** — a per-song EQ curve: genre baseline refined by the track's own measured
   spectrum, applied mean-zero. The manual EQ stays available.
+- 🎧 **Smart 8D audio** — adaptive stereo spatialization for headphones: panning, a sub-millisecond
+  interaural delay, head shadow, crossfeed and a little ambience, tuned per genre and then refined from
+  the recording's own width, weight and tempo. Off by default, toggles live mid-song, and stands down by
+  itself over the phone's speaker. It is *not* Atmos, multichannel, HRTF or a quality improvement.
 - 🎤 **Karaoke lyrics** — timed lyrics up to word-by-word / letter-by-letter precision (LRCLIB, NetEase,
   KuGou, Musixmatch), with a live spectrum waveform seek bar and an animated **canvas** built from the
   song's own muted music video.
 - 🧠 **On-device recommendations** — a local listening log (plays/skips/completions) drives daily mixes,
   "Similar to …" rows, and endless radio (YouTube Music mixes or Deezer artist radio). Nothing about
   your listening leaves the phone.
-- 🔎 **Rich search** — Songs, Artists, Albums, Playlists, an *Underground* tab of YouTube/SoundCloud
-  exclusives, plus on-device search history and suggestion pills.
+- 🔎 **Rich search & genre browsing** — Songs, Artists, Albums, Playlists, an *Underground* tab of
+  YouTube/SoundCloud exclusives, on-device search history and suggestion pills, and a 28-tile browse
+  wall where each tile opens a **genre hub** (that genre's songs, playlists, artists and albums) —
+  addressed by genre id, never by searching the genre's name.
 - 🎙️ **Music recognition (Audio ID)** — identify what is playing in the room. The microphone is opened
   only for the few seconds you ask for; the audio becomes an acoustic fingerprint **on the phone** and is
   then discarded — no recording is stored or transmitted. A match is located in Rizx's own catalogue by
   ISRC or Apple id first, and by a *scored* search after that, so it plays the recording you heard
   rather than the first same-titled karaoke version.
-- 📥 **Playlist import** — by URL (Spotify, YouTube / YT Music, Deezer — fully paginated where the
+- 📥 **Playlist import** — by URL (Spotify, YouTube / YT Music, Deezer, Apple Music — fully paginated where the
   source allows) or from Nuclear-JSON / Exportify-CSV files; imports become normal editable playlists.
 - ❤️ **Library** — favorites, user playlists, recently played, per-tab filter bars, and contextual
   queue/radio (Next/Prev traverse the album/artist/playlist you started from).
-- 🔌 **Plugin runtime** — a sandboxed QuickJS runtime runs real Nuclear plugins (fetch-only, no
-  DOM/FS/Android access; 13 of 14 registry plugins work), with per-plugin crash isolation. The community
-  lossless FLAC source is itself a plugin; the repo bundles none.
+- 🔌 **Plugin runtime** — a sandboxed QuickJS runtime runs compatible Nuclear plugins (`fetch` plus a
+  pure-JS `DOMParser`, no filesystem or Android APIs), with per-plugin isolation and quarantine. The
+  store hides integrations replaced by native code or unsupported by this host; the community lossless
+  FLAC source is itself a plugin, and the repository bundles no plugin archives.
 - 🌐 **Localized & themed** — English/Español/Português/Français, System/Light/Dark theme modes, data
   saver, and a brutalist Nothing-OS-inspired design language with semantic haptics.
 
@@ -73,10 +80,11 @@ See **[docs/FEATURES.md](docs/FEATURES.md)** for the full feature tour.
 | Plugin engine | QuickJS via `quickjs-kt` (sandboxed) |
 | Audio formats | jaudiotagger (tags) · jump3r (MP3 encode) · in-repo Ogg Opus tagger |
 | Tests | JUnit4 · MockK · Turbine · MockWebServer |
-| Build | Gradle (Kotlin DSL) · `minSdk 26` · `compileSdk 36` · JDK 17 |
+| Build | Gradle 8.12 (Kotlin DSL) · AGP 8.9.1 · KSP 2.0.21-1.0.28 · `minSdk 26` · `compileSdk 36` · JDK 21 recommended |
 
-~360 Kotlin source files and ~150 unit-test files across a clean `domain` / `data` / `playback` / `ui`
-layering. Full dependency list & licenses: **[docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md)**.
+421 main Kotlin files, 172 JVM-test files and 3 instrumented-test files across a clean `domain` / `data`
+/ `playback` / `ui` layering. The current JVM suite contains 1,473 passing tests. Full dependency list &
+licenses: **[docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md)**.
 
 ---
 
@@ -91,7 +99,7 @@ UI (Compose) → ViewModel → UseCase → Repository / Controller → Provider 
   DTO↔domain mappers, repositories, the download/transcode pipeline, canvas, and the plugin runtime.
   Depends on `domain`.
 - **`playback/`** — `PlaybackService : MediaSessionService` owns the *single* ExoPlayer; the stream
-  resolver, audio effects (AutoEQ, normalization, float output) and the PCM tap live here. Depends on
+  resolver, audio effects (AutoEQ, fixed loudness boost, float output) and the PCM tap live here. Depends on
   `domain` + Media3.
 - **`ui/`** — Compose screens, theme tokens, navigation. Talks only to ViewModels/use cases — never to a
   provider or ExoPlayer directly.
@@ -138,7 +146,8 @@ else works). See [docs/BUILD.md](docs/BUILD.md#project-structure).
 
 ## Build & run
 
-Requires JDK 17+ and the Android SDK (`compileSdk 36`). The app **runs on Android 8.0+ (API 26)** —
+Use JDK 21 to run Gradle (17–23 are compatible; **Java 25 is not**) and install the Android SDK with
+`compileSdk 36`. The app **runs on Android 8.0+ (API 26)** —
 newer-API features degrade gracefully behind version checks
 ([details](docs/FEATURES.md#device-compatibility)).
 
@@ -150,7 +159,7 @@ cd Proyecto
 ./gradlew assembleRelease       # distributable build — requires a real keystore, fails without one
 ```
 
-Or open `Proyecto/` in Android Studio (Meerkat / AGP 8.9+) and run the **app** configuration on a device
+Or open `Proyecto/` in Android Studio, select JDK 21 for Gradle, and run the **app** configuration on a device
 or emulator (API 26+). Detailed instructions, signing (including creating a keystore), and
 troubleshooting: **[docs/BUILD.md](docs/BUILD.md)**.
 
@@ -160,9 +169,12 @@ troubleshooting: **[docs/BUILD.md](docs/BUILD.md)**.
 
 | Doc | What's in it |
 |---|---|
+| [docs/README.md](docs/README.md) | Documentation index, verified project snapshot and known limits |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layers, dependency rules, identity model, streaming, playback, queue, downloads |
 | [docs/FEATURES.md](docs/FEATURES.md) | Full feature tour + device-compatibility table |
 | [docs/PROVIDERS.md](docs/PROVIDERS.md) | The provider model + every content source |
+| [docs/plugins/PLUGIN_GUIDE.md](docs/plugins/PLUGIN_GUIDE.md) | Writing a plugin: the contract, the rules, and what the sandbox does and does not guarantee |
+| [docs/plugins/PLUGIN_SPEC_FOR_AGENTS.md](docs/plugins/PLUGIN_SPEC_FOR_AGENTS.md) | The same contract as imperative rules, exact shapes and a template, for coding agents |
 | [docs/BUILD.md](docs/BUILD.md) | Build, run, test, signing, Room schemas, project structure |
 | [docs/LICENSING.md](docs/LICENSING.md) | AGPL compliance, attribution, corresponding source |
 | [docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md) | Bundled dependencies & their licenses |

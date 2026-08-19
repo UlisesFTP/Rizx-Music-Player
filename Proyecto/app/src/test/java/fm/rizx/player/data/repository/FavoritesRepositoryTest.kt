@@ -2,6 +2,7 @@ package fm.rizx.player.data.repository
 
 import fm.rizx.player.data.local.db.FavoriteDao
 import fm.rizx.player.data.local.db.FavoriteEntity
+import fm.rizx.player.data.local.db.SyncOutboxEntity
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Track
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +20,7 @@ class FavoritesRepositoryTest {
     /** In-memory [FavoriteDao] replicating the `IGNORE`-insert (idempotent) semantics. */
     private class FakeFavoriteDao : FavoriteDao {
         val rows = MutableStateFlow<List<FavoriteEntity>>(emptyList())
+        val operations = mutableListOf<SyncOutboxEntity>()
         private fun matches(e: FavoriteEntity, type: String, provider: String, sourceId: String) =
             e.type == type && e.provider == provider && e.sourceId == sourceId
 
@@ -27,6 +29,7 @@ class FavoritesRepositoryTest {
                 rows.value = rows.value + entity
             }
         }
+        override suspend fun insertSyncOperation(operation: SyncOutboxEntity) { operations += operation }
 
         override suspend fun delete(type: String, provider: String, sourceId: String) {
             rows.value = rows.value.filterNot { matches(it, type, provider, sourceId) }

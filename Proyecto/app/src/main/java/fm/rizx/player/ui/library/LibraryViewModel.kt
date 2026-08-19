@@ -100,6 +100,22 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    /** Copies every current favorite into a new editable playlist without changing the favorites. */
+    fun saveLikedAsPlaylist(
+        name: String,
+        tracks: List<Track> = favoriteTracks.value,
+        onResult: (Result<String>) -> Unit = {},
+    ) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || tracks.isEmpty()) {
+            onResult(Result.failure(IllegalArgumentException("A playlist name and at least one liked song are required")))
+            return
+        }
+        viewModelScope.launch {
+            onResult(runCatching { playlists.saveQueueAsPlaylist(trimmed, tracks) })
+        }
+    }
+
     fun clearRecentlyPlayed() {
         viewModelScope.launch { recentlyPlayed.clear() }
     }

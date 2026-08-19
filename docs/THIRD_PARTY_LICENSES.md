@@ -5,7 +5,8 @@ Rizx Player bundles the open-source libraries below. This report is surfaced in-
 
 > Regenerate at release time from the actual resolved dependency graph (e.g. a Gradle license-reporting
 > plugin such as `com.jaredsburrows.license` or `com.github.jk1.dependency-license-report`) so the list
-> stays accurate. This hand-curated report reflects `app/build.gradle.kts` as of version 0.2.0.
+> stays accurate. This hand-curated report was checked against `app/build.gradle.kts` on 2026-08-14 for
+> version 0.2.0. Transitive versions must still be regenerated before distribution.
 
 ## App license
 

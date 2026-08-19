@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * A favorited track/album/artist. Identity/dedup is `(type, provider, sourceId)` — the entity's
@@ -12,6 +13,7 @@ import androidx.room.PrimaryKey
  * original [addedAtIso] is preserved.
  */
 @Entity(tableName = "favorites", primaryKeys = ["type", "provider", "sourceId"])
+@Serializable
 data class FavoriteEntity(
     val type: String, // "TRACK" | "ALBUM" | "ARTIST"
     val provider: String,
@@ -79,6 +81,7 @@ data class PlaylistItemEntity(
  * arithmetic — the rules for what counts as a play belong where they can be unit-tested.
  */
 @Entity(tableName = "recently_played", primaryKeys = ["provider", "sourceId"])
+@Serializable
 data class RecentlyPlayedEntity(
     val provider: String,
     val sourceId: String,
@@ -143,6 +146,39 @@ data class RecognitionHistoryEntity(
     val resolvedSourceId: String? = null,
     val resolvedTrackJson: String? = null,
     val recognizedAtIso: String,
+)
+
+/** Durable, idempotent local mutation waiting to be acknowledged by cloud sync. */
+@Entity(
+    tableName = "sync_outbox",
+    indices = [Index("createdAtIso"), Index(value = ["entityType", "entityId"])],
+)
+data class SyncOutboxEntity(
+    @PrimaryKey val operationId: String,
+    val entityType: String,
+    val entityId: String,
+    val operation: String,
+    val payloadJson: String?,
+    val createdAtIso: String,
+    val attemptCount: Int = 0,
+)
+
+/** Per-account cursor and stable installation id used by incremental sync. */
+@Entity(tableName = "sync_state")
+data class SyncStateEntity(
+    @PrimaryKey val accountId: String,
+    val deviceId: String,
+    val cursor: Long = 0,
+    val lastSyncedAtIso: String? = null,
+)
+
+/** Short-lived local recovery snapshot kept before applying a conflicting remote playlist. */
+@Entity(tableName = "sync_recovery", indices = [Index("expiresAtIso")])
+data class SyncRecoveryEntity(
+    @PrimaryKey val id: String,
+    val playlistId: String,
+    val snapshotJson: String,
+    val expiresAtIso: String,
 )
 
 /** Lightweight list projection (§7.2 two-tier): playlist meta + item count, no items loaded. */

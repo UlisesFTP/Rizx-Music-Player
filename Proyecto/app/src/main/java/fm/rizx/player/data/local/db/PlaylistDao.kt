@@ -2,7 +2,9 @@ package fm.rizx.player.data.local.db
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -13,6 +15,74 @@ interface PlaylistDao {
 
     @Insert
     suspend fun insertPlaylist(playlist: PlaylistEntity)
+
+    @Insert
+    suspend fun insertItems(items: List<PlaylistItemEntity>)
+
+    @Insert
+    suspend fun insertSyncOperation(operation: SyncOutboxEntity)
+
+    @Transaction
+    suspend fun createWithJournal(playlist: PlaylistEntity, operation: SyncOutboxEntity) {
+        insertPlaylist(playlist)
+        insertSyncOperation(operation)
+    }
+
+    @Transaction
+    suspend fun updateWithJournal(playlist: PlaylistEntity, operation: SyncOutboxEntity) {
+        updatePlaylist(playlist)
+        insertSyncOperation(operation)
+    }
+
+    @Transaction
+    suspend fun deleteWithJournal(id: String, operation: SyncOutboxEntity) {
+        insertSyncOperation(operation)
+        deletePlaylist(id)
+    }
+
+    @Transaction
+    suspend fun addItemsWithJournal(
+        items: List<PlaylistItemEntity>,
+        playlist: PlaylistEntity,
+        operation: SyncOutboxEntity,
+    ) {
+        insertItems(items)
+        updatePlaylist(playlist)
+        insertSyncOperation(operation)
+    }
+
+    @Transaction
+    suspend fun removeItemWithJournal(
+        itemId: String,
+        playlist: PlaylistEntity,
+        operation: SyncOutboxEntity,
+    ) {
+        deleteItem(itemId)
+        updatePlaylist(playlist)
+        insertSyncOperation(operation)
+    }
+
+    @Transaction
+    suspend fun reorderWithJournal(
+        itemIds: List<String>,
+        playlist: PlaylistEntity,
+        operation: SyncOutboxEntity,
+    ) {
+        itemIds.forEachIndexed { index, id -> updateOrder(id, index) }
+        updatePlaylist(playlist)
+        insertSyncOperation(operation)
+    }
+
+    @Transaction
+    suspend fun importWithJournal(
+        playlist: PlaylistEntity,
+        items: List<PlaylistItemEntity>,
+        operation: SyncOutboxEntity,
+    ) {
+        insertPlaylist(playlist)
+        insertItems(items)
+        insertSyncOperation(operation)
+    }
 
     /**
      * Updates a playlist in place. Must **not** be an `@Insert(REPLACE)`: REPLACE deletes the row and
@@ -52,6 +122,17 @@ interface PlaylistDao {
 
     @Query("DELETE FROM playlist_items WHERE id = :itemId")
     suspend fun deleteItem(itemId: String)
+
+    @Query("DELETE FROM playlist_items WHERE playlistId = :playlistId")
+    suspend fun deleteItems(playlistId: String)
+
+    @Transaction
+    suspend fun replaceFromSync(playlist: PlaylistEntity, items: List<PlaylistItemEntity>) {
+        val existing = getPlaylist(playlist.id)
+        if (existing == null) insertPlaylist(playlist) else updatePlaylist(playlist)
+        deleteItems(playlist.id)
+        insertItems(items)
+    }
 
     @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId ORDER BY sortOrder ASC")
     fun observeItems(playlistId: String): Flow<List<PlaylistItemEntity>>

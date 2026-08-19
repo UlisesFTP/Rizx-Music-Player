@@ -12,6 +12,11 @@ import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.playback.PlaybackState
 import fm.rizx.player.domain.repository.PlaylistRepository
+import fm.rizx.player.domain.repository.PlaylistExportArtifact
+import fm.rizx.player.domain.repository.PlaylistExportFormat
+import fm.rizx.player.domain.repository.PlaylistExportRepository
+import fm.rizx.player.domain.share.PlaylistShare
+import fm.rizx.player.domain.share.PlaylistShareRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,6 +75,17 @@ class PlaylistDetailViewModelTest {
         override fun release() {}
     }
 
+    private object NoExports : PlaylistExportRepository {
+        override suspend fun export(playlistId: String, format: PlaylistExportFormat): PlaylistExportArtifact? = null
+    }
+
+    private object NoShares : PlaylistShareRepository {
+        override val configured = false
+        override suspend fun create(playlistId: String, captchaToken: String?) = PlaylistShare("", "", "")
+        override suspend fun active(): List<PlaylistShare> = emptyList()
+        override suspend fun revoke(shareId: String) = Unit
+    }
+
     private fun samplePlaylist() = Playlist(
         id = "p1", name = "Mix", createdAtIso = "t", lastModifiedIso = "t",
         items = listOf(PlaylistItem("i1", Track(title = "A", source = ProviderRef("meta", "a")), addedAtIso = "t")),
@@ -84,6 +100,7 @@ class PlaylistDetailViewModelTest {
 
     private fun vm(repo: PlaylistRepository, playback: PlaybackController = FakePlayback()) = PlaylistDetailViewModel(
         SavedStateHandle(mapOf("playlistId" to "p1")), repo, InMemoryQueueRepository(), playback, NoDownloads(),
+        NoExports, NoShares,
     )
 
     @Test

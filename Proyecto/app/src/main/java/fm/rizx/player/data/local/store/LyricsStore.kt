@@ -160,8 +160,11 @@ class LyricsStore(
          *
          * 1 — the matcher learned to refuse a re-recording in another language, so every lyric matched
          * before it (a Japanese "DNA" against a Korean one) has to be looked up again.
+         * 2 — a wrong artist and a far-off timed cut became rejections instead of penalties, and
+         * NetEase's "纯音乐，请欣赏" notice stopped counting as a lyric; every song that had settled on
+         * a cover, a tribute or that notice has to be looked up again.
          */
-        const val SCHEMA = 1
+        const val SCHEMA = 2
     }
 }
 

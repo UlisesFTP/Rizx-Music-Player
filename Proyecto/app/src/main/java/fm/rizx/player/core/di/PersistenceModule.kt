@@ -16,10 +16,12 @@ import fm.rizx.player.data.local.db.MIGRATION_1_2
 import fm.rizx.player.data.local.db.MIGRATION_2_3
 import fm.rizx.player.data.local.db.MIGRATION_3_4
 import fm.rizx.player.data.local.db.MIGRATION_4_5
+import fm.rizx.player.data.local.db.MIGRATION_5_6
 import fm.rizx.player.data.local.db.PlaylistDao
 import fm.rizx.player.data.local.db.RecentlyPlayedDao
 import fm.rizx.player.data.local.db.RecognitionHistoryDao
 import fm.rizx.player.data.local.db.RizxDatabase
+import fm.rizx.player.data.local.db.SyncDao
 import fm.rizx.player.data.local.settings.EnabledProviderStoreImpl
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.artwork.ArtworkCache
@@ -35,11 +37,13 @@ import fm.rizx.player.data.local.store.LyricsStore
 import fm.rizx.player.data.local.store.SearchHistoryStore
 import fm.rizx.player.data.repository.FavoritesRepositoryImpl
 import fm.rizx.player.data.repository.PlaylistRepositoryImpl
+import fm.rizx.player.data.repository.PlaylistExportRepositoryImpl
 import fm.rizx.player.data.repository.RecentlyPlayedRepositoryImpl
 import fm.rizx.player.domain.provider.EnabledProviderStore
 import fm.rizx.player.domain.provider.ProviderRegistry
 import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.domain.repository.PlaylistRepository
+import fm.rizx.player.domain.repository.PlaylistExportRepository
 import fm.rizx.player.domain.repository.RecentlyPlayedRepository
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.domain.usecase.ProviderHealthProbe
@@ -60,7 +64,7 @@ object PersistenceModule {
             // v2 adds recently_played; v3 adds playlists.artworkUrl; v4 turns the history into a
             // listening log (play/skip counts, time of day); v5 adds recognition_history. All of them
             // preserve existing data.
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
 
     @Provides
@@ -74,6 +78,9 @@ object PersistenceModule {
 
     @Provides
     fun provideRecognitionHistoryDao(db: RizxDatabase): RecognitionHistoryDao = db.recognitionHistoryDao()
+
+    @Provides
+    fun provideSyncDao(db: RizxDatabase): SyncDao = db.syncDao()
 
     @Provides
     @Singleton
@@ -98,6 +105,11 @@ object PersistenceModule {
         enabled: EnabledProviderStore,
         artwork: TrackArtworkEnricher,
     ): PlaylistRepository = PlaylistRepositoryImpl(dao, registry, enabled, artwork)
+
+    @Provides
+    @Singleton
+    fun providePlaylistExportRepository(dao: PlaylistDao): PlaylistExportRepository =
+        PlaylistExportRepositoryImpl(dao)
 
     @Provides
     @Singleton

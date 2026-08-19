@@ -19,6 +19,29 @@ class LyricsNormalizerTest {
     )
 
     @Test
+    fun `the credits a file opens with are not lyrics`() {
+        // The top of KuGou's krc for "Dynamite" and NetEase's lrc for "2.0", verbatim in shape.
+        val lyrics = Lyrics(
+            lines = listOf(
+                LyricLine(timeMs = 0, text = "Lyrics by：David Stewart/Jessica Agombar"),
+                LyricLine(timeMs = 100, text = "作曲 Composer：辉子"),
+                LyricLine(timeMs = 200, text = "词：Pdogg/GHSTLOOP"),
+                LyricLine(timeMs = 300, text = "Produced by：David Stewart"),
+                LyricLine(timeMs = 400, text = "(Harley Streten/Gregory Aldae Hein/JPEGMAFIA/Thomas Wesley Pentz)"),
+                LyricLine(timeMs = 500, text = "Additional Vocal Production/Engineering：Pdogg"),
+                LyricLine(timeMs = 12_000, text = "'Cause I-I-I'm in the stars tonight"),
+                LyricLine(timeMs = 15_000, text = "Written by: nobody, this one is sung"),
+            ),
+        )
+
+        val lines = LyricsNormalizer.normalize(lyrics).lines
+
+        assertEquals("'Cause I-I-I'm in the stars tonight", lines.first().text)
+        // Only the run at the top goes; a credit-shaped line after the song has begun is a lyric.
+        assertEquals(2, lines.size)
+    }
+
+    @Test
     fun `a line inherits the next line's start as its end`() {
         val lyrics = Lyrics(
             lines = listOf(

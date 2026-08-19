@@ -3,6 +3,7 @@ package fm.rizx.player.data.repository
 import fm.rizx.player.data.local.db.PlaylistDao
 import fm.rizx.player.data.local.db.PlaylistEntity
 import fm.rizx.player.data.local.db.PlaylistItemEntity
+import fm.rizx.player.data.local.db.SyncOutboxEntity
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.artwork.TrackArtworkEnricher
 import fm.rizx.player.data.local.store.PlaylistTransfer
@@ -64,53 +65,71 @@ class PlaylistRepositoryImpl(
     override suspend fun createPlaylist(name: String, description: String?): String {
         val id = newId()
         val now = nowIso()
-        dao.insertPlaylist(
-            PlaylistEntity(
+        val playlist = PlaylistEntity(
                 id = id, name = name, description = description,
                 createdAtIso = now, lastModifiedIso = now,
                 isReadOnly = false, parentId = null, originProvider = null, originId = null,
-            ),
-        )
+            )
+        dao.createWithJournal(playlist, journal(id, "UPSERT", now))
         return id
     }
 
-    override suspend fun deletePlaylist(id: String) = dao.deletePlaylist(id)
+    override suspend fun deletePlaylist(id: String) {
+        dao.getPlaylist(id) ?: return
+        val now = nowIso()
+        dao.deleteWithJournal(id, journal(id, "DELETE", now))
+    }
 
     override suspend fun rename(id: String, name: String, description: String?) {
         val existing = requireMutable(id)
-        dao.updatePlaylist(existing.copy(name = name, description = description, lastModifiedIso = nowIso()))
+        val now = nowIso()
+        dao.updateWithJournal(
+            existing.copy(name = name, description = description, lastModifiedIso = now),
+            journal(id, "UPSERT", now),
+        )
     }
 
     override suspend fun addTracks(playlistId: String, tracks: List<Track>) {
-        requireMutable(playlistId)
+        val existing = requireMutable(playlistId)
         var order = dao.maxOrder(playlistId)
         val now = nowIso()
-        for (track in tracks) {
-            dao.insertItem(
-                PlaylistItemEntity(
+        val items = tracks.map { track ->
+            PlaylistItemEntity(
                     id = newId(), playlistId = playlistId, sortOrder = ++order,
                     trackJson = TrackJson.encodeTrack(track), note = null, addedAtIso = now,
-                ),
-            )
+                )
         }
-        touch(playlistId)
+        if (items.isEmpty()) return
+        dao.addItemsWithJournal(
+            items,
+            existing.copy(lastModifiedIso = now),
+            journal(playlistId, "UPSERT", now),
+        )
     }
 
     override suspend fun removeItem(playlistId: String, itemId: String) {
-        requireMutable(playlistId)
-        dao.deleteItem(itemId)
-        touch(playlistId)
+        val existing = requireMutable(playlistId)
+        val now = nowIso()
+        dao.removeItemWithJournal(
+            itemId,
+            existing.copy(lastModifiedIso = now),
+            journal(playlistId, "UPSERT", now),
+        )
     }
 
     override suspend fun reorder(playlistId: String, fromIndex: Int, toIndex: Int) {
-        requireMutable(playlistId)
+        val existing = requireMutable(playlistId)
         val items = dao.getItems(playlistId).toMutableList()
         if (fromIndex !in items.indices) return
         val to = toIndex.coerceIn(0, items.lastIndex)
         if (to == fromIndex) return
         items.add(to, items.removeAt(fromIndex))
-        items.forEachIndexed { index, item -> dao.updateOrder(item.id, index) }
-        touch(playlistId)
+        val now = nowIso()
+        dao.reorderWithJournal(
+            items.map { it.id },
+            existing.copy(lastModifiedIso = now),
+            journal(playlistId, "UPSERT", now),
+        )
     }
 
     override suspend fun saveQueueAsPlaylist(name: String, tracks: List<Track>): String {
@@ -208,24 +227,21 @@ class PlaylistRepositoryImpl(
     ): String {
         val id = newId()
         val now = nowIso()
-        dao.insertPlaylist(
-            PlaylistEntity(
+        val playlist = PlaylistEntity(
                 id = id, name = name, description = description,
                 createdAtIso = now, lastModifiedIso = now,
                 isReadOnly = false, parentId = null, originProvider = "import", originId = origin ?: id,
                 artworkUrl = artworkUrl,
-            ),
-        )
+            )
         // Insert items directly rather than via addTracks() so lastModified isn't bumped per track.
         // Bounded: a hostile/oversized import must not bloat the DB or freeze the UI.
-        tracks.take(MAX_IMPORT_TRACKS).forEachIndexed { index, track ->
-            dao.insertItem(
-                PlaylistItemEntity(
+        val items = tracks.take(MAX_IMPORT_TRACKS).mapIndexed { index, track ->
+            PlaylistItemEntity(
                     id = newId(), playlistId = id, sortOrder = index,
                     trackJson = TrackJson.encodeTrack(track), note = null, addedAtIso = now,
-                ),
-            )
+                )
         }
+        dao.importWithJournal(playlist, items, journal(id, "UPSERT", now))
         return id
     }
 
@@ -236,10 +252,10 @@ class PlaylistRepositoryImpl(
         return entity
     }
 
-    private suspend fun touch(id: String) {
-        val entity = dao.getPlaylist(id) ?: return
-        dao.updatePlaylist(entity.copy(lastModifiedIso = nowIso()))
-    }
+    private fun journal(id: String, operation: String, now: String) = SyncOutboxEntity(
+        operationId = newId(), entityType = "PLAYLIST", entityId = id, operation = operation,
+        payloadJson = null, createdAtIso = now,
+    )
 
     private fun PlaylistEntity.toDomain(items: List<PlaylistItem>) = Playlist(
         id = id, name = name, description = description,

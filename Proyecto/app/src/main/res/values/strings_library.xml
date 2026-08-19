@@ -21,6 +21,10 @@
     <!-- Library screen: liked actions -->
     <string name="library_removed_from_liked">Removed from liked</string>
     <string name="library_remove_from_liked_desc">Remove from liked</string>
+    <string name="library_save_liked_label">Save all</string>
+    <string name="library_save_liked_desc">Save all liked songs as a playlist</string>
+    <string name="library_liked_playlist_created">Playlist created with %1$d liked songs</string>
+    <string name="library_liked_playlist_failed">Couldn\'t create the playlist</string>
 
     <!-- Library screen: confirm dialogs -->
     <string name="library_clear_recent_title">Clear recently played?</string>

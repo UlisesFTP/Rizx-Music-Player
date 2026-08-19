@@ -2,6 +2,10 @@ package fm.rizx.player.ui.screens
 
 import android.animation.ValueAnimator
 import android.view.TextureView
+import fm.rizx.player.domain.account.AccountState
+import fm.rizx.player.ui.account.AccountViewModel
+import fm.rizx.player.ui.components.AccountAvatar
+import fm.rizx.player.ui.components.AccountDialog
 import fm.rizx.player.ui.components.SectionHeader
 import fm.rizx.player.ui.components.tileUrl
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -254,11 +258,26 @@ fun HomeScreen(
     onShowHeroCanvas: (Track?, motionEnabled: Boolean) -> Unit = { _, _ -> },
     onSetHeroCanvasVisible: (Boolean) -> Unit = {},
     onAttachHeroCanvas: (TextureView) -> Unit = {},
+    onOpenAccount: () -> Unit = {},
     vm: HomeViewModel = hiltViewModel(),
+    accountVm: AccountViewModel = hiltViewModel(),
 ) {
     val c = RizxTheme.colors
     val state by vm.state.collectAsStateWithLifecycle()
     val isRefreshing by vm.isRefreshing.collectAsStateWithLifecycle()
+    val accountState by accountVm.accountState.collectAsStateWithLifecycle()
+    var accountDialogOpen by remember { mutableStateOf(false) }
+    if (accountDialogOpen) {
+        AccountDialog(
+            state = accountState,
+            onDismiss = { accountDialogOpen = false },
+            onSignOut = accountVm::signOut,
+            // Sign out first: the Account screen's Google button then opens the device chooser
+            // with every account instead of silently reusing the one that was just active.
+            onSwitchAccount = { accountVm.signOut(); onOpenAccount() },
+            onSignIn = onOpenAccount,
+        )
+    }
     // Saved by name, not as the enum itself: restoring a constant that a later version removed (as
     // "For you" was) would throw on the way back from process death.
     var tabName by rememberSaveable { mutableStateOf(HomeTab.All.name) }
@@ -453,6 +472,11 @@ fun HomeScreen(
                     }
                     RizxIconButton(RizxIcons.Search, stringResource(R.string.action_search), onOpenSearch, background = c.elev, border = c.line, iconSize = 21.dp)
                     RizxIconButton(RizxIcons.Favorite, stringResource(R.string.home_liked_songs_cd), onOpenLikes, background = c.elev, border = c.line, iconSize = 20.dp, tint = c.redAccent)
+                    // The account, next to the heart: the Google photo once signed in, a person
+                    // glyph otherwise. Hidden entirely in builds without cloud configuration.
+                    if (accountState != AccountState.Disabled) {
+                        AccountAvatar(accountState, onClick = { accountDialogOpen = true })
+                    }
                 }
             }
 

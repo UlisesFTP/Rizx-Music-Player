@@ -5,6 +5,7 @@ import fm.rizx.player.data.lyrics.LrcParser
 import fm.rizx.player.data.remote.lrclib.LrcLibApi
 import fm.rizx.player.data.remote.lrclib.LrcLibTrackDto
 import fm.rizx.player.domain.lyrics.LyricsMatchTarget
+import fm.rizx.player.domain.lyrics.LyricsScript
 import fm.rizx.player.domain.lyrics.LyricsTrackMatcher
 import fm.rizx.player.domain.model.Lyrics
 import fm.rizx.player.domain.model.LyricsCandidate
@@ -17,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.IOException
+import kotlin.math.abs
 
 /**
  * **Timed** lyrics from the keyless LRCLIB API — the source that makes the synced lyrics screen possible.
@@ -29,6 +31,12 @@ import java.io.IOException
  *    recordings of the same song.
  * 2. `/api/get` **without** it — same title/artist, any length.
  * 3. `/api/search` — free text, then the closest candidate by duration, preferring timed lyrics.
+ *
+ * Steps 1 and 2 hand back **one** row, chosen by LRCLIB, and for a K-pop track that row is often a
+ * *romanization* someone uploaded under the song's name — right words, wrong alphabet. When the row is
+ * Latin-only, [preferMajorityScript] asks the search endpoint what everyone else uploaded for the same
+ * recording and follows the majority script, so a Hangul transcription outvotes a lone romanized one.
+ * A Latin majority changes nothing, so an English song costs one extra request and keeps its row.
  *
  * A 404 at any step is a miss, not a failure. Only genuine transport errors surface as [AppError], so a
  * song nobody has transcribed shows an empty state instead of an error.
@@ -53,8 +61,8 @@ class LrcLibProvider(
                 // Step 1 runs only when we know our own duration — without it the exact call is just
                 // step 2 with extra words.
                 val exact = durationMs?.let { exactGet(artist, title, album, it) }
-                exact
-                    ?: looseGet(artist, title, album)
+                val direct = exact ?: looseGet(artist, title, album, durationMs)
+                direct?.let { preferMajorityScript(track, artist, title, it) }
                     ?: bestFromSearch(track, artist, title)
             }
         }
@@ -81,9 +89,23 @@ class LrcLibProvider(
     private suspend fun exactGet(artist: String, title: String, album: String?, durationMs: Long): Lyrics? =
         notFoundAsNull { api.get(artist, title, album, durationMs / 1000) }?.toLyrics()
 
-    /** Step 2: same title/artist, any length. */
-    private suspend fun looseGet(artist: String, title: String, album: String?): Lyrics? =
-        notFoundAsNull { api.get(artist, title, album, null) }?.toLyrics()
+    /**
+     * Step 2: same title/artist, any length.
+     *
+     * "Any length" is the point — and the catch. LRCLIB picks whichever cut it has, and when that is
+     * the album version of a radio edit (or the reverse) the words are right and the timings walk a
+     * verse out of step by the end. So a row this far from our duration keeps its words and loses its
+     * clock: prose the reader can follow beats a karaoke sweep pointing at the wrong line, and prose
+     * ranks below any timed answer another provider may have.
+     */
+    private suspend fun looseGet(artist: String, title: String, album: String?, durationMs: Long?): Lyrics? {
+        val row = notFoundAsNull { api.get(artist, title, album, null) } ?: return null
+        val theirs = row.duration?.let { (it * 1000).toLong() }
+        val drift = if (durationMs != null && theirs != null) abs(theirs - durationMs) else null
+        val farOff = drift != null && drift > LyricsTrackMatcher.MAX_TIMED_DRIFT_MS
+        return (if (farOff) row.copy(syncedLyrics = null) else row).toLyrics()
+            ?.copy(matchScore = drift ?: LyricsTrackMatcher.UNKNOWN_DURATION_PENALTY)
+    }
 
     /**
      * Step 3. Free-text search, scored by [LyricsTrackMatcher]: the same recording first (title, artist
@@ -94,16 +116,47 @@ class LrcLibProvider(
     private suspend fun bestFromSearch(track: Track, artist: String, title: String): Lyrics? {
         val results = notFoundAsNull { api.search("$artist $title") } ?: return null
         val usable = results.filter { it.syncedLyrics != null || it.plainLyrics != null || it.instrumental }
-        return LyricsTrackMatcher.bestOf(track, usable) { row ->
-            LyricsMatchTarget(
-                title = row.trackName.orEmpty(),
-                artist = row.artistName.orEmpty(),
-                album = row.albumName,
-                durationMs = row.duration?.let { (it * 1000).toLong() },
-                synced = row.syncedLyrics != null,
-            )
-        }?.toLyrics()
+        val match = LyricsTrackMatcher.pick(track, usable) { it.toTarget() } ?: return null
+        return match.candidate.toLyrics()?.copy(matchScore = match.score)
     }
+
+    /**
+     * The same recording, in the script most of LRCLIB's uploaders wrote it in.
+     *
+     * Only consulted when [chosen] has no non-Latin script at all, and only ever *replaces* it with a
+     * row that scores as the same recording, carries timings, and belongs to a script that strictly
+     * outnumbers the Latin rows. "Blue & Grey" is nine Hangul rows to two romanized; the exact lookup
+     * returned one of the two. A song whose rows are mostly Latin — every English song, and the odd
+     * K-pop track whose uploads are all romanized — keeps exactly what the lookup returned.
+     */
+    private suspend fun preferMajorityScript(track: Track, artist: String, title: String, chosen: Lyrics): Lyrics {
+        if (chosen.lines.isEmpty() || LyricsScript.isForeign(chosen)) return chosen
+        val rows = notFoundAsNull { api.search("$artist $title") }.orEmpty()
+        val scored = rows.mapNotNull { row ->
+            val score = LyricsTrackMatcher.score(track, row.toTarget()) ?: return@mapNotNull null
+            // Parsed, not just present: LRCLIB rows can carry an empty `syncedLyrics`, and a row that
+            // parses to no timed lines must neither vote nor be chosen — the swap never trades timings
+            // for prose.
+            val lyrics = row.toLyrics()?.takeIf { it.isSynced } ?: return@mapNotNull null
+            val script = LyricsScript.dominant(lyrics)?.takeIf { LyricsScript.isForeign(lyrics) }
+            Triple(row, score, script)
+        }
+        if (scored.isEmpty()) return chosen
+        val latin = scored.count { it.third == null }
+        val (script, count) = scored.mapNotNull { it.third }.groupingBy { it }.eachCount()
+            .maxByOrNull { it.value } ?: return chosen
+        if (count <= latin) return chosen
+        val best = scored.filter { it.third == script }.minByOrNull { it.second } ?: return chosen
+        return best.first.toLyrics()?.copy(matchScore = best.second) ?: chosen
+    }
+
+    private fun LrcLibTrackDto.toTarget() = LyricsMatchTarget(
+        title = trackName.orEmpty(),
+        artist = artistName.orEmpty(),
+        album = albumName,
+        durationMs = duration?.let { (it * 1000).toLong() },
+        synced = syncedLyrics != null,
+    )
 
     // ---- Mapping ----
 

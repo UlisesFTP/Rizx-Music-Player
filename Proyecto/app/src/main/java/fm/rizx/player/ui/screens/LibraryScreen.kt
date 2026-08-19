@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.DriveFileMove
@@ -133,6 +134,7 @@ fun LibraryScreen(
     // over to a list where it would silently hide almost everything.
     var filter by rememberSaveable { mutableStateOf("") }
     var creating by remember { mutableStateOf(false) }
+    var savingLiked by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var confirmDeleteDownload by remember { mutableStateOf<DownloadedTrack?>(null) }
@@ -157,6 +159,8 @@ fun LibraryScreen(
     val nothingToSaveMsg = stringResource(R.string.library_export_none)
     val exportFailedMsg = stringResource(R.string.library_export_failed)
     val removedFromLikedMsg = stringResource(R.string.library_removed_from_liked)
+    val likedPlaylistCreatedTemplate = stringResource(R.string.library_liked_playlist_created)
+    val likedPlaylistFailedMsg = stringResource(R.string.library_liked_playlist_failed)
     val undoLabel = stringResource(R.string.action_undo).uppercase()
 
     // Imports hit the network and can legitimately fail (private list, dead link, changed page) — say so
@@ -251,6 +255,27 @@ fun LibraryScreen(
     }
     if (creating) {
         CreatePlaylistDialog(onCreate = vm::createPlaylist, onDismiss = { creating = false })
+    }
+    if (savingLiked) {
+        CreatePlaylistDialog(
+            onCreate = { name ->
+                vm.saveLikedAsPlaylist(name, likedSongs) { result ->
+                    result.onSuccess { id ->
+                        Toast.makeText(
+                            context,
+                            String.format(likedPlaylistCreatedTemplate, likedSongs.size),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                        onOpenPlaylist(id)
+                    }.onFailure {
+                        scope.launch {
+                            snackbars.showSnackbar(likedPlaylistFailedMsg, duration = SnackbarDuration.Short)
+                        }
+                    }
+                }
+            },
+            onDismiss = { savingLiked = false },
+        )
     }
     if (confirmClear) {
         ConfirmDialog(
@@ -434,7 +459,24 @@ fun LibraryScreen(
                     } else if (visibleLiked.isEmpty()) {
                         item { FilterEmpty(filter) }
                     } else {
-                        item { TabCount(countLabel(visibleLiked.size, R.string.library_count_song_one, R.string.library_count_song_other)) }
+                        item {
+                            Row(
+                                Modifier.fillMaxWidth().padding(top = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                TabCount(
+                                    countLabel(visibleLiked.size, R.string.library_count_song_one, R.string.library_count_song_other),
+                                    Modifier.weight(1f),
+                                )
+                                RizxActionButton(
+                                    Icons.AutoMirrored.Filled.PlaylistAdd,
+                                    stringResource(R.string.library_save_liked_label),
+                                    onClick = { savingLiked = true },
+                                    contentDescription = stringResource(R.string.library_save_liked_desc),
+                                )
+                            }
+                        }
                         // What you see is what plays: a filtered list becomes the queue, so next/prev stay
                         // inside the songs the filter left on screen.
                         likedRows(visibleLiked, downloadStates, vm, onUnfavorite) { vm.playLiked(it, visibleLiked) }

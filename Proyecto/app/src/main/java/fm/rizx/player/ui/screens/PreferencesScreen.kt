@@ -56,6 +56,9 @@ import fm.rizx.player.domain.model.PlayerLayout
 import fm.rizx.player.domain.model.RadioMode
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.ui.components.CaptionedOptionDialog
+import fm.rizx.player.domain.account.AccountState
+import fm.rizx.player.ui.account.AccountViewModel
+import fm.rizx.player.ui.components.AccountAvatar
 import fm.rizx.player.ui.components.RizxFilterField
 import fm.rizx.player.ui.components.RizxToggle
 import fm.rizx.player.ui.components.SectionHeader
@@ -84,8 +87,10 @@ fun PreferencesScreen(
     onSetThemeMode: (ThemeMode) -> Unit,
     onOpenSources: () -> Unit,
     onOpenEqualizer: () -> Unit,
+    onOpenAccount: () -> Unit,
     onOpenAbout: () -> Unit,
     vm: PreferencesViewModel = hiltViewModel(),
+    accountVm: AccountViewModel = hiltViewModel(),
 ) {
     val c = RizxTheme.colors
     val context = LocalContext.current
@@ -247,6 +252,9 @@ fun PreferencesScreen(
     val langValue = if (currentLang == AppLanguage.SYSTEM) langSystem else currentLang.endonym
     val aboutTitle = stringResource(R.string.pref_about)
     val aboutValue = stringResource(R.string.pref_about_v)
+    val accountTitle = stringResource(R.string.pref_account_sync)
+    val accountValue = stringResource(R.string.pref_account_optional)
+    val accountCaption = stringResource(R.string.pref_account_caption)
 
     // ---- The screen, as eight themed groups ---------------------------------------------------
     // Grouped by what the setting *is about*, which is how someone looks for one. The old single
@@ -362,6 +370,9 @@ fun PreferencesScreen(
             },
         ),
         stringResource(R.string.settings_app) to listOf(
+            entry(accountTitle, accountValue, accountCaption) {
+                SettingRow(accountTitle, accountValue, accountCaption, onClick = onOpenAccount)
+            },
             // Tapping opens a picker; the OS owns the per-app locale, so the choice persists and also
             // shows under Android's own per-app Language page.
             entry(langTitle, langValue) { SettingRow(langTitle, langValue) { languageDialogOpen = true } },
@@ -385,6 +396,50 @@ fun PreferencesScreen(
             modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
             hint = stringResource(R.string.settings_search_hint),
         )
+
+        // The account, first — it was a plain row at the bottom of the eighth group, which in
+        // practice meant nobody found where to sign in. Face + state + one tap into the flow; the
+        // searchable row in "App" stays so filtering for it still works.
+        val accountState by accountVm.accountState.collectAsStateWithLifecycle()
+        if (accountState != AccountState.Disabled) {
+            val accountProfile = (accountState as? AccountState.SignedIn)?.profile
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+                    .background(c.elev)
+                    .border(1.5.dp, c.hardLine)
+                    .clickableScale(onClick = onOpenAccount)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                AccountAvatar(accountState, size = 46.dp, iconSize = 22.dp)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when (accountState) {
+                            is AccountState.SignedIn -> accountProfile?.displayName ?: accountProfile?.email
+                                ?: stringResource(R.string.account_connected)
+                            is AccountState.Guest -> stringResource(R.string.account_guest)
+                            else -> stringResource(R.string.account_sign_in)
+                        },
+                        style = sg(16, FontWeight.Bold, -0.01f),
+                        color = c.text,
+                    )
+                    Text(
+                        when (accountState) {
+                            is AccountState.SignedIn -> stringResource(R.string.account_connected_caption)
+                            is AccountState.Guest -> stringResource(R.string.account_guest_caption)
+                            else -> stringResource(R.string.pref_account_caption)
+                        },
+                        style = mr(12, FontWeight.Medium),
+                        color = c.muted,
+                        modifier = Modifier.padding(top = 3.dp),
+                    )
+                }
+                Icon(RizxIcons.ChevronRight, null, tint = c.muted, modifier = Modifier.size(18.dp))
+            }
+        }
 
         groups.forEach { (title, rows) -> SettingsGroup(title, query, rows) }
         if (groups.none { (_, rows) -> rows.any { it.matches(query) } }) {

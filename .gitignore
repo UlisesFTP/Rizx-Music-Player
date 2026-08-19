@@ -64,3 +64,16 @@ keystore.properties
 # anybody's index (see docs/adr/0024-community-lossless-source.md). A clone builds an app with no
 # bundled plugins and no section for them, which is the intended public shape.
 Proyecto/app/src/main/assets/plugins/
+
+# Agent/MCP local tooling config (not part of the published app)
+.mcp.json
+
+# Agent tooling and private planning/ops context (never published; see AGENTS.md conventions).
+# docs/AGENT_CONTEXT.md carries local machine paths and operational OAuth/artifact detail.
+.agents/
+skills-lock.json
+RIZX_SHAZAM_RECOGNITION_IMPLEMENTATION.md
+docs/AGENT_CONTEXT.md
+
+# Supabase backend (migrations + Edge Functions) is deployment state, applied via MCP/CLI; not published.
+supabase/

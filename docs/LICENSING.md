@@ -1,5 +1,7 @@
 # Licensing & attribution
 
+_Reviewed against version 0.2.0 on 2026-08-14. This is engineering documentation, not legal advice._
+
 ## App license: AGPL-3.0
 
 Rizx Player is licensed under the **GNU Affero General Public License, version 3.0 (AGPL-3.0)**. The full
@@ -48,6 +50,8 @@ etc.), §13 activates and that component must offer its Corresponding Source to 
 - An animated-cover **canvas** resolved from the song's own music video, behind policy gating.
 - An **on-device recommendations engine** (listening log, taste clusters, daily mixes) and a rebuilt
   streaming-style Home feed; an **automatic per-song equalizer** (genre baseline + measured spectrum).
+- Adaptive **Smart 8D** stereo spatialization and standalone 8D MP3 rendering, implemented in the native
+  playback/download pipeline without a new DSP dependency.
 - Full app **localization** (en/es/pt/fr) and an Android 8.0+ compatibility layer (version-gated APIs).
 - Ambient **music recognition** ("Audio ID"), absent upstream: on-device acoustic fingerprinting of
   microphone audio (a Kotlin reimplementation of the format documented by

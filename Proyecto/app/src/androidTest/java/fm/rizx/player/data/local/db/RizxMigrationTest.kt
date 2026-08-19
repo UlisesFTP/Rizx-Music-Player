@@ -106,6 +106,31 @@ class RizxMigrationTest {
         db.close()
     }
 
+    @Test
+    fun migrate5To6_keepsLibraryAndAddsEmptySyncBookkeeping() {
+        helper.createDatabase(TEST_DB, 5).use { db ->
+            db.execSQL(
+                "INSERT INTO playlists (id, name, description, createdAtIso, lastModifiedIso, isReadOnly, " +
+                    "parentId, originProvider, originId, artworkUrl) VALUES " +
+                    "('p1', 'Saved mix', NULL, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 0, NULL, NULL, NULL, NULL)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 6, true, MIGRATION_5_6)
+
+        db.query("SELECT name FROM playlists WHERE id = 'p1'").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Saved mix", it.getString(0))
+        }
+        listOf("sync_outbox", "sync_state", "sync_recovery").forEach { table ->
+            db.query("SELECT COUNT(*) FROM $table").use {
+                assertTrue(it.moveToFirst())
+                assertEquals(0, it.getInt(0))
+            }
+        }
+        db.close()
+    }
+
     private companion object {
         const val TEST_DB = "rizx-migration-test.db"
     }

@@ -19,8 +19,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PlaylistItemEntity::class,
         RecentlyPlayedEntity::class,
         RecognitionHistoryEntity::class,
+        SyncOutboxEntity::class,
+        SyncStateEntity::class,
+        SyncRecoveryEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class RizxDatabase : RoomDatabase() {
@@ -28,6 +31,7 @@ abstract class RizxDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
     abstract fun recentlyPlayedDao(): RecentlyPlayedDao
     abstract fun recognitionHistoryDao(): RecognitionHistoryDao
+    abstract fun syncDao(): SyncDao
 }
 
 /** v1 → v2: adds the `recently_played` table (Phase 15). Preserves favorites/playlists. */
@@ -107,5 +111,33 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
             "CREATE INDEX IF NOT EXISTS `index_recognition_history_resolvedProvider_resolvedSourceId` " +
                 "ON `recognition_history` (`resolvedProvider`, `resolvedSourceId`)",
         )
+    }
+}
+
+/** v5 -> v6: local-first sync bookkeeping. Existing user media data is untouched. */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `sync_outbox` (" +
+                "`operationId` TEXT NOT NULL, `entityType` TEXT NOT NULL, `entityId` TEXT NOT NULL, " +
+                "`operation` TEXT NOT NULL, `payloadJson` TEXT, `createdAtIso` TEXT NOT NULL, " +
+                "`attemptCount` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`operationId`))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_sync_outbox_createdAtIso` ON `sync_outbox` (`createdAtIso`)")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_sync_outbox_entityType_entityId` " +
+                "ON `sync_outbox` (`entityType`, `entityId`)",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `sync_state` (" +
+                "`accountId` TEXT NOT NULL, `deviceId` TEXT NOT NULL, `cursor` INTEGER NOT NULL DEFAULT 0, " +
+                "`lastSyncedAtIso` TEXT, PRIMARY KEY(`accountId`))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `sync_recovery` (" +
+                "`id` TEXT NOT NULL, `playlistId` TEXT NOT NULL, `snapshotJson` TEXT NOT NULL, " +
+                "`expiresAtIso` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_sync_recovery_expiresAtIso` ON `sync_recovery` (`expiresAtIso`)")
     }
 }

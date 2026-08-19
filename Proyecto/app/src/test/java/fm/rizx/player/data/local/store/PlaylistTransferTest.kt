@@ -1,6 +1,7 @@
 package fm.rizx.player.data.local.store
 
 import fm.rizx.player.domain.model.ProviderRef
+import fm.rizx.player.domain.model.LocalFileInfo
 import fm.rizx.player.domain.model.Stream
 import fm.rizx.player.domain.model.StreamCandidate
 import fm.rizx.player.domain.model.StreamProtocol
@@ -21,11 +22,11 @@ class PlaylistTransferTest {
         val export = PlaylistTransfer.decode(json)
 
         assertEquals("rizx.playlist", export.format)
-        assertEquals(1, export.version)
+        assertEquals(2, export.version)
         assertEquals("Road Trip", export.name)
         assertEquals("summer", export.description)
-        assertEquals(listOf("A", "B"), export.tracks.map { it.title })
-        assertEquals(ProviderRef("itunes", "id-A"), export.tracks.first().source)
+        assertEquals(listOf("A", "B"), export.items.map { it.track.title })
+        assertEquals(ProviderRef("itunes", "id-A"), export.items.first().track.source)
     }
 
     @Test
@@ -42,7 +43,30 @@ class PlaylistTransferTest {
 
         val export = PlaylistTransfer.decode(PlaylistTransfer.encode("Mix", null, listOf(resolved), "t"))
 
-        assertTrue(export.tracks.single().streamCandidates.isEmpty())
+        assertTrue(export.items.single().track.streamCandidates.isEmpty())
+    }
+
+    @Test
+    fun `v2 export removes local files and local uri data`() {
+        val local = track("A").copy(
+            source = ProviderRef("local", "a", "content://media/audio/1"),
+            localFile = LocalFileInfo("file:///storage/emulated/0/Music/private.mp3", fingerprint = "secret"),
+        )
+
+        val exported = PlaylistTransfer.decode(PlaylistTransfer.encode("Mix", null, listOf(local), "t"))
+
+        assertEquals(null, exported.items.single().track.localFile)
+        assertEquals(null, exported.items.single().track.source.url)
+        assertTrue("private.mp3" !in PlaylistTransfer.encode("Mix", null, listOf(local), "t"))
+    }
+
+    @Test
+    fun `v1 json remains importable`() {
+        val legacy = """{"format":"rizx.playlist","version":1,"name":"Old","tracks":[{"title":"A","source":{"provider":"itunes","id":"1"}}]}"""
+
+        val imported = PlaylistTransfer.decodeImport(legacy)
+
+        assertEquals(listOf("A"), imported.tracks.map { it.title })
     }
 
     @Test

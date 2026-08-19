@@ -59,6 +59,7 @@ class LibraryViewModelTest {
     private class FakePlaylists : PlaylistRepository {
         val created = mutableListOf<String>()
         val addedTo = mutableListOf<Pair<String, List<Track>>>()
+        val savedSnapshots = mutableListOf<Pair<String, List<Track>>>()
         override fun playlists(): Flow<List<PlaylistSummary>> = flowOf(emptyList())
         override fun playlist(id: String): Flow<Playlist?> = flowOf(null)
         override suspend fun createPlaylist(name: String, description: String?): String { created += name; return "id-${created.size}" }
@@ -67,7 +68,10 @@ class LibraryViewModelTest {
         override suspend fun addTracks(playlistId: String, tracks: List<Track>) { addedTo += playlistId to tracks }
         override suspend fun removeItem(playlistId: String, itemId: String) {}
         override suspend fun reorder(playlistId: String, fromIndex: Int, toIndex: Int) {}
-        override suspend fun saveQueueAsPlaylist(name: String, tracks: List<Track>): String { created += name; return "id" }
+        override suspend fun saveQueueAsPlaylist(name: String, tracks: List<Track>): String {
+            savedSnapshots += name to tracks
+            return "saved-id"
+        }
         override suspend fun exportPlaylist(id: String): String? = null
         override suspend fun importPlaylistFile(text: String, fallbackName: String?): String = "id"
         override suspend fun importFromUrl(url: String): String = "id"
@@ -174,6 +178,40 @@ class LibraryViewModelTest {
         advanceUntilIdle()
 
         assertTrue(playlists.created.isEmpty())
+    }
+
+    @Test
+    fun `saveLikedAsPlaylist preserves favorite order and reports the new playlist`() = runTest {
+        val playlists = FakePlaylists()
+        val liked = listOf(track("Velvet"), track("Ruby"), track("Rust"))
+        val vm = LibraryViewModel(
+            FakeFavorites(liked), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(),
+            NoDownloads(), FakeSettingsRepository(), NoSpatialRenders(),
+        )
+        var result: Result<String>? = null
+
+        vm.saveLikedAsPlaylist("  My likes  ", liked) { result = it }
+        advanceUntilIdle()
+
+        assertEquals(listOf("My likes"), playlists.savedSnapshots.map { it.first })
+        assertEquals(liked, playlists.savedSnapshots.single().second)
+        assertEquals("saved-id", result?.getOrNull())
+    }
+
+    @Test
+    fun `saveLikedAsPlaylist rejects a blank name or empty favorites`() = runTest {
+        val playlists = FakePlaylists()
+        val vm = LibraryViewModel(
+            FakeFavorites(), playlists, FakeRecent(), InMemoryQueueRepository(), FakePlayback(),
+            NoDownloads(), FakeSettingsRepository(), NoSpatialRenders(),
+        )
+        val failures = mutableListOf<Result<String>>()
+
+        vm.saveLikedAsPlaylist("   ", listOf(track("Velvet"))) { failures += it }
+        vm.saveLikedAsPlaylist("My likes", emptyList()) { failures += it }
+
+        assertTrue(playlists.savedSnapshots.isEmpty())
+        assertEquals(2, failures.count { it.isFailure })
     }
 
     @Test

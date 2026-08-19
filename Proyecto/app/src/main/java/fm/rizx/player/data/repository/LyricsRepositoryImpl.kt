@@ -159,12 +159,15 @@ class LyricsRepositoryImpl(
     }
 
     /**
-     * Races the whole chain and returns the **best** result: word timings beat line timings, which beat
-     * prose, with ties going to the provider earliest in the chain (the active one first).
+     * Races the whole chain and returns the **best** result: a *confident* match beats a doubtful one,
+     * then word timings beat line timings, which beat prose, with ties going to the provider earliest
+     * in the chain (the active one first).
      *
-     * The first word-timed hit wins outright and cancels the rest — nothing can outrank it, so there is
-     * no reason to keep paying for the others. Otherwise every provider is given [providerTimeoutMs] and
-     * the best of what came back is used.
+     * The first **confident** word-timed hit wins outright and cancels the rest — nothing can outrank
+     * it, so there is no reason to keep paying for the others. A word-timed hit whose match carried a
+     * penalty does not get that shortcut: it was the door a cover filed as "Cover Artist, BTS" walked
+     * through, word-timed and in the wrong language, ahead of LRCLIB's exact match. Otherwise every
+     * provider is given [providerTimeoutMs] and the best of what came back is used.
      *
      * The error is rethrown **only if every provider failed** — a timeout or a "doesn't have it" is not
      * a failure, it's a miss, and a miss must read as "no lyrics", not as an error banner.
@@ -179,7 +182,9 @@ class LyricsRepositoryImpl(
             async {
                 val outcome = attempt(provider, track)
                 outcomes[index] = outcome
-                (outcome as? Outcome.Ok)?.lyrics?.takeIf { it.isWordSynced }?.let { karaoke.complete(it) }
+                (outcome as? Outcome.Ok)?.lyrics
+                    ?.takeIf { it.isWordSynced && it.isConfidentMatch }
+                    ?.let { karaoke.complete(it) }
                 outcome
             }
         }
@@ -226,11 +231,18 @@ class LyricsRepositoryImpl(
     /** `withTimeoutOrNull` returns null on timeout, which a nullable result would be indistinguishable from. */
     private class Boxed(val value: Lyrics?)
 
-    /** How useful a result is: word-timed > line-timed > anything else worth showing. */
-    private fun Lyrics.rank(): Int = when {
-        isWordSynced -> 3
-        isSynced -> 2
-        else -> 1
+    /**
+     * How useful a result is: a confident match first, then word-timed > line-timed > anything else
+     * worth showing. Confidence outranks timings because a doubtful match's timings describe some other
+     * recording — that is precisely what the doubt is about.
+     */
+    private fun Lyrics.rank(): Int {
+        val timing = when {
+            isWordSynced -> 3
+            isSynced -> 2
+            else -> 1
+        }
+        return if (isConfidentMatch) timing + 10 else timing
     }
 
     /** The active provider first, then the rest in registration order. */

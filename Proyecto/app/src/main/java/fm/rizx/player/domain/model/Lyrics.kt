@@ -84,7 +84,18 @@ data class Lyrics(
      * Portuguese would silently keep showing Spanish.
      */
     val translationLang: String? = null,
+    /**
+     * How far the provider's match was from a sure thing, in the milliseconds of
+     * `LyricsTrackMatcher.score` — `null` when the lyric came from an exact artist/title/duration lookup
+     * or the user's own pick. Provenance, like [sourceName]: it lets the repository refuse to let a
+     * word-timed lyric from a *doubtful* match beat a line-timed one from a certain match. Word timings
+     * are worth reaching for, but not from a different recording.
+     */
+    val matchScore: Long? = null,
 ) {
+    /** True unless the match carried a penalty — a wrong-looking title or artist, or an unknown length. */
+    val isConfidentMatch: Boolean get() = matchScore == null || matchScore < CONFIDENT_MATCH_MS
+
     /** At least one line has a pronunciation, so the reading is worth offering. */
     val hasRomanization: Boolean get() = lines.any { !it.romanized.isNullOrBlank() }
 
@@ -105,6 +116,15 @@ data class Lyrics(
 
     /** True when there is nothing at all to show (and the track isn't a declared instrumental). */
     val isEmpty: Boolean get() = lines.isEmpty() && plain.isNullOrBlank() && !instrumental
+
+    companion object {
+        /**
+         * Below this a match is a real one with a little duration drift; at or above it something was
+         * penalised. Just under the smallest penalty `LyricsTrackMatcher` hands out (prose, 30 s), and
+         * far above the drift between two honest listings of the same recording (a few seconds).
+         */
+        const val CONFIDENT_MATCH_MS = 30_000L
+    }
 }
 
 /**

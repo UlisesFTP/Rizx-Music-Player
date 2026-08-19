@@ -83,6 +83,7 @@ import fm.rizx.player.ui.screens.LocalLibraryScreen
 import fm.rizx.player.ui.screens.NowPlayingScreen
 import fm.rizx.player.ui.screens.PlaylistDetailScreen
 import fm.rizx.player.ui.screens.PreferencesScreen
+import fm.rizx.player.ui.screens.AccountScreen
 import fm.rizx.player.ui.screens.QueueScreen
 import fm.rizx.player.ui.screens.SearchScreen
 import fm.rizx.player.ui.screens.PluginsScreen
@@ -208,6 +209,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                         nav.navigate(Routes.station(providerId, station.id, station.title, station.artwork.tileUrl(thrifty)))
                     },
                     onOpenAllMoods = { nav.navigate(Routes.MOODS) },
+                    onOpenAccount = { nav.navigate(Routes.ACCOUNT) },
                     canvasState = canvasState,
                     canvasEnabled = canvasOn,
                     onShowHeroCanvas = { track, motionEnabled ->
@@ -522,8 +524,12 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     onSetThemeMode = playerViewModel::setThemeMode,
                     onOpenSources = { nav.navigate(Routes.SOURCES) },
                     onOpenEqualizer = { nav.navigate(Routes.EQUALIZER) },
+                    onOpenAccount = { nav.navigate(Routes.ACCOUNT) },
                     onOpenAbout = { nav.navigate(Routes.ABOUT) },
                 )
+            }
+            composable(Routes.ACCOUNT) {
+                AccountScreen(onBack = { nav.popBackStack() })
             }
             composable(Routes.ABOUT) {
                 AboutScreen(

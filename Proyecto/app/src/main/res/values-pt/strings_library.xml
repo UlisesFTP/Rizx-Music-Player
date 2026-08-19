@@ -21,6 +21,10 @@
     <!-- Library screen: liked actions -->
     <string name="library_removed_from_liked">Removido das curtidas</string>
     <string name="library_remove_from_liked_desc">Remover das curtidas</string>
+    <string name="library_save_liked_label">Salvar todas</string>
+    <string name="library_save_liked_desc">Salvar todas as músicas curtidas como playlist</string>
+    <string name="library_liked_playlist_created">Playlist criada com %1$d músicas curtidas</string>
+    <string name="library_liked_playlist_failed">Não foi possível criar a playlist</string>
 
     <!-- Library screen: confirm dialogs -->
     <string name="library_clear_recent_title">Limpar reproduzidos recentemente?</string>

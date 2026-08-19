@@ -1,6 +1,6 @@
 # Privacy Policy — Rizx Player
 
-_Last updated: 2026-08-06 · applies to Rizx Player Android, version 0.2.0_
+_Last reviewed: 2026-08-14 · applies to Rizx Player Android, version 0.2.0_
 
 > Rizx Player ("the app") is an open-source, native Android music player and an independent
 > reimplementation of [nukeop/nuclear](https://github.com/nukeop/nuclear)'s business logic.
@@ -74,7 +74,8 @@ When, and only when, you start a recognition from the Audio ID screen:
   is paused first.
 
 **Plugins:** if you install a plugin, that plugin can make its own `fetch` requests to the source it
-implements (the sandbox allows network access only). Which plugins are installed and enabled is always
+implements (the sandbox has no filesystem or Android access, but outbound destinations are not
+allow-listed). Which plugins are installed and enabled is always
 visible in the Plugins screen, and a disabled plugin makes no requests.
 
 No search text or listening activity is stored on any server operated by us — because we operate no
@@ -104,7 +105,8 @@ The app is not directed at children and collects no personal data from anyone.
 
 ## Your choices
 
-- **Disable any provider** (Settings → Sources) or any plugin — disabled sources are never contacted.
+- **Disable any provider or plugin** from Settings → Plugins & sources — disabled sources are never
+  contacted.
 - **Data saver** limits network use on metered connections.
 - **Clear cache / app data** in Android Settings to erase locally stored favorites, playlists,
   preferences, the listening log, the recognition history, and downloads.

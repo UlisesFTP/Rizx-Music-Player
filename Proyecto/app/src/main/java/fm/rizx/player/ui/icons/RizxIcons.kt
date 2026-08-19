@@ -248,6 +248,20 @@ object RizxIcons {
      * Drag handle for reordering — a 6-dot grip (2×3 filled squares). The dot-matrix motif doubles as the
      * app's own language, so the reorder affordance reads as native rather than a generic hamburger.
      */
+    // Head + shoulders, in the same open-stroke language as the other glyphs. Used wherever the
+    // account has no Google photo to show (signed out, guest, or email-OTP sessions).
+    val Person = icon {
+        stroke(2.6f) {
+            // Head: circle at (12, 8.2), r 3.6, drawn as two half-arcs.
+            moveTo(8.4f, 8.2f)
+            arcTo(3.6f, 3.6f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 15.6f, y1 = 8.2f)
+            arcTo(3.6f, 3.6f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 8.4f, y1 = 8.2f)
+            // Shoulders: an open arc from hip to hip.
+            moveTo(4.6f, 20f)
+            arcTo(7.4f, 7.4f, 0f, isMoreThanHalf = false, isPositiveArc = true, x1 = 19.4f, y1 = 20f)
+        }
+    }
+
     val Grip = icon {
         fill {
             moveTo(8f, 5f); horizontalLineTo(10.4f); verticalLineTo(7.4f); horizontalLineTo(8f); close()

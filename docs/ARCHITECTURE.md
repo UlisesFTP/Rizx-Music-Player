@@ -1,5 +1,7 @@
 # Architecture
 
+_Current implementation snapshot: 2026-08-18 · app 0.2.0 · Room schema 6_
+
 Rizx Player is a single-module Android app (`fm.rizx.player`) built on a clean, one-directional layering.
 This document describes the layers, the identity model, how streaming and playback work, and the queue —
 the load-bearing parts of the design.
@@ -106,18 +108,23 @@ song changes and seeks near-instant.
 
 ## Playback
 
-- **`PlaybackService : MediaSessionService`** owns the **single** real ExoPlayer instance, the
+- **`PlaybackService : MediaSessionService`** owns the **single audio ExoPlayer** instance, the
   `MediaSession`, and the system media notification. ExoPlayer is **never** created or accessed inside a
   Composable.
 - The UI drives playback through **`PlaybackController`** (a domain abstraction), which talks to the
   service via a `MediaController`. `MediaItem.mediaId` is the `QueueItem.id`.
-- Extras handled in the service: gapless/crossfade (volume-envelope fade), loudness normalization
+- Extras handled in the service: gapless/crossfade (volume-envelope fade), the optional loudness boost
   (`LoudnessEnhancer`), adaptive stream quality by network conditions, optional **32-bit float PCM
   output** (Hi-Res mode), the **automatic equalizer** (a per-song curve over the platform `Equalizer`,
   from a genre baseline refined by the track's own measured spectrum), a **PCM tap**
   (`TeeAudioProcessor`) that feeds the Now Playing waveform without any `RECORD_AUDIO` permission, and
   **resume-after-process-death** (a filesystem session store, holding identities only — no ephemeral
   URLs — restores the last track at the exact second).
+- Canvas is the intentional exception to “one player”: `CanvasPlaybackController` owns a second,
+  **muted video-only** ExoPlayer. It never joins the audio session or resolves the queue's audio.
+- Crossfade is a volume-envelope fade-out/fade-in, not overlapping playback from two audio players.
+  The current normalization switch applies a fixed `LoudnessEnhancer` gain; it is not measured LUFS
+  normalization.
 
 ## Queue
 
@@ -130,6 +137,8 @@ song changes and seeks near-instant.
   Next/Prev** (traverse the album/artist/playlist you started from) and the **endless radio** auto-refill.
 - **Shuffle** stores `unshuffledIds` (the pre-shuffle order) so toggling shuffle off restores the original
   order exactly, even with duplicate tracks.
+- Queue mutation remains in-memory. A sanitized session snapshot restores items, current index and
+  playback position after process death; Room is not the queue's source of truth.
 
 ## Downloads & the format pipeline
 
@@ -159,11 +168,17 @@ the canvas stream.
 
 ## Lyrics
 
-A ranked provider chain — word-level beats line-level beats prose: LRCLIB, NetEase (`yrc`), KuGou
-(`krc`), Musixmatch (`richsync`), lyrics.ovh. Results are matched to the playing track (title/artist
-plus a ±2 s duration window) and cached at their achieved tier only, so a degraded fallback never
-shadows a better source later. The karaoke view runs on a smooth interpolating clock rather than
-polling.
+A raced provider chain — LRCLIB, NetEase (`yrc`), KuGou (`krc`), Musixmatch (`richsync`),
+lyrics.ovh — ranked confident-match first, then word-level beats line-level beats prose. Every
+candidate passes `LyricsTrackMatcher`: version, language-of-recording, timed-duration and artist gates
+reject a different recording outright (a Japanese re-recording, a live medley, a cover filed under the
+original artist), and the remaining drift travels with the lyric as `Lyrics.matchScore` so a
+word-timed lyric from a doubtful match cannot outrank a line-timed one from an exact lookup. LRCLIB's
+single-row lookups are cross-checked against its search results when the row is Latin-only, so a
+romanized upload is outvoted by the script most uploaders used. Results are cached at their achieved
+tier only, so a degraded fallback never shadows a better source later, and the cache is versioned so
+a matcher fix invalidates the answers the old matcher gave. The karaoke view runs on a smooth
+interpolating clock rather than polling.
 
 ## Recommendations
 
@@ -171,6 +186,80 @@ polling.
 time-of-day buckets. From it the app derives taste clusters, three daily mixes (70/30
 familiar/discovery), "Similar to …" rows, and radio seeding — all **on-device**; nothing about
 listening behaviour leaves the phone.
+
+## Smart 8D audio (adaptive spatialization)
+
+```
+decoded PCM → PcmTappingAudioSink (waveform · AutoEQ · spatial analyzer)
+            → SpatializingAudioSink (SmartSpatialEngine)
+            → DefaultAudioSink → AudioTrack → session Equalizer
+```
+
+**It wraps the sink; it is not an `AudioProcessor`.** `DefaultAudioSink.configure` builds its
+processing chain from a fixed list whenever the input is high-resolution, so anything passed to
+`setAudioProcessors` is dropped on the float path — the path "prefer lossless" turns on. That has
+already cost this app once (see `PcmTappingAudioSink`), and the spatializer would have failed the same
+way, silently, on exactly the FLAC files it matters most for.
+
+**The taps stay outside it**, so the waveform draws the recording and the automatic equaliser measures
+the recording, rather than either of them seeing this effect and reacting to it.
+
+- **`SmartSpatialEngine`** (`playback/spatial/`) is pure Kotlin — no Android imports, no allocation per
+  frame, no locks — so the whole DSP is covered by JVM tests. A 24 dB/octave crossover keeps the bass
+  centred, then equal-power panning, a fractional delay line for an interaural delay capped at 0.65 ms,
+  head shadow, a front/back spectral cue, crossfeed, a six-tap ambience with a 42 ms pre-delay and
+  allpass diffusion, level-neutral headroom and a stereo-linked limiter.
+- **Every lateral cue is symmetric front-to-back.** Panning, interaural delay and head shadow all place
+  a sound on the axis through the ears; none of them distinguishes ahead from behind, so an orbit built
+  from those alone collapses to a line and half of it is wasted. The separating cue is spectral and
+  belongs to the outer ear: a bell at 3.5 kHz swinging boost-to-cut across the orbit, plus a low-pass
+  faded in as the source passes behind. **Height has no interaural cue either** — it rides a pinna notch
+  swept from 6.3 to 10.8 kHz along an inclined ring — and the ambience leans with the source, since a
+  fixed tail anchors the image and turns an orbit back into a sweep.
+- **The mid and the side both travel, half a turn apart.** Only the middle of the high band used to
+  move; the difference signal came back at a fraction of its level and sat still, so most of a wide
+  record's width was discarded and what survived was an anchor. It now orbits opposite the centre with
+  its own direction cues, and it moves by *balance* rather than by the pan law, which would have spent
+  another 3–6 dB of the width on the movement. Splitting by frequency instead would tear one voice's
+  body away from its consonants; mid/side separates instruments the mix had already separated. A disabled effect is bit-exact passthrough because the dry path
+  is the untouched input, not a reconstruction.
+- **Nothing audible may depend on the buffer size.** Media3 does not promise one, so anything that
+  evolves over time — the orbit, how much the movement breathes with the level, and the glide towards a
+  new profile — is stepped per fixed-length segment from a time constant, never once per `process` call.
+  Two separate bugs came from getting this wrong; the second one meant a long buffer barely moved off
+  the built-in defaults at all. The orbit's phase is likewise **accumulated** rather than computed from
+  the stream position, which would leap most of a turn whenever the profile's period changed; it
+  re-anchors on seek.
+- **Subtractive filters are not filters.** `high = input − lowPass(input)` reconstructs the input
+  exactly but rejects nothing, because a low-pass shifts phase as well as level: at 60 Hz under a 150 Hz
+  cutoff the difference still carries most of the bass. It shipped in two places — the crossover, where
+  it panned bass around the listener, and the reverb send, where it put bass into the most decorrelated
+  part of the chain — and both are now real high-pass biquads.
+- **`SpatializingAudioSink`** owns the buffer contract — one DSP pass per buffer even when the delegate
+  takes it in pieces, the renderer's buffer never written, and the input advanced by exactly what the
+  delegate consumed. Zero-copy bypass when off.
+- **`SpatialTrackAnalyzer`** is a third PCM tap; it keeps the channels apart (stereo width is what a
+  downmix destroys) and does its transforms on `Dispatchers.Default`.
+- **`SmartSpatialProfiles`** is a pure table keyed on `SoundGenre` — the same normalised enum the
+  automatic equaliser already resolves to — followed by measured adaptation and one clamp at the exit
+  that no path can skip. There is no strength setting: the table itself is the tuning.
+- **`SmartSpatialController`** mirrors `AutoEqualizer`: attach/release from the playback service, nested
+  `collectLatest` so a track change cancels the previous song's work, and two gates (built-in speaker,
+  system spatializer) that leave the setting on and report a reason.
+
+- **`SpatialRenderRepository`** writes standalone 8D MP3s, and is deliberately *not* a
+  `DownloadFormat` value. The download index derives its key from `track.source.identityKey` on read, so
+  one song can hold exactly one row — an 8D copy would have had to displace the ordinary download, and
+  then choosing 8D would quietly change what "downloaded" plays. It gets its own store, and its own
+  `TrackDownloader` pointed at its own folder: that class deletes everything in its directory its caller
+  does not claim, so one shared folder would have each index sweep away the other's files at startup.
+  The DSP enters as an `Mp3Encoder` **decorator**, which leaves the transcode loop shared with the plain
+  MP3 download untouched and lands the mono→stereo case (live playback bypasses mono instead, because
+  there the channel count was already announced to the audio sink). The render engine is a fresh
+  instance, never the playback singleton, which is mid-song holding a profile and a room full of tail.
+
+`SpatialAudioProfileStore` caches the **measurement**, not the finished profile, so retuning the
+per-genre table still takes effect on songs already heard.
 
 ## Music recognition
 
@@ -207,14 +296,31 @@ bridge.
 
 ## Persistence
 
-- **Room** — favorites, playlists (+ items), the recently-played listening log, and the recognition
-  history (v5; audio and fingerprints are never stored). `exportSchema` is
+- **Room** — favorites, playlists (+ items), the recently-played listening log, recognition history and
+  local-first sync bookkeeping (v6; audio, fingerprints and resolved stream URLs are never stored).
+  `exportSchema` is
   **on**: each version's schema JSON is committed under `app/schemas/`, and every version bump ships its
   `Migration` together with the new JSON (see [BUILD.md](BUILD.md#room-schemas)).
 - **DataStore (Preferences)** — settings and small key/value state (enabled providers, playback resolver
   settings, etc.).
 - **kotlinx.serialization** — `Track`/queue/session serialization (`TrackJson`), always stripped of
   transient stream state before writing.
+
+## Optional account, sync and portable sharing
+
+Room remains authoritative. Local playlist, favorite and taste mutations enqueue idempotent outbox
+operations in the same local transaction; the Supabase sync function assigns monotonic revisions and
+the client retains recoverable snapshots before replacing dirty playlist state. Signing out stops sync
+without deleting the local library.
+
+Google Credential Manager or a six-digit email OTP creates an optional permanent account. Tokens are
+encrypted with Android Keystore-backed AES-GCM. Guest users are created only when an unlisted cloud
+share needs ownership. Portable JSON/XSPF/M3U8 and every cloud payload are sanitized before crossing the
+device boundary: local paths, local URIs and ephemeral stream candidates are excluded.
+
+The Android client contains only publishable Supabase/Google/share configuration. Migrations and the
+`sync`, `playlist-shares`, `guest-claim` and `account-delete` Edge Functions live in `supabase/`; remote
+deployment and provider configuration remain an external release gate and must be verified separately.
 
 ## Testing
 
@@ -232,5 +338,5 @@ composables, so the JVM-tested pipeline never branches on SDK level.
 Instrumented tests (`app/src/androidTest/`, device required) cover what the JVM cannot: the karaoke
 lyrics timing screen, and **Room migrations** — `RizxMigrationTest` opens a database at the previous
 version from its exported schema, runs the real `Migration`, and asserts that favorites, playlists and
-the listening log survive it. A migration bug is unrecoverable by the time a user notices, so from v5
+the listening log survive it. It covers both 4 → 5 and 5 → 6. A migration bug is unrecoverable by the time a user notices, so from v5
 onward every version bump ships its migration, its schema JSON and its test together.

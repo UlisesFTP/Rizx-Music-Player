@@ -1,5 +1,7 @@
 # Features
 
+_Current feature inventory: 2026-08-14 · Rizx Player 0.2.0_
+
 A tour of what Rizx Player does. Everything below is built on the shared domain pipeline described in
 [ARCHITECTURE.md](ARCHITECTURE.md), so features compose cleanly — a local file, a downloaded track, and a
 Deezer track are all just `Track`s with different `ProviderRef` sources.
@@ -14,12 +16,14 @@ Deezer track are all just `Track`s with different `ProviderRef` sources.
   song to jump to it.
 - **Mini-player** — a floating bar across the app that expands into Now Playing.
 - **Gapless & crossfade** — volume-envelope fades between tracks.
-- **Loudness normalization** — evens out volume across sources (`LoudnessEnhancer`).
+- **Optional loudness boost** — the setting currently applies a fixed +6 dB `LoudnessEnhancer` gain. It
+  is not per-track LUFS measurement or true volume normalization.
 - **Adaptive quality & Hi-Res mode** — stream quality follows current network conditions; an optional
   max-quality mode prefers Opus 160 kbps / 48 kHz over AAC 128 kbps, forces **32-bit float** PCM output,
   and Settings shows a live readout of what the current output path (DAC/headset) actually supports.
 - **Automatic equalizer** — a per-song EQ curve: a genre baseline refined by measuring the track's own
-  spectrum, applied mean-zero with boost trim. The manual equalizer remains available when it's off.
+  spectrum, applied mean-zero with boost trim. When it is off, the manual equalizer offers 17 localized
+  listening profiles whose curves adapt to the real frequency ranges and gain limits exposed by the device.
 - **Synced & karaoke lyrics** — timed lyrics with word-by-word / letter-by-letter highlighting where a
   source carries that resolution (LRCLIB, NetEase, KuGou, Musixmatch — all keyless), falling back to
   line-synced or prose lyrics otherwise.
@@ -52,6 +56,22 @@ Tabbed search across sources:
   grouped by source.
 - **History & suggestion pills** — recent searches and artists you actually played come back as one-tap
   pills, computed entirely on-device (zero network, only deliberate searches are recorded).
+
+**Browse by genre, not by the genre's name.** With the field empty, Search shows a wall of 28 tiles —
+the catalogue's whole published genre list (Pop, Hip-Hop, Metal, Jazz, Salsa, Cumbia, Brazilian,
+African, Indian, Soundtracks, Kids…) led by the all-genres **Charts**. A tile opens a **genre hub**:
+that genre's songs, playlists, artists and albums, with the songs list becoming the queue so next/prev
+stay inside the genre.
+
+Each tile carries a genre **id**, never a query. Searching a catalogue for the word "Pop" returns songs
+*titled* Pop and artists *named* Pop Smoke; a genre is a facet of the catalogue, and only the provider
+that owns the catalogue can group by it. The wall itself makes **no network call at all** — ids and
+artwork are inlined, so the app's most-opened screen never waits or jumps.
+
+One deliberate exception to "take what the provider returns": the source's own per-genre **artists**
+list is not genre-filtered — Metal, Jazz, Classical and an id that does not exist all answer with the
+same regional top-artist list. The hub therefore derives its artists from the genre's own charting
+tracks and albums, which is why Metal shows AC/DC and Metallica.
 
 ## Music recognition (Audio ID)
 
@@ -100,12 +120,92 @@ entry plays it, or searches for it when it was never resolved.
 A streaming-grade feed, rendered progressively from a disk cache so a warm start paints instantly:
 
 - **Continue listening** speed dial (with a surprise-me die) on the overview tab.
-- **Daily mixes** built from your own listening log (see Recommendations).
-- **"Similar to …"** rows anchored on artists you play, a **mood/genre grid**, featured cards with
+- A dedicated **For you** tab with all recommendation rows; the overview keeps only the first three.
+- **Three daily mixes** of up to 12 songs, built from your own listening log (see Recommendations).
+- **"Similar to …"** rows anchored on artists you play, a **mood/genre station grid**, featured cards with
   preview, editorial playlists, charts, new releases, and mosaic tiles.
-- A **feed source selector** — Deezer, Apple, SoundCloud editorial/charts, or a weighted blend.
+- A **feed source selector** — Deezer, Apple, Spotify editorial/charts, YouTube Music, SoundCloud
+  **New & hot**, or a weighted blend. Compact rows show 10 items while full tabs use deeper source lists.
 - Rows announce themselves from local taste before any network call, so the layout doesn't jump while
   content fills in.
+- Pull-to-refresh keeps the current feed visible, each tab remembers its own position, and cards display
+  their actual source instead of presenting blended content as one catalogue.
+
+**Mood & genre stations open, they don't fire.** The grid at the foot of the feed is the same mosaic as
+Search's browse wall — the provider ships a cover for every station and the app used to throw it away —
+and a tile opens a **station hub** showing what that station is playing right now, so you can see the
+list before committing to it and get a retry instead of a dead tap when you are offline. Playing any row
+makes the whole fetched list the queue.
+
+Home previews twelve of them with **See all** behind it; the provider publishes ~75, of which the app
+used to show ten. A station is a live rotation rather than a fixed playlist — two consecutive fetches
+share only about half their tracks — so the hub plays exactly the list it showed you, and reopening it
+legitimately offers a different one.
+
+## Smart 8D audio
+
+Adaptive stereo spatialization, off by default, toggled from the player's overflow menu or from
+Settings → Playback. It applies to the song already playing — the change is a fade of under a second,
+not a restart.
+
+**What it actually is.** Everything above the crossover is taken out of the mix and sent travelling
+around the listener — equal-power panning, a sub-millisecond interaural delay, head-shadow filtering, a
+front/back spectral cue and a little crossfeed — inside a large simulated room with a 42 ms pre-delay
+and a tail of up to three and a half seconds. The front/back cue is what makes the path a circle rather
+than a line: panning, delay and head shadow are all symmetric about the ears, so without it a sound
+behind the listener is indistinguishable from one in front, and half of every orbit is wasted. The
+outer ear is what tells them apart in life — it resonates around 3.5 kHz for sound from the front and
+shadows that band and everything above it for sound from behind — so a bell swings from boost to cut
+across the orbit and the top end rolls off as the source passes behind.
+
+**And height.** The ring is inclined rather than flat: the sound climbs as it passes behind the listener
+and comes back down in front. Elevation has no interaural cue at all — a source above and a source
+ahead reach both ears identically — so what carries it is the *pinna notch*, the dip the folds of the
+outer ear carve into arriving sound, whose frequency rises with the source. Sweeping that notch between
+roughly 6 and 11 kHz is the entire height cue. The ambience leans with the source as well, because a
+tail that stays put while the music moves is an anchor: it reads as a sweep across a fixed room rather
+than as something going round you.
+
+**Two layers, not one.** The recording's own width — everything the engineer placed away from the
+centre, the guitars, pads and backing vocals — gets its own place in the ring, half a turn from the
+middle of the mix, with its own front/back and height cues. One thing moving is a sweep; two things
+moving in different places is a space. It travels by shifting its balance rather than by being panned,
+so the width itself is kept rather than spent on the movement. Not a copy added on top: the original is removed as the moved version is put back, which
+is the difference between the song itself travelling and a halo drifting around a song that stays put.
+Everything below the crossover stays home, so the low end keeps its weight. It is **not** eight of
+anything, not Dolby Atmos, not multichannel, not a measured HRTF, and not a quality improvement. It is a
+*parametric approximation* of the cues an HRTF encodes — a real one is a set of measured impulse
+responses per direction, per head, and this app ships no such dataset. A finished stereo
+master cannot have its voice, drums and guitars moved separately without stem separation, so what
+travels is the whole upper band together, with as much of the recording's own width preserved
+underneath as the mix can spare. Made for headphones.
+
+**Adaptive per song.** A profile arrives immediately from the track's genre, so the effect is there
+from the first bar; meanwhile the recording itself is measured — stereo width and correlation, the
+low/mid/high balance, crest factor, onset density and tempo — and the profile is refined and then
+cached, so a second listen starts where the first finished. Bass-heavy masters raise their crossover
+and calm down, already-wide mixes are left more of themselves, dense modern masters get less ambience,
+and the tempo only sets the orbit's speed when the estimate is confident enough to act on. There is
+deliberately **no strength control**: three of them meant two settings that were wrong for whoever
+picked them, so the per-genre profiles are simply tuned to be worth switching on. Speech is the one
+thing kept nearly still — an arena is the last place you want a podcast — and the safety limits on
+delay, level and crossover apply to every profile regardless.
+
+**Downloading a song in 8D.** The player's overflow menu offers *Download as 8D · MP3 320*, which
+renders the song through the same engine and writes a **standalone file** — a second file for that song,
+not a replacement for its ordinary download, which keeps playing exactly what it always did. It lands in
+its own folder, carries `(8D)` in its tags and in the name it exports under, and copies into the phone's
+`Music/Rizx` when "Save to the phone" is on, so it can be taken to a car stereo or another player. It is
+a re-encode: 320 kbps is what loses the least *more* from an already-lossy source, and no bitrate turns a
+compressed stream into a better one. A song already listened to with the effect on is rendered with the
+profile measured from the recording; one that has not is rendered from its genre, since there is no way
+to measure a song without playing it.
+
+**When it stands down.** The effect stays enabled but reports itself as waiting, with the reason
+visible in the menu, when the audio is going to the phone's speaker (the interaural cues it is built
+from only exist when each ear gets its own channel), when Android is already applying spatial audio of
+its own (API 32+, and that guard is itself a setting), or when the track is mono or in a PCM format it
+cannot process. It never listens, never records, and adds nothing to the APK's dependencies.
 
 ## Recommendations
 
@@ -157,13 +257,16 @@ in-list filter bar (the visible, filtered list is exactly what plays).
 
 ## Playlist import
 
-- **By URL** — Spotify, YouTube / YouTube Music, and Deezer playlist links.
+- **By URL** — Spotify, YouTube / YouTube Music, Deezer and Apple Music playlist links.
 - **By file** — Nuclear-JSON exports and Exportify CSV files.
-- **Complete imports** — Deezer playlists are paged to the end, YouTube beyond the first 100 tracks;
-  Spotify's public embed caps at 100 tracks (the keyless limit, stated in the UI). Playlist covers come
-  along, and missing per-track art is backfilled from Deezer.
+- **Complete imports, whatever the length.** Deezer, Spotify and YouTube all page to the end; Apple
+  Music's playlist page already carries its whole tracklist. Spotify used to arrive as its first 100
+  tracks — the most its public embed will ship — and now pages past that with the anonymous bearer the
+  same embed publishes. Playlist covers come along, and missing per-track art is backfilled from Deezer.
+- **A short import says it is short.** When a source really does cut a list off, the playlist carries
+  that notice on its own screen instead of passing a partial import off as a complete one.
 - Imports are persisted and become normal, editable playlists. All import paths are **keyless** — Spotify
-  is read via the public embed data, never a private API secret.
+  is read from public embed data, never a private API secret.
 
 ## Artist pages
 
@@ -177,11 +280,14 @@ in-list filter bar (the visible, filtered list is exactly what plays).
 - A **sandboxed QuickJS runtime** can download and run real Nuclear plugins.
 - The sandbox exposes only `fetch` (no DOM, no filesystem, no Android APIs), with per-call timeouts and
   per-plugin crash isolation — a misbehaving plugin can't take down the app.
-- 13 of the 14 plugins in Nuclear's registry run as-is; desktop-only integrations are hidden rather than
-  shown broken. A native **Plugins** screen shows each plugin's version, health, and an enable/disable
-  toggle.
+- The store lists **what you can still install**: entries Rizx already does natively (YouTube, SoundCloud,
+  the Deezer dashboard, YouTube playlist import, multi-source search, media-session control) are hidden,
+  as is anything that could not run here at all — a scrobbling plugin has no host to scrobble to. An
+  installed plugin leaves the store for the **Installed** tab, and comes back if you remove it.
+- A native **Plugins** screen shows each plugin's version, health, and an enable/disable toggle.
 - The **community lossless (FLAC) source** is itself a plugin: the app ships as a generic plugin host and
-  a fresh clone builds with **zero** bundled plugins (and no plugin section) by design.
+  a fresh clone builds with **zero** bundled plugins (and no plugin section) by design. A build that does
+  carry one installs it on first launch rather than asking you to find it in the store.
 
 ## Settings
 

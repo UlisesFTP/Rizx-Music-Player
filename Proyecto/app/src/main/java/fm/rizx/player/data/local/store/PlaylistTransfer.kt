@@ -1,7 +1,7 @@
 package fm.rizx.player.data.local.store
 
 import fm.rizx.player.domain.model.Track
-import fm.rizx.player.domain.model.stripResolutionState
+import fm.rizx.player.domain.model.Playlist
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -17,13 +17,22 @@ data class PlaylistExport(
     val name: String,
     val description: String? = null,
     val exportedAtIso: String? = null,
+    /** Kept for v1 import compatibility. New v2 exports use [items]. */
     val tracks: List<Track> = emptyList(),
+    val items: List<PlaylistExportItem> = emptyList(),
 ) {
     companion object {
         const val FORMAT = "rizx.playlist"
-        const val VERSION = 1
+        const val VERSION = 2
     }
 }
+
+@Serializable
+data class PlaylistExportItem(
+    val track: Track,
+    val note: String? = null,
+    val addedAtIso: String? = null,
+)
 
 /** Pure JSON codec for [PlaylistExport]. No Android/file I/O — the UI layer supplies the bytes (SAF). */
 object PlaylistTransfer {
@@ -41,9 +50,21 @@ object PlaylistTransfer {
                 name = name,
                 description = description,
                 exportedAtIso = exportedAtIso,
-                tracks = tracks.map { it.stripResolutionState() },
+                items = tracks.map { PlaylistExportItem(PortableTrackSanitizer.sanitize(it)) },
             ),
         )
+
+    fun encode(playlist: Playlist, exportedAtIso: String): String = json.encodeToString(
+        PlaylistExport.serializer(),
+        PlaylistExport(
+            name = playlist.name,
+            description = playlist.description,
+            exportedAtIso = exportedAtIso,
+            items = playlist.items.map {
+                PlaylistExportItem(PortableTrackSanitizer.sanitize(it.track), it.note, it.addedAtIso)
+            },
+        ),
+    )
 
     /** Parses a Rizx export. Throws [IllegalArgumentException] if the payload isn't a Rizx playlist. */
     fun decode(text: String): PlaylistExport {
@@ -62,7 +83,8 @@ object PlaylistTransfer {
             decodeExportifyCsv(text, fallbackName)?.let { return it }
         }
         runCatching { decode(text) }.getOrNull()?.let {
-            return ImportedPlaylist(name = it.name, description = it.description, tracks = it.tracks)
+            val tracks = if (it.items.isNotEmpty()) it.items.map(PlaylistExportItem::track) else it.tracks
+            return ImportedPlaylist(name = it.name, description = it.description, tracks = tracks)
         }
         decodeNuclearPlaylist(json, text)?.let { return it }
         throw IllegalArgumentException(

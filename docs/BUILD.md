@@ -7,10 +7,12 @@ from that directory.
 
 | Tool | Version |
 |---|---|
-| JDK | 17+ (the project compiles against Java 17) |
+| Gradle JVM | **Java 21 recommended**; Gradle 8.12 supports 17–23 for this project; Java 25 is incompatible |
+| Java target | Java/Kotlin bytecode 17 |
 | Android SDK | `compileSdk 36` installed; the app **runs** on API 26+ (`minSdk 26`) |
-| Android Studio | Meerkat 2024.3+ (ships AGP 8.9) — optional if you use the CLI |
-| Gradle | via the committed wrapper (`./gradlew`) |
+| Android Studio | Any current release compatible with AGP 8.9.1; Quail 2026.1.3 verified locally |
+| Build plugins | AGP 8.9.1 · Kotlin 2.0.21 · KSP 2.0.21-1.0.28 · Hilt 2.52 |
+| Gradle | 8.12 via the committed wrapper (`./gradlew`) |
 
 The app was written API-first against modern Android; every platform API newer than 26 sits behind a
 `Build.VERSION` check, so devices from Android 8.0 up run the same build. What degrades where (Opus
@@ -29,6 +31,16 @@ sdk.dir=/absolute/path/to/Android/Sdk
 ```
 
 `local.properties` is **git-ignored** — never commit it.
+
+Android Studio uses `#GRADLE_LOCAL_JAVA_HOME` from `.idea/gradle.xml`. On this checkout the ignored
+`.gradle/config.properties` should point it to the installed Java 21 JDK:
+
+```properties
+java.home=C\:\\Program Files\\Java\\jdk-21
+```
+
+Use **Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK** if your JDK is in a
+different location. Keep machine-specific paths out of Git.
 
 ## Build
 
@@ -88,7 +100,8 @@ losing them means never being able to update the published app under the same id
 policy: every `version` bump ships its `Migration`, the newly exported schema JSON, **and** a
 `MigrationTestHelper` case in `RizxMigrationTest` — in the same commit, so migrations are reviewable and
 provable against the real history. The export starts at version 4; versions 1–3 predate it and are
-reconstructible only from the migrations in `RizxDatabase.kt`, so 4 → 5 is the first testable one.
+reconstructible only from the migrations in `RizxDatabase.kt`. The instrumented suite covers 4 → 5 and
+5 → 6; schema 6 adds local-first account/sync bookkeeping without replacing existing media data.
 
 Two artifacts are generated **into the source tree** by builds — worth knowing if you build from a
 mirror/copy of the checkout (CI caches, synced build dirs): `app/schemas/` (any KSP build) and
@@ -101,9 +114,11 @@ Carry them back to the real checkout or they're lost on the next sync.
 cd Proyecto
 ./gradlew testDebugUnitTest                                   # all unit tests (JVM, no device)
 ./gradlew testDebugUnitTest --tests "fm.rizx.player.data.provider.ProviderRegistryTest"   # a single class
+./gradlew lintDebug                                           # static Android checks
 ```
 
 Unit tests use JUnit4 · MockK · Turbine · OkHttp MockWebServer and run on the JVM (no emulator needed).
+The 2026-08-18 repository snapshot runs **1,489 tests in 168 suites with zero failures or skips**.
 Instrumented tests run via `./gradlew connectedDebugAndroidTest` (device/emulator required): the
 karaoke-lyrics timing screen, and the **Room migration tests** (`RizxMigrationTest`), which open a
 database at the previous version from the exported schema, apply the real `Migration`, and check that
@@ -163,5 +178,12 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the layering rules and why the depend
 - **JitPack dependency (NewPipeExtractor) fails to resolve** — the JitPack repository is scoped in
   `settings.gradle.kts` to `com.github.[Tt]eam[Nn]ew[Pp]ipe*`; a network hiccup on first resolve usually
   fixes itself on retry.
-- **Wrong JDK** — ensure Gradle uses JDK 17+ (Android Studio: *Settings → Build Tools → Gradle → Gradle
-  JDK*).
+- **“Incompatible Gradle JVM version” with Java 25** — select Java 21 for the Gradle JDK. Gradle 8.12
+  cannot run on Java 25. The CLI check is `./gradlew --version`; both Launcher and Daemon JVM should
+  report Java 21.
+- **`Unable to load class com.google.devtools.ksp.gradle.KspTaskJvm`** — do not clear a healthy cache
+  first. Confirm the project has the pinned compatible set: Gradle 8.12, AGP 8.9.1, Kotlin 2.0.21,
+  KSP 2.0.21-1.0.28 and Hilt 2.52. This error occurs when Android Studio's Upgrade Assistant partially
+  upgrades Gradle/Kotlin/KSP while leaving Hilt on the older API. Stop daemons with `./gradlew --stop`,
+  restore those versions, then sync. Only re-download dependencies if an offline `./gradlew help`
+  actually proves the cache is missing or corrupt.

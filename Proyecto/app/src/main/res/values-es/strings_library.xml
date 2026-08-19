@@ -21,6 +21,10 @@
     <!-- Library screen: liked actions -->
     <string name="library_removed_from_liked">Quitado de Me gusta</string>
     <string name="library_remove_from_liked_desc">Quitar de Me gusta</string>
+    <string name="library_save_liked_label">Guardar todas</string>
+    <string name="library_save_liked_desc">Guardar todas las canciones con Me gusta como playlist</string>
+    <string name="library_liked_playlist_created">Playlist creada con %1$d canciones con Me gusta</string>
+    <string name="library_liked_playlist_failed">No se pudo crear la playlist</string>
 
     <!-- Library screen: confirm dialogs -->
     <string name="library_clear_recent_title">¿Vaciar lo reproducido recientemente?</string>

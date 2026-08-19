@@ -48,8 +48,8 @@ class NeteaseLyricsProvider(
 
         return guard {
             withContext(io) {
-                val song = bestMatch(query, track) ?: return@withContext null
-                lyricsFor(song.id ?: return@withContext null)
+                val match = bestMatch(query, track) ?: return@withContext null
+                lyricsFor(match.candidate.id ?: return@withContext null)?.copy(matchScore = match.score)
             }
         }
     }
@@ -82,9 +82,9 @@ class NeteaseLyricsProvider(
      * Length alone used to decide this, which is how a live take or a sped-up edit of the same song won:
      * they are the versions whose duration lands closest to the original.
      */
-    private suspend fun bestMatch(query: String, track: Track): NeteaseSongDto? {
+    private suspend fun bestMatch(query: String, track: Track): LyricsTrackMatcher.Scored<NeteaseSongDto>? {
         val songs = api.search(query, limit = MAX_RESULTS).result.songs.ifEmpty { return null }
-        return LyricsTrackMatcher.bestOf(track, songs) { song ->
+        return LyricsTrackMatcher.pick(track, songs) { song ->
             LyricsMatchTarget(
                 title = song.name.orEmpty(),
                 artist = song.artists.joinToString { it.name.orEmpty() },
@@ -113,7 +113,7 @@ class NeteaseLyricsProvider(
 
         return guard {
             withContext(io) {
-                val song = bestMatch(query, track) ?: return@withContext lyrics
+                val song = bestMatch(query, track)?.candidate ?: return@withContext lyrics
                 val body = api.lyric(song.id ?: return@withContext lyrics)
                 // Joined inside NetEase's own document first, where the timestamps agree exactly, then
                 // carried across to the other provider's lines by text — the only key the two share.
@@ -140,11 +140,20 @@ class NeteaseLyricsProvider(
         val words = YrcParser.parse(body.yrc?.lyric)
         val fromWords = words.isNotEmpty()
         val lines = words.ifEmpty { LrcParser.parse(body.lrc?.lyric) }
-        if (lines.isEmpty()) return null
+        if (lines.isEmpty() || lines.isPlaceholder()) return null
 
         val roman = LrcParser.parse(if (fromWords) body.yromalrc?.lyric else body.romalrc?.lyric)
         return Lyrics(lines = lines.withReadings(romanized = roman), sourceName = NAME)
     }
+
+    /**
+     * NetEase answers an instrumental — or a song nobody has transcribed — with a single line reading
+     * "纯音乐，请欣赏" ("pure music, please enjoy"). It is a message, not a lyric, and as a one-line
+     * *timed* lyric it used to outrank every other provider's prose and tie every other provider's
+     * timings, so a Chinese notice was what the screen showed for FAKE LOVE.
+     */
+    private fun List<fm.rizx.player.domain.model.LyricLine>.isPlaceholder(): Boolean =
+        size <= 2 && all { it.text.isBlank() || PLACEHOLDER_MARKERS.any { marker -> marker in it.text } }
 
     private suspend fun <T> guard(block: suspend () -> T): T? =
         try {
@@ -167,6 +176,8 @@ class NeteaseLyricsProvider(
 
         /** Each candidate costs its own lyric request, so the manual picker stays short. */
         private const val MAX_CANDIDATES = 5
+
+        private val PLACEHOLDER_MARKERS = listOf("纯音乐", "暂无歌词", "请欣赏")
 
     }
 }
