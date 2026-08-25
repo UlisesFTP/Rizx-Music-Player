@@ -1,3 +1,4 @@
+import java.net.URI
 import java.util.Properties
 
 plugins {
@@ -58,6 +59,13 @@ android {
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", quotedBuildConfig(publicConfig("RIZX_GOOGLE_WEB_CLIENT_ID")))
         buildConfigField("String", "SHARE_BASE_URL", quotedBuildConfig(publicConfig("RIZX_SHARE_BASE_URL")))
         buildConfigField("String", "TURNSTILE_CHALLENGE_URL", quotedBuildConfig(publicConfig("RIZX_TURNSTILE_CHALLENGE_URL")))
+
+        // The App Links intent filter is cut from the same share URL the app hands out, so the two can
+        // never disagree. With no share backend configured the filter still has to be well-formed, so it
+        // points at a reserved `.invalid` host (RFC 2606) that no link will ever carry.
+        val shareLink = runCatching { URI(publicConfig("RIZX_SHARE_BASE_URL").trim()) }.getOrNull()
+        manifestPlaceholders["shareLinkHost"] = shareLink?.host?.takeIf { it.isNotBlank() } ?: "share.rizx.invalid"
+        manifestPlaceholders["shareLinkPath"] = (shareLink?.path?.trimEnd('/') ?: "") + "/"
     }
 
     signingConfigs {

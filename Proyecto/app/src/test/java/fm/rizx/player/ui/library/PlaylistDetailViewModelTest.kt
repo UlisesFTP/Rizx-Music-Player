@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -82,6 +83,31 @@ class PlaylistDetailViewModelTest {
     private object NoShares : PlaylistShareRepository {
         override val configured = false
         override suspend fun create(playlistId: String, captchaToken: String?) = PlaylistShare("", "", "")
+        override suspend fun existing(playlistId: String): PlaylistShare? = null
+        override suspend fun active(): List<PlaylistShare> = emptyList()
+        override suspend fun revoke(shareId: String) = Unit
+    }
+
+    /** Answers without suspending, which is also the shape that would catch an init-order mistake. */
+    private class ExistingShare(private val share: PlaylistShare?) : PlaylistShareRepository {
+        override val configured = true
+        var lookups = 0
+            private set
+
+        override suspend fun create(playlistId: String, captchaToken: String?) = PlaylistShare("", "", "")
+        override suspend fun existing(playlistId: String): PlaylistShare? {
+            lookups++
+            return share
+        }
+
+        override suspend fun active(): List<PlaylistShare> = emptyList()
+        override suspend fun revoke(shareId: String) = Unit
+    }
+
+    private class FailingShares : PlaylistShareRepository {
+        override val configured = true
+        override suspend fun create(playlistId: String, captchaToken: String?) = PlaylistShare("", "", "")
+        override suspend fun existing(playlistId: String): PlaylistShare? = error("offline")
         override suspend fun active(): List<PlaylistShare> = emptyList()
         override suspend fun revoke(shareId: String) = Unit
     }
@@ -98,9 +124,13 @@ class PlaylistDetailViewModelTest {
         },
     )
 
-    private fun vm(repo: PlaylistRepository, playback: PlaybackController = FakePlayback()) = PlaylistDetailViewModel(
+    private fun vm(
+        repo: PlaylistRepository,
+        playback: PlaybackController = FakePlayback(),
+        shares: PlaylistShareRepository = NoShares,
+    ) = PlaylistDetailViewModel(
         SavedStateHandle(mapOf("playlistId" to "p1")), repo, InMemoryQueueRepository(), playback, NoDownloads(),
-        NoExports, NoShares,
+        NoExports, shares,
     )
 
     @Test
@@ -172,5 +202,33 @@ class PlaylistDetailViewModelTest {
 
         assertEquals(listOf("p1"), repo.deleted)
         assertTrue(deleted)
+    }
+
+    @Test
+    fun `an existing link is restored when the playlist opens, so it can be copied and revoked again`() = runTest {
+        val link = PlaylistShare("share-1", "https://example.test/s/token", "2026-08-27T16:49:59Z")
+        val shares = ExistingShare(link)
+
+        val vm = vm(FakePlaylists(samplePlaylist()), shares = shares)
+        advanceUntilIdle()
+
+        assertEquals(link, vm.shareState.value.link)
+        assertEquals(1, shares.lookups)
+    }
+
+    @Test
+    fun `a playlist with no link still offers to create one`() = runTest {
+        val vm = vm(FakePlaylists(samplePlaylist()), shares = ExistingShare(null))
+        advanceUntilIdle()
+
+        assertNull(vm.shareState.value.link)
+    }
+
+    @Test
+    fun `a lookup that fails leaves the sheet usable instead of taking the screen down`() = runTest {
+        val vm = vm(FakePlaylists(samplePlaylist()), shares = FailingShares())
+        advanceUntilIdle()
+
+        assertNull(vm.shareState.value.link)
     }
 }

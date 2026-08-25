@@ -14,8 +14,25 @@ interface FavoriteDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(entity: FavoriteEntity)
 
+    /**
+     * The cloud's version of a favorite replaces the local row. [insert]'s `IGNORE` is right for a
+     * local re-like, and wrong here: it silently dropped every remote edit to a key already present.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFromSync(entity: FavoriteEntity)
+
+    @Query("DELETE FROM sync_outbox WHERE entityType = :entityType AND entityId = :entityId")
+    suspend fun deleteSyncOperationsFor(entityType: String, entityId: String)
+
     @Insert
-    suspend fun insertSyncOperation(operation: SyncOutboxEntity)
+    suspend fun insertSyncOperationRow(operation: SyncOutboxEntity)
+
+    /** One pending operation per favorite: like-unlike-like leaves a single UPSERT, not three rows. */
+    @Transaction
+    suspend fun insertSyncOperation(operation: SyncOutboxEntity) {
+        deleteSyncOperationsFor(operation.entityType, operation.entityId)
+        insertSyncOperationRow(operation)
+    }
 
     @Transaction
     suspend fun insertWithJournal(entity: FavoriteEntity, operation: SyncOutboxEntity) {
@@ -36,6 +53,15 @@ interface FavoriteDao {
         delete(type, provider, sourceId)
         insertSyncOperation(operation)
     }
+
+    @Query("SELECT * FROM favorites WHERE type = :type AND provider = :provider AND sourceId = :sourceId")
+    suspend fun find(type: String, provider: String, sourceId: String): FavoriteEntity?
+
+    @Query("SELECT * FROM favorites")
+    suspend fun all(): List<FavoriteEntity>
+
+    @Query("DELETE FROM favorites")
+    suspend fun deleteAll()
 
     @Query("SELECT * FROM favorites WHERE type = :type ORDER BY addedAtIso DESC")
     fun observeByType(type: String): Flow<List<FavoriteEntity>>

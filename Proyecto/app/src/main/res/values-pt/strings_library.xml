@@ -28,7 +28,7 @@
 
     <!-- Library screen: confirm dialogs -->
     <string name="library_clear_recent_title">Limpar reproduzidos recentemente?</string>
-    <string name="library_clear_recent_body">Somente o histórico é apagado — suas músicas curtidas e playlists permanecem.</string>
+    <string name="library_clear_recent_body">Só o histórico deste telefone é apagado: seus favoritos, playlists e o que ouviu em outros aparelhos ficam.</string>
     <string name="library_delete_download_title">Excluir download?</string>
     <string name="library_delete_download_body">O arquivo é removido deste dispositivo. A música permanece na sua biblioteca e voltará a tocar via streaming.</string>
     <string name="library_delete_all_downloads_title">Excluir todos os downloads?</string>

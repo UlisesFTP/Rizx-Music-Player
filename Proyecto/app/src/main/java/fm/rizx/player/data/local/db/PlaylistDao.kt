@@ -19,8 +19,28 @@ interface PlaylistDao {
     @Insert
     suspend fun insertItems(items: List<PlaylistItemEntity>)
 
+    @Query("DELETE FROM sync_outbox WHERE entityType = :entityType AND entityId = :entityId")
+    suspend fun deleteSyncOperationsFor(entityType: String, entityId: String)
+
     @Insert
-    suspend fun insertSyncOperation(operation: SyncOutboxEntity)
+    suspend fun insertSyncOperationRow(operation: SyncOutboxEntity)
+
+    /**
+     * One pending operation per entity. Six edits to a playlist used to queue six full re-exports of
+     * the same list; the server keys records by entity, so only the newest state matters.
+     */
+    @Transaction
+    suspend fun insertSyncOperation(operation: SyncOutboxEntity) {
+        deleteSyncOperationsFor(operation.entityType, operation.entityId)
+        insertSyncOperationRow(operation)
+    }
+
+    @Query("SELECT id FROM playlists")
+    suspend fun allIds(): List<String>
+
+    /** Items go with them by cascade. */
+    @Query("DELETE FROM playlists")
+    suspend fun deleteAll()
 
     @Transaction
     suspend fun createWithJournal(playlist: PlaylistEntity, operation: SyncOutboxEntity) {

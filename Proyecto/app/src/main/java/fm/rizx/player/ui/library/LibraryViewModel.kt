@@ -20,6 +20,7 @@ import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.domain.repository.SpatialRenderRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import fm.rizx.player.domain.share.ShareLinkInbox
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -41,7 +42,16 @@ class LibraryViewModel @Inject constructor(
     private val downloads: DownloadRepository,
     private val settings: SettingsRepository,
     private val spatialRenders: SpatialRenderRepository,
+    private val shareLinks: ShareLinkInbox = ShareLinkInbox(),
 ) : ViewModel() {
+
+    /**
+     * A share link that arrived from outside the app — a scanned QR, a tapped link — waiting for the
+     * Library to import it. Null once [consumeShareLink] has taken it.
+     */
+    val pendingShareLink: StateFlow<String?> get() = shareLinks.pending
+
+    fun consumeShareLink(): String? = shareLinks.consume()
 
     val favoriteTracks: StateFlow<List<Track>> =
         favorites.favoriteTracks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

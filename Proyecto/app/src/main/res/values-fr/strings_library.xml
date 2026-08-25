@@ -28,7 +28,7 @@
 
     <!-- Library screen: confirm dialogs -->
     <string name="library_clear_recent_title">Vider les titres récemment écoutés ?</string>
-    <string name="library_clear_recent_body">Seul l\'historique est effacé — vos titres aimés et vos playlists restent.</string>
+    <string name="library_clear_recent_body">Seul l\'historique de ce téléphone est effacé : vos favoris, playlists et ce que vous avez écouté sur d\'autres appareils restent.</string>
     <string name="library_delete_download_title">Supprimer le téléchargement ?</string>
     <string name="library_delete_download_body">Le fichier est supprimé de cet appareil. Le titre reste dans votre bibliothèque et sera de nouveau diffusé en streaming.</string>
     <string name="library_delete_all_downloads_title">Supprimer tous les téléchargements ?</string>

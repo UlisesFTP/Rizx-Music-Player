@@ -16,6 +16,7 @@ import fm.rizx.player.domain.model.PlaylistSummary
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Stream
 import fm.rizx.player.domain.model.Track
+import fm.rizx.player.domain.share.ShareLinkInbox
 import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.playback.PlaybackState
 import fm.rizx.player.domain.repository.DownloadRepository
@@ -31,6 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -318,5 +320,23 @@ class LibraryViewModelTest {
         assertEquals(listOf("meta:Ruby"), downloads.exported)
         assertEquals(1, saved)
         assertEquals(0, failed)
+    }
+
+    @Test
+    fun `a share link from outside waits in the inbox until the Library takes it, once`() = runTest {
+        val inbox = ShareLinkInbox()
+        val vm = LibraryViewModel(
+            FakeFavorites(), FakePlaylists(), FakeRecent(), InMemoryQueueRepository(), FakePlayback(), NoDownloads(),
+            FakeSettingsRepository(), NoSpatialRenders(), inbox,
+        )
+        val url = "https://example.supabase.co/functions/v1/playlist-shares/iS_UBbQ-InTyjHsGRcBwCk7s1tWiK_qJSv8np62mxLY"
+        assertNull(vm.pendingShareLink.value)
+
+        inbox.offer(url)
+
+        assertEquals(url, vm.pendingShareLink.value)
+        assertEquals("the first taker gets it", url, vm.consumeShareLink())
+        assertNull("and nobody after", vm.consumeShareLink())
+        assertNull(vm.pendingShareLink.value)
     }
 }

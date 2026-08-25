@@ -261,6 +261,9 @@ in-list filter bar (the visible, filtered list is exactly what plays).
 
 - **By URL** — Spotify, YouTube / YouTube Music, Deezer and Apple Music playlist links.
 - **By file** — Nuclear-JSON exports and Exportify CSV files.
+- **By share link or QR** — a Rizx share link opened on a phone with Rizx installed opens the app and
+  imports the playlist straight away. Without the app, the link shows a page with an "Open in Rizx"
+  button and a download link.
 - **Complete imports, whatever the length.** Deezer, Spotify and YouTube all page to the end; Apple
   Music's playlist page already carries its whole tracklist. Spotify used to arrive as its first 100
   tracks — the most its public embed will ship — and now pages past that with the anonymous bearer the
@@ -269,6 +272,24 @@ in-list filter bar (the visible, filtered list is exactly what plays).
   that notice on its own screen instead of passing a partial import off as a complete one.
 - Imports are persisted and become normal, editable playlists. All import paths are **keyless** — Spotify
   is read from public embed data, never a private API secret.
+
+## Account & sync
+
+Optional. Rizx works fully without an account; signing in with Google keeps your library the same on
+every device, the way a streaming service does:
+
+- **Playlists, favorites and listening taste** travel with the account. Every edit is journaled
+  locally and uploaded on its own within seconds; opening the app, or bringing it back after a while,
+  pulls what other devices did. A backstop run every few hours catches a phone that sat in a drawer.
+- **Taste adds up across devices.** Each phone publishes its own listening counters; the app sums
+  them, so a song played five times here and three times on the tablet is an eight-play song on both —
+  and the personalized rows of the Home refresh when another device's history or likes arrive.
+- **Local first, always.** Room stays the source of truth: nothing waits on the network, the app is
+  identical offline, and signing out keeps everything on the phone. A device that last synced with a
+  different account asks before uploading its library: merge it, take the cloud copy (recoverable for
+  30 days), or stay signed out.
+- Never uploaded: downloads, local files, stream URLs, the queue, recognition history, plugins or any
+  provider credential. Data saver pauses only the listening-counter uploads.
 
 ## Artist pages
 

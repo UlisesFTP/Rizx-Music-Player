@@ -42,6 +42,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -171,6 +172,25 @@ fun LibraryScreen(
             onFailure = { importFailedMsg },
         )
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
+
+    // A link that arrived from outside the app — a scanned QR, a tapped share link. Taken out of the
+    // inbox *before* the import starts, so a recomposition or a second Library entry can't run it twice;
+    // on success the new playlist opens, which is the whole point of scanning instead of pasting.
+    val pendingShare by vm.pendingShareLink.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingShare) {
+        val url = pendingShare ?: return@LaunchedEffect
+        if (vm.consumeShareLink() == null) return@LaunchedEffect
+        tab = LibraryTab.Playlists
+        vm.importFromUrl(url) { result ->
+            result.fold(
+                onSuccess = { id ->
+                    Toast.makeText(context, playlistImportedMsg, Toast.LENGTH_LONG).show()
+                    onOpenPlaylist(id)
+                },
+                onFailure = { Toast.makeText(context, importFailedMsg, Toast.LENGTH_LONG).show() },
+            )
+        }
     }
 
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->

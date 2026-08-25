@@ -29,7 +29,17 @@ class FavoritesRepositoryTest {
                 rows.value = rows.value + entity
             }
         }
-        override suspend fun insertSyncOperation(operation: SyncOutboxEntity) { operations += operation }
+        override suspend fun upsertFromSync(entity: FavoriteEntity) {
+            rows.value = rows.value.filterNot { matches(it, entity.type, entity.provider, entity.sourceId) } + entity
+        }
+        override suspend fun deleteSyncOperationsFor(entityType: String, entityId: String) {
+            operations.removeAll { it.entityType == entityType && it.entityId == entityId }
+        }
+        override suspend fun insertSyncOperationRow(operation: SyncOutboxEntity) { operations += operation }
+        override suspend fun find(type: String, provider: String, sourceId: String): FavoriteEntity? =
+            rows.value.firstOrNull { matches(it, type, provider, sourceId) }
+        override suspend fun all(): List<FavoriteEntity> = rows.value
+        override suspend fun deleteAll() { rows.value = emptyList() }
 
         override suspend fun delete(type: String, provider: String, sourceId: String) {
             rows.value = rows.value.filterNot { matches(it, type, provider, sourceId) }

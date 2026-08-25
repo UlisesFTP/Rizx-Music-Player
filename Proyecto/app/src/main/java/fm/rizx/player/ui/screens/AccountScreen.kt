@@ -63,7 +63,10 @@ import fm.rizx.player.ui.theme.code
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.sg
 import kotlinx.coroutines.launch
+import android.text.format.DateUtils
+import fm.rizx.player.data.sync.SyncScheduler
 import java.security.MessageDigest
+import java.time.Instant
 import java.security.SecureRandom
 
 @Composable
@@ -74,8 +77,40 @@ fun AccountScreen(onBack: () -> Unit, vm: AccountViewModel = hiltViewModel()) {
     val account by vm.accountState.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
     val pendingCount by vm.pendingCount.collectAsStateWithLifecycle()
+    val status by vm.status.collectAsStateWithLifecycle()
+    val mergeRequired by vm.mergeRequired.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
     var googleRequesting by remember { mutableStateOf(false) }
+
+    // This device holds a library that was last synced with another account. Nothing is uploaded until
+    // the user says what happens to it — the one choice spec 021 refuses to make on their behalf.
+    if (mergeRequired != null) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text(stringResource(R.string.account_merge_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.account_merge_body))
+                    Button(
+                        onClick = { vm.resolveMerge(SyncScheduler.MergeChoice.UNION) },
+                        enabled = !ui.isWorking,
+                        modifier = Modifier.fillMaxWidth().padding(top = 18.dp).heightIn(min = 48.dp),
+                    ) { Text(stringResource(R.string.account_merge_union)) }
+                    OutlinedButton(
+                        onClick = { vm.resolveMerge(SyncScheduler.MergeChoice.CLOUD) },
+                        enabled = !ui.isWorking,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp),
+                    ) { Text(stringResource(R.string.account_merge_cloud)) }
+                    OutlinedButton(
+                        onClick = { vm.resolveMerge(SyncScheduler.MergeChoice.KEEP_LOCAL) },
+                        enabled = !ui.isWorking,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp),
+                    ) { Text(stringResource(R.string.account_merge_keep)) }
+                }
+            },
+            confirmButton = {},
+        )
+    }
 
     if (confirmDelete) {
         AlertDialog(
@@ -176,10 +211,24 @@ fun AccountScreen(onBack: () -> Unit, vm: AccountViewModel = hiltViewModel()) {
             Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.account_sync_scope), style = mr(13, FontWeight.Medium), color = c.text)
             Text(stringResource(R.string.account_sync_excludes), style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 6.dp))
+            // Sync runs on its own; this line is how the user knows it did, and the button is for the
+            // moment they don't want to wait for it.
+            val statusText = when {
+                status.running -> stringResource(R.string.account_sync_status_syncing)
+                status.failed -> stringResource(R.string.account_sync_status_failed)
+                status.lastSyncedAtIso != null -> stringResource(R.string.account_sync_status_synced, relativeTime(status.lastSyncedAtIso!!))
+                else -> stringResource(R.string.account_sync_status_never)
+            }
+            Text(
+                statusText,
+                style = mr(12, FontWeight.SemiBold),
+                color = if (status.failed) c.redAccent else c.text,
+                modifier = Modifier.padding(top = 14.dp),
+            )
             OutlinedButton(
                 onClick = vm::syncNow,
-                enabled = !ui.isWorking,
-                modifier = Modifier.fillMaxWidth().padding(top = 18.dp).heightIn(min = 52.dp),
+                enabled = !ui.isWorking && !status.running && mergeRequired == null,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp).heightIn(min = 52.dp),
             ) { Text(stringResource(R.string.account_sync_now, pendingCount)) }
             OutlinedButton(
                 onClick = vm::signOut,
@@ -310,3 +359,8 @@ private fun randomNonce(): String = ByteArray(32).also(SecureRandom()::nextBytes
 
 private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+
+/** "2 minutes ago", in the device's language, or the raw stamp if it does not parse. */
+private fun relativeTime(iso: String): String = runCatching {
+    DateUtils.getRelativeTimeSpanString(Instant.parse(iso).toEpochMilli(), System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
+}.getOrDefault(iso)

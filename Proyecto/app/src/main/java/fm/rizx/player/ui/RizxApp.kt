@@ -119,6 +119,13 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     // Library (favorites + playlists) shared for the app-wide "add to playlist" picker.
     val libraryViewModel: LibraryViewModel = hiltViewModel()
     val playlists by libraryViewModel.playlistSummaries.collectAsStateWithLifecycle()
+
+    // A share link that arrived from outside — a scanned QR, a tapped link — is imported by the Library,
+    // so that is where the app goes the moment one lands. The screen itself consumes and imports it.
+    val pendingShareLink by libraryViewModel.pendingShareLink.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingShareLink) {
+        if (pendingShareLink != null) nav.navigateTabAt(Routes.library(LibraryTab.Playlists.name))
+    }
     // One visual player for the whole activity. Home and Now Playing borrow it by placement; the
     // coordinator gives Now Playing priority during navigation and stops whenever neither is visible.
     val canvasViewModel: CanvasViewModel = hiltViewModel()

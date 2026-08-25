@@ -1,0 +1,23 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "fm.rizx.player",
+      "sha256_cert_fingerprints": [
+        "D7:97:42:78:D0:51:B0:8D:44:89:5E:32:7D:6B:0E:B3:3B:E2:72:2A:45:F5:D1:C4:E4:DA:44:67:C0:1E:8A:95",
+        "DD:31:C7:64:A0:E2:0A:BE:F4:83:93:72:38:EE:60:39:7B:68:1A:5E:2E:98:AB:7A:9A:5F:B1:89:72:36:F1:C7"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "fm.rizx.player.debug",
+      "sha256_cert_fingerprints": [
+        "DD:31:C7:64:A0:E2:0A:BE:F4:83:93:72:38:EE:60:39:7B:68:1A:5E:2E:98:AB:7A:9A:5F:B1:89:72:36:F1:C7"
+      ]
+    }
+  }
+]

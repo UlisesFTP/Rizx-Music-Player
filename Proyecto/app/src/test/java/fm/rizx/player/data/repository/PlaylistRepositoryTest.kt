@@ -41,7 +41,12 @@ class PlaylistRepositoryTest {
             playlists.value = playlists.value + (playlist.id to playlist)
         }
         override suspend fun insertItems(items: List<PlaylistItemEntity>) { this.items.value += items }
-        override suspend fun insertSyncOperation(operation: SyncOutboxEntity) { operations += operation }
+        override suspend fun deleteSyncOperationsFor(entityType: String, entityId: String) {
+            operations.removeAll { it.entityType == entityType && it.entityId == entityId }
+        }
+        override suspend fun insertSyncOperationRow(operation: SyncOutboxEntity) { operations += operation }
+        override suspend fun allIds(): List<String> = playlists.value.keys.toList()
+        override suspend fun deleteAll() { playlists.value = emptyMap(); items.value = emptyList() }
         override suspend fun updatePlaylist(playlist: PlaylistEntity) {
             playlists.value = playlists.value + (playlist.id to playlist)
         }

@@ -28,7 +28,7 @@
 
     <!-- Library screen: confirm dialogs -->
     <string name="library_clear_recent_title">¿Vaciar lo reproducido recientemente?</string>
-    <string name="library_clear_recent_body">Solo se borra el historial — tus canciones con me gusta y tus playlists se mantienen.</string>
+    <string name="library_clear_recent_body">Solo se borra el historial de este teléfono: tus favoritos, playlists y lo que escuchaste en otros dispositivos se quedan.</string>
     <string name="library_delete_download_title">¿Eliminar descarga?</string>
     <string name="library_delete_download_body">El archivo se elimina de este dispositivo. La canción permanece en tu biblioteca y volverá a reproducirse en streaming.</string>
     <string name="library_delete_all_downloads_title">¿Eliminar todas las descargas?</string>

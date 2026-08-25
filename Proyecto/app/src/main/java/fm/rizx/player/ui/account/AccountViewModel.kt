@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.domain.account.AccountRepository
 import fm.rizx.player.domain.account.AccountState
+import fm.rizx.player.data.sync.SyncScheduler
 import fm.rizx.player.domain.sync.SyncCoordinator
+import fm.rizx.player.domain.sync.SyncStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +21,7 @@ import javax.inject.Inject
 class AccountViewModel @Inject constructor(
     private val account: AccountRepository,
     private val sync: SyncCoordinator,
+    private val scheduler: SyncScheduler,
 ) : ViewModel() {
     data class UiState(
         val isWorking: Boolean = false,
@@ -29,6 +32,10 @@ class AccountViewModel @Inject constructor(
     val accountState: StateFlow<AccountState> = account.state
     val configured: Boolean get() = account.configured
     val pendingCount = sync.pendingCount.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    val status: StateFlow<SyncStatus> = sync.status.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncStatus())
+
+    /** Set while this device holds a library last synced with a different account — the user decides. */
+    val mergeRequired: StateFlow<SyncScheduler.MergeRequired?> = scheduler.mergeRequired
     private val _ui = MutableStateFlow(UiState())
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
@@ -36,8 +43,8 @@ class AccountViewModel @Inject constructor(
     // 2026-08-19); the repository still speaks OTP in case it ever comes back.
     fun signInGoogle(idToken: String, nonce: String) = runAction {
         account.signInWithGoogle(idToken, nonce)
-        // Signing in IS the request to have your library on this device — sync starts by itself.
-        sync.syncNow()
+        // Signing in IS the request to have your library on this device. The scheduler sees the session
+        // change and starts sync — or, if this device belongs to another account's library, asks first.
         _ui.value = UiState(message = "Sesión iniciada. Sincronizando tu biblioteca…")
     }
 
@@ -50,6 +57,8 @@ class AccountViewModel @Inject constructor(
     }
 
     fun syncNow() = sync.syncNow()
+
+    fun resolveMerge(choice: SyncScheduler.MergeChoice) = runAction { scheduler.resolveMerge(choice) }
 
     fun deleteCloudAccount() = runAction {
         sync.stop()

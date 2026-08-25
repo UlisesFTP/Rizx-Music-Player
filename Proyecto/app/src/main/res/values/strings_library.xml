@@ -28,7 +28,7 @@
 
     <!-- Library screen: confirm dialogs -->
     <string name="library_clear_recent_title">Clear recently played?</string>
-    <string name="library_clear_recent_body">Only the history is cleared — your liked songs and playlists stay.</string>
+    <string name="library_clear_recent_body">Only this phone\'s history is cleared — your liked songs, playlists and what you played on other devices stay.</string>
     <string name="library_delete_download_title">Delete download?</string>
     <string name="library_delete_download_body">The file is removed from this device. The song stays in your library and will stream again.</string>
     <string name="library_delete_all_downloads_title">Delete all downloads?</string>

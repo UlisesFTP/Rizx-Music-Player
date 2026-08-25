@@ -14,13 +14,33 @@ interface RecentlyPlayedDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: RecentlyPlayedEntity)
 
+    @Query("DELETE FROM sync_outbox WHERE entityType = :entityType AND entityId = :entityId")
+    suspend fun deleteSyncOperationsFor(entityType: String, entityId: String)
+
     @Insert
-    suspend fun insertSyncOperation(operation: SyncOutboxEntity)
+    suspend fun insertSyncOperationRow(operation: SyncOutboxEntity)
+
+    /**
+     * One pending operation per track. Every play start and every outcome journals a full snapshot of
+     * the row, so only the newest matters — a listening session used to outrun the 100-row batch.
+     */
+    @Transaction
+    suspend fun insertSyncOperation(operation: SyncOutboxEntity) {
+        deleteSyncOperationsFor(operation.entityType, operation.entityId)
+        insertSyncOperationRow(operation)
+    }
 
     @Transaction
     suspend fun upsertWithJournal(entry: RecentlyPlayedEntity, operation: SyncOutboxEntity) {
         upsert(entry)
         insertSyncOperation(operation)
+    }
+
+    /** Clearing history tells the cloud too, one delete per row this device owns. */
+    @Transaction
+    suspend fun clearWithJournal(operations: List<SyncOutboxEntity>) {
+        clear()
+        operations.forEach { insertSyncOperation(it) }
     }
 
     /**
@@ -35,6 +55,9 @@ interface RecentlyPlayedDao {
 
     @Query("SELECT * FROM recently_played ORDER BY playedAtIso DESC LIMIT :limit")
     fun observe(limit: Int): Flow<List<RecentlyPlayedEntity>>
+
+    @Query("SELECT * FROM recently_played")
+    suspend fun all(): List<RecentlyPlayedEntity>
 
     /**
      * Keeps the [keep] best rows, deleting the rest so the table stays bounded.

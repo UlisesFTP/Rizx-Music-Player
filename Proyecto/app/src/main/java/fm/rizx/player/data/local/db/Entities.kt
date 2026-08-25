@@ -163,6 +163,35 @@ data class SyncOutboxEntity(
     val attemptCount: Int = 0,
 )
 
+/**
+ * Another device's listening counters for one track (v7).
+ *
+ * `recently_played` is what *this* device did; this table is what every other device did, one row per
+ * device. The taste the Home reads is the sum. Keeping them apart is what makes the sum honest: a
+ * device only ever publishes its own row, so nothing is ever counted twice however often it is pulled.
+ */
+@Entity(
+    tableName = "taste_contributions",
+    primaryKeys = ["deviceId", "provider", "sourceId"],
+    indices = [Index(value = ["provider", "sourceId"])],
+)
+data class TasteContributionEntity(
+    val deviceId: String,
+    val provider: String,
+    val sourceId: String,
+    val trackJson: String,
+    val playedAtIso: String,
+    val playCount: Int = 0,
+    val completedCount: Int = 0,
+    val skipCount: Int = 0,
+    val msListened: Long = 0,
+    val firstPlayedAtIso: String = "",
+    val partNight: Int = 0,
+    val partMorning: Int = 0,
+    val partAfternoon: Int = 0,
+    val partEvening: Int = 0,
+)
+
 /** Per-account cursor and stable installation id used by incremental sync. */
 @Entity(tableName = "sync_state")
 data class SyncStateEntity(
@@ -170,6 +199,12 @@ data class SyncStateEntity(
     val deviceId: String,
     val cursor: Long = 0,
     val lastSyncedAtIso: String? = null,
+    /**
+     * When the whole local library was journaled for this account (v7). Null = not yet: the next run
+     * pushes everything, which is how a first sign-in unions the two libraries and how an install
+     * that synced under the old taste key republishes its rows under its device.
+     */
+    val backfilledAtIso: String? = null,
 )
 
 /** Short-lived local recovery snapshot kept before applying a conflicting remote playlist. */

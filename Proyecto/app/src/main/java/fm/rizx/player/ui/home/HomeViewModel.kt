@@ -37,6 +37,12 @@ import java.time.LocalTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import fm.rizx.player.domain.account.AccountRepository
+import fm.rizx.player.domain.account.AccountState
+import fm.rizx.player.domain.sync.NoSyncCoordinator
+import fm.rizx.player.domain.sync.SyncCoordinator
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -113,6 +119,8 @@ class HomeViewModel @Inject constructor(
     private val favorites: FavoritesRepository,
     private val playlists: PlaylistRepository,
     recents: fm.rizx.player.domain.repository.RecentlyPlayedRepository,
+    private val sync: SyncCoordinator = NoSyncCoordinator,
+    private val account: AccountRepository? = null,
 ) : ViewModel() {
 
     /**
@@ -242,6 +250,20 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             dashboard.activeSourceIds().drop(1).distinctUntilChanged().collect { refresh() }
         }
+        // Another device's favorites or listening just arrived: the personalized half of the Home is
+        // built from exactly those, so it is refetched. The Room-backed rows already moved on their own.
+        viewModelScope.launch {
+            sync.applied.filter { it.touchesTaste }.collect { refresh() }
+        }
+        // A different account's Home is never served from the previous one's cache.
+        account?.let { repo ->
+            viewModelScope.launch {
+                repo.state.map { (it as? AccountState.SignedIn)?.profile?.id }.distinctUntilChanged().drop(1).collect {
+                    withContext(Dispatchers.IO) { cache.clear() }
+                    refresh()
+                }
+            }
+        }
     }
 
     /**
@@ -257,6 +279,7 @@ class HomeViewModel @Inject constructor(
         activeSources = dashboard.activeSourceIds().first(),
         country = countryName,
         consent = regionalConsent,
+        accountId = account?.let { (it.state.value as? AccountState.SignedIn)?.profile?.id },
     )
 
     /** Cache-first load: shows the last Home instantly, then revalidates if it is stale. */
@@ -441,11 +464,13 @@ class HomeViewModel @Inject constructor(
             activeSources: List<String>,
             country: String?,
             consent: Boolean?,
+            accountId: String? = null,
         ): String = listOf(
             feedProvider,
             activeSources.sorted().joinToString(","),
             country.orEmpty(),
             consent.toString(),
+            accountId.orEmpty(),
         ).joinToString("|")
 
         /** Six above-the-fold quick picks; Surprise reads the deeper history directly when tapped. */

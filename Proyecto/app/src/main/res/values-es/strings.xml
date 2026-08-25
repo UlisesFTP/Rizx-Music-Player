@@ -122,6 +122,15 @@
     <string name="account_sync_scope">Se sincroniza: playlists, favoritos y gustos agregados.</string>
     <string name="account_sync_now">Sincronizar ahora · %1$d pendientes</string>
     <string name="account_sync_excludes">No se sube: descargas, rutas locales, URLs de reproducción, cola, historial detallado, reconocimientos ni credenciales de proveedores.</string>
+    <string name="account_sync_status_syncing">Sincronizando…</string>
+    <string name="account_sync_status_synced">Sincronizado %1$s</string>
+    <string name="account_sync_status_never">Aún sin sincronizar</string>
+    <string name="account_sync_status_failed">No se pudo sincronizar — se reintentará</string>
+    <string name="account_merge_title">Este teléfono ya tiene una biblioteca</string>
+    <string name="account_merge_body">Se sincronizó por última vez con otra cuenta. ¿Qué hacemos con las playlists, favoritos e historial de este teléfono?</string>
+    <string name="account_merge_union">Unir a esta cuenta</string>
+    <string name="account_merge_cloud">Usar la copia de la nube</string>
+    <string name="account_merge_keep">Seguir sin sesión</string>
     <string name="account_sign_out">Cerrar sesión y conservar biblioteca local</string>
     <string name="account_delete">Eliminar cuenta en la nube</string>
     <string name="account_delete_title">¿Eliminar la cuenta en la nube?</string>

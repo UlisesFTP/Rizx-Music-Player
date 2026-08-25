@@ -22,8 +22,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncOutboxEntity::class,
         SyncStateEntity::class,
         SyncRecoveryEntity::class,
+        TasteContributionEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class RizxDatabase : RoomDatabase() {
@@ -32,6 +33,7 @@ abstract class RizxDatabase : RoomDatabase() {
     abstract fun recentlyPlayedDao(): RecentlyPlayedDao
     abstract fun recognitionHistoryDao(): RecognitionHistoryDao
     abstract fun syncDao(): SyncDao
+    abstract fun tasteContributionDao(): TasteContributionDao
 }
 
 /** v1 → v2: adds the `recently_played` table (Phase 15). Preserves favorites/playlists. */
@@ -139,5 +141,31 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
                 "`expiresAtIso` TEXT NOT NULL, PRIMARY KEY(`id`))",
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_sync_recovery_expiresAtIso` ON `sync_recovery` (`expiresAtIso`)")
+    }
+}
+
+/**
+ * v6 -> v7: taste becomes additive across devices.
+ *
+ * `taste_contributions` holds other devices' counters (empty until the first pull), and `sync_state`
+ * learns whether the library was journaled wholesale for the account. Additive only: the listening
+ * log, favorites and playlists are untouched, and `RizxMigrationTest` says so.
+ */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `taste_contributions` (" +
+                "`deviceId` TEXT NOT NULL, `provider` TEXT NOT NULL, `sourceId` TEXT NOT NULL, " +
+                "`trackJson` TEXT NOT NULL, `playedAtIso` TEXT NOT NULL, `playCount` INTEGER NOT NULL, " +
+                "`completedCount` INTEGER NOT NULL, `skipCount` INTEGER NOT NULL, `msListened` INTEGER NOT NULL, " +
+                "`firstPlayedAtIso` TEXT NOT NULL, `partNight` INTEGER NOT NULL, `partMorning` INTEGER NOT NULL, " +
+                "`partAfternoon` INTEGER NOT NULL, `partEvening` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`deviceId`, `provider`, `sourceId`))",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_taste_contributions_provider_sourceId` " +
+                "ON `taste_contributions` (`provider`, `sourceId`)",
+        )
+        db.execSQL("ALTER TABLE `sync_state` ADD COLUMN `backfilledAtIso` TEXT")
     }
 }

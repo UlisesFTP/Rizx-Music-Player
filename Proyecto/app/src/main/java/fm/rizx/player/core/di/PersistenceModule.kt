@@ -17,11 +17,16 @@ import fm.rizx.player.data.local.db.MIGRATION_2_3
 import fm.rizx.player.data.local.db.MIGRATION_3_4
 import fm.rizx.player.data.local.db.MIGRATION_4_5
 import fm.rizx.player.data.local.db.MIGRATION_5_6
+import fm.rizx.player.data.local.db.MIGRATION_6_7
 import fm.rizx.player.data.local.db.PlaylistDao
 import fm.rizx.player.data.local.db.RecentlyPlayedDao
 import fm.rizx.player.data.local.db.RecognitionHistoryDao
 import fm.rizx.player.data.local.db.RizxDatabase
 import fm.rizx.player.data.local.db.SyncDao
+import fm.rizx.player.data.local.db.TasteContributionDao
+import fm.rizx.player.data.local.store.SyncPrefsStore
+import fm.rizx.player.data.sync.LibraryBackfill
+import fm.rizx.player.data.sync.LibraryJournal
 import fm.rizx.player.data.local.settings.EnabledProviderStoreImpl
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.data.artwork.ArtworkCache
@@ -34,6 +39,7 @@ import fm.rizx.player.data.local.store.AutoEqStore
 import fm.rizx.player.data.remote.wikipedia.WikipediaApi
 import fm.rizx.player.data.local.store.HomeFeedStore
 import fm.rizx.player.data.local.store.LyricsStore
+import fm.rizx.player.data.local.store.PlaylistShareStore
 import fm.rizx.player.data.local.store.SearchHistoryStore
 import fm.rizx.player.data.repository.FavoritesRepositoryImpl
 import fm.rizx.player.data.repository.PlaylistRepositoryImpl
@@ -64,7 +70,7 @@ object PersistenceModule {
             // v2 adds recently_played; v3 adds playlists.artworkUrl; v4 turns the history into a
             // listening log (play/skip counts, time of day); v5 adds recognition_history. All of them
             // preserve existing data.
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
 
     @Provides
@@ -81,6 +87,24 @@ object PersistenceModule {
 
     @Provides
     fun provideSyncDao(db: RizxDatabase): SyncDao = db.syncDao()
+
+    @Provides
+    @Singleton
+    fun provideTasteContributionDao(db: RizxDatabase): TasteContributionDao = db.tasteContributionDao()
+
+    @Provides
+    @Singleton
+    fun provideSyncPrefsStore(@ApplicationContext context: Context): SyncPrefsStore =
+        SyncPrefsStore(File(context.filesDir, "sync_prefs.json"))
+
+    @Provides
+    @Singleton
+    fun provideLibraryJournal(
+        playlists: PlaylistDao,
+        favorites: FavoriteDao,
+        recents: RecentlyPlayedDao,
+        contributions: TasteContributionDao,
+    ): LibraryJournal = LibraryBackfill(playlists, favorites, recents, contributions)
 
     @Provides
     @Singleton
@@ -113,8 +137,8 @@ object PersistenceModule {
 
     @Provides
     @Singleton
-    fun provideRecentlyPlayedRepository(dao: RecentlyPlayedDao): RecentlyPlayedRepository =
-        RecentlyPlayedRepositoryImpl(dao)
+    fun provideRecentlyPlayedRepository(dao: RecentlyPlayedDao, contributions: TasteContributionDao): RecentlyPlayedRepository =
+        RecentlyPlayedRepositoryImpl(dao, contributions)
 
     /**
      * Cached lyrics. A plain JSON file rather than a Room table: it is a lookup by track identity with no
@@ -161,6 +185,11 @@ object PersistenceModule {
     @Singleton
     fun provideArtistBioStore(@ApplicationContext context: Context): ArtistBioStore =
         ArtistBioStore(File(context.filesDir, "artist_bios.json"))
+
+    @Provides
+    @Singleton
+    fun providePlaylistShareStore(@ApplicationContext context: Context): PlaylistShareStore =
+        PlaylistShareStore(File(context.filesDir, "playlist_shares.json"))
 
     @Provides
     @Singleton

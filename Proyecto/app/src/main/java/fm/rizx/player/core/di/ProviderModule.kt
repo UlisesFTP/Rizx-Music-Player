@@ -26,6 +26,7 @@ import fm.rizx.player.data.provider.LyricsOvhProvider
 import fm.rizx.player.data.provider.MusixmatchLyricsProvider
 import fm.rizx.player.data.provider.NeteaseLyricsProvider
 import fm.rizx.player.data.provider.RizxUrlPlaylistProvider
+import fm.rizx.player.data.remote.supabase.SupabaseShareApi
 import fm.rizx.player.data.provider.SpotifyChartsDashboardProvider
 import fm.rizx.player.data.provider.SpotifyPlaylistProvider
 import fm.rizx.player.data.provider.SpotifyAlbumMetadataProvider
@@ -186,7 +187,14 @@ object ProviderModule {
             // Apple's editorial playlists. Registered as a real PlaylistProvider so the cards the
             // dashboard emits can actually be opened — a card that opens empty is worse than absent.
             register(AppleMusicPlaylistProvider(applePlaylistPage, appleCatalogue))
-            register(RizxUrlPlaylistProvider(okHttp, shareBaseUrl = BuildConfig.SHARE_BASE_URL))
+            register(
+                RizxUrlPlaylistProvider(
+                    okHttp,
+                    shareBaseUrl = BuildConfig.SHARE_BASE_URL,
+                    shareReadEndpoint = BuildConfig.SUPABASE_URL.trim().trimEnd('/')
+                        .takeIf { it.isNotEmpty() }?.let { "$it/${SupabaseShareApi.READ_PATH}" }.orEmpty(),
+                ),
+            )
             // Restore the persisted active selection over first-wins (preserve-then-reconcile, §4):
             // apply a persisted id only when it is actually registered; otherwise pick a sensible real
             // default. Metadata defaults to Deezer and streaming to YouTube so a fresh install searches

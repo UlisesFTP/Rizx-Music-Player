@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Playlist · Rizx</title>
+<style>
+body{margin:0;background:#f4f1ea;color:#111;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:420px;margin:0 auto;padding:48px 24px}
+h1{font-size:26px;line-height:1.15;margin:0 0 6px;letter-spacing:-.02em}
+p{margin:0 0 22px;color:#555}
+a.b{display:block;text-align:center;padding:16px;margin:0 0 12px;border:2px solid #111;border-radius:10px;text-decoration:none;font-weight:700;color:#111}
+a.b.p{background:#111;color:#f4f1ea}
+small{display:block;color:#777;margin-top:20px}
+</style>
+</head>
+<body>
+<main>
+<h1 id="name">Playlist</h1>
+<p id="meta">Playlist compartida desde Rizx · Shared from Rizx</p>
+<a class="b p" id="open" href="#">Abrir en Rizx · Open in Rizx</a>
+<a class="b" href="https://github.com/UlisesFTP/Rizx-Music-Player/releases">Descargar Rizx · Get Rizx</a>
+<small>¿Tienes Rizx y no se abre? Prueba <a id="plain" href="#">este enlace</a>, o copia la URL de esta página y pégala en Biblioteca → Importar.<br>
+Have Rizx and it didn't open? Try <a id="plain2" href="#">this link</a>, or paste this page's URL into Library → Import.</small>
+</main>
+<script>
+(function () {
+  // Where the documents live. The page only previews; the app always reads from here too.
+  var READ_ENDPOINT = "https://wbcwgbozqefeezzhxmsy.supabase.co/functions/v1/playlist-shares";
+  var RELEASES = "https://github.com/UlisesFTP/Rizx-Music-Player/releases";
+  // Token from `/s/<token>` or `/s/?t=<token>` — both work on hosts without path rewrites (404.html).
+  var last = location.pathname.replace(/\/+$/, "").split("/").pop();
+  var token = new URLSearchParams(location.search).get("t") || last;
+  if (!/^[A-Za-z0-9_-]{43}$/.test(token || "")) return;
+  var appUri = "rizx://share/" + token;
+  var intentUri = "intent://share/" + token + "#Intent;scheme=rizx;package=fm.rizx.player;S.browser_fallback_url=" + encodeURIComponent(RELEASES) + ";end";
+  document.getElementById("open").href = intentUri;
+  document.getElementById("plain").href = appUri;
+  document.getElementById("plain2").href = appUri;
+  fetch(READ_ENDPOINT + "/" + token, { headers: { accept: "application/json" } })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (doc) {
+      if (!doc) return;
+      var n = Array.isArray(doc.items) ? doc.items.length : 0;
+      document.getElementById("name").textContent = doc.name || "Playlist";
+      document.title = (doc.name || "Playlist") + " · Rizx";
+      document.getElementById("meta").textContent = n + " canciones · playlist compartida desde Rizx · " + n + " songs";
+    })
+    .catch(function () {});
+})();
+</script>
+</body>
+</html>

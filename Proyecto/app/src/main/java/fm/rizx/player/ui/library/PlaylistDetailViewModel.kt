@@ -66,6 +66,10 @@ class PlaylistDetailViewModel @Inject constructor(
     val shareState: StateFlow<ShareUiState> = _shareState.asStateFlow()
     val cloudSharingConfigured: Boolean get() = shares.configured
 
+    // Deliberately below _shareState: an implementation that answers without suspending would run this
+    // body during construction, and the property it writes to would still be null.
+    init { restoreShareLink() }
+
     fun removeItem(itemId: String) {
         viewModelScope.launch { playlists.removeItem(playlistId, itemId) }
     }
@@ -111,6 +115,20 @@ class PlaylistDetailViewModel @Inject constructor(
     suspend fun exportJson(): String? = playlists.exportPlaylist(playlistId)
 
     suspend fun export(format: PlaylistExportFormat): PlaylistExportArtifact? = exports.export(playlistId, format)
+
+    /**
+     * Brings back the link this playlist already has, so leaving the screen doesn't lose it.
+     *
+     * Without this the sheet offers "create a link" to a playlist that already has a live one — the user
+     * can neither copy it again nor revoke it, and tapping again mints a duplicate. Guarded against the
+     * race with a link the user creates while the lookup is in flight: whatever they just made wins.
+     */
+    private fun restoreShareLink() {
+        viewModelScope.launch {
+            val restored = runCatching { shares.existing(playlistId) }.getOrNull() ?: return@launch
+            _shareState.update { if (it.link == null && !it.isWorking) it.copy(link = restored) else it }
+        }
+    }
 
     fun createShareLink(captchaToken: String? = null) {
         if (_shareState.value.isWorking) return

@@ -1,6 +1,8 @@
 package fm.rizx.player.ui.player
 
 import android.content.Context
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import android.view.TextureView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -66,6 +68,9 @@ class CanvasViewModel @Inject constructor(
     private val _state = MutableStateFlow(CanvasState())
     val state: StateFlow<CanvasState> = _state.asStateFlow()
 
+    // The byte cache is Media3's own unstable surface; opting in here keeps it to this one property
+    // instead of spreading the marker across the ViewModel.
+    @OptIn(UnstableApi::class)
     private val controller = CanvasPlaybackController(
         context,
         dataSourceFactory = CanvasMediaCache.dataSourceFactory(context),

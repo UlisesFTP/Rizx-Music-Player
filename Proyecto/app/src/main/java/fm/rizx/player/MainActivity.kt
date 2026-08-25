@@ -2,6 +2,7 @@ package fm.rizx.player
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -31,6 +32,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import fm.rizx.player.domain.model.ThemeMode
+import fm.rizx.player.domain.share.ShareLinkInbox
+import fm.rizx.player.domain.share.ShareLinks
 import fm.rizx.player.ui.RizxApp
 import fm.rizx.player.ui.player.PlayerViewModel
 import fm.rizx.player.ui.screens.RizxSplash
@@ -38,9 +41,13 @@ import fm.rizx.player.ui.settings.withAppLocale
 import fm.rizx.player.ui.theme.LARGE_SCREEN_SW_DP
 import fm.rizx.player.ui.theme.RizxTheme
 import kotlinx.coroutines.delay
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    /** Where a share link opened from outside (a scanned QR, a tapped link) waits for the Library. */
+    @Inject lateinit var shareLinks: ShareLinkInbox
 
     /**
      * Below API 33 the app language is applied by hand from its stored preference (see AppLanguage.kt);
@@ -53,6 +60,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // Only on a genuine launch: Android re-delivers the launch intent when it recreates the activity
+        // (theme change, a tablet rotating), and that must not import the same playlist again.
+        if (savedInstanceState == null) receiveShareLink(intent)
         applyOrientationPolicy()
         keepScreenAwake()
         setContent {
@@ -92,6 +102,27 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** `singleTask`: a link opened while the app is running arrives here instead of in a second copy. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        receiveShareLink(intent)
+    }
+
+    /**
+     * A share link in either spelling — `https://<share host>/<token>` (the QR, App Links) or
+     * `rizx://share/<token>` (the browser landing page's button, scanners that honour custom schemes).
+     * Anything else that reaches this activity is ignored; the token is validated before it is trusted.
+     */
+    private fun receiveShareLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        val uri = intent.dataString ?: return
+        val base = BuildConfig.SHARE_BASE_URL
+        if (base.isBlank()) return
+        val token = ShareLinks.tokenFrom(uri, base) ?: return
+        shareLinks.offer(ShareLinks.shareUrl(base, token))
     }
 
     /**

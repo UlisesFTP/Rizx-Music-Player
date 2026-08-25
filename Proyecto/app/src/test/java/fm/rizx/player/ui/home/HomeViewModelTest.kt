@@ -34,6 +34,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import fm.rizx.player.data.sync.FakeSyncCoordinator
+import fm.rizx.player.domain.sync.SyncApplied
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -393,4 +395,36 @@ class HomeViewModelTest {
             ),
         ),
     )
+
+    @Test
+    fun `remote favorites or taste arriving refresh the personalized feed`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+        var loads = 0
+        val sync = FakeSyncCoordinator()
+        val vm = HomeViewModel(
+            FakeDash { loads++; HomeFeed(topTracks = listOf(AttributedResult("d", "Deezer", listOf(Track("Yellow", source = ProviderRef("deezer", "1")))))) }, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), store(),
+            FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents(), sync = sync,
+        )
+        vm.state.first { it is HomeUiState.Content }
+        val before = loads
+
+        sync.appliedEvents.emit(SyncApplied(playlists = 3))
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+        assertEquals("playlists alone do not touch the personalized rows", before, loads)
+
+        sync.appliedEvents.emit(SyncApplied(favorites = 1))
+        // The refresh hops to Dispatchers.IO for the cache read, so wait for it to start and finish
+        // rather than for the virtual clock to run dry.
+        vm.isRefreshing.first { it }
+        vm.isRefreshing.first { !it }
+        assertEquals(before + 1, loads)
+    }
+
+    @Test
+    fun `the feed cache is keyed by account`() {
+        val a = HomeViewModel.cacheKeyOf("deezer", listOf("x"), "MX", true, accountId = "acct-1")
+        val b = HomeViewModel.cacheKeyOf("deezer", listOf("x"), "MX", true, accountId = "acct-2")
+        val none = HomeViewModel.cacheKeyOf("deezer", listOf("x"), "MX", true)
+        assertEquals(3, setOf(a, b, none).size)
+    }
+
 }

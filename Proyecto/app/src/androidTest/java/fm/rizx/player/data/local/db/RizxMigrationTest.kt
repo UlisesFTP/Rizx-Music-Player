@@ -131,6 +131,36 @@ class RizxMigrationTest {
         db.close()
     }
 
+    @Test
+    fun migrate6To7_keepsSyncStateAndListeningLogAndAddsEmptyContributions() {
+        helper.createDatabase(TEST_DB, 6).use { db ->
+            db.execSQL("INSERT INTO sync_state (accountId, deviceId, cursor, lastSyncedAtIso) VALUES ('acct', 'dev', 7, NULL)")
+            db.execSQL(
+                "INSERT INTO recently_played (provider, sourceId, trackJson, playedAtIso, playCount, completedCount, " +
+                    "skipCount, msListened, firstPlayedAtIso, partNight, partMorning, partAfternoon, partEvening) VALUES " +
+                    "('deezer', '1', '{}', '2026-01-01T00:00:00Z', 3, 1, 0, 1000, '2026-01-01T00:00:00Z', 0, 1, 2, 0)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_6_7)
+
+        db.query("SELECT deviceId, cursor, backfilledAtIso FROM sync_state WHERE accountId = 'acct'").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("dev", it.getString(0))
+            assertEquals(7, it.getInt(1))
+            assertTrue("never backfilled: the next run pushes the whole library", it.isNull(2))
+        }
+        db.query("SELECT playCount FROM recently_played WHERE provider = 'deezer' AND sourceId = '1'").use {
+            assertTrue(it.moveToFirst())
+            assertEquals(3, it.getInt(0))
+        }
+        db.query("SELECT COUNT(*) FROM taste_contributions").use {
+            assertTrue(it.moveToFirst())
+            assertEquals(0, it.getInt(0))
+        }
+        db.close()
+    }
+
     private companion object {
         const val TEST_DB = "rizx-migration-test.db"
     }

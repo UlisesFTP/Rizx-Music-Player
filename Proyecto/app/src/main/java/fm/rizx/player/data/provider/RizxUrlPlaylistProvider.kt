@@ -5,6 +5,7 @@ import fm.rizx.player.data.local.store.PlaylistTransfer
 import fm.rizx.player.domain.model.PlaylistPreview
 import fm.rizx.player.domain.provider.PlaylistProvider
 import fm.rizx.player.domain.provider.ProviderKind
+import fm.rizx.player.domain.share.ShareLinks
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -23,10 +24,17 @@ import java.io.IOException
  * `<shareBaseUrl>/<token>`, and GETting it returns the shared playlist's Rizx JSON document, which the
  * same decode path already understands. Without this rule no provider matched a share URL (it has no
  * file extension), so pasting one showed "Error al importar" before any network call was made.
+ *
+ * A share link is **fetched from [shareReadEndpoint]**, not from its own address, and always as JSON.
+ * The link's host is whatever the install hands out — today the function itself, tomorrow a domain
+ * that serves a landing page to browsers and `assetlinks.json` to Android — while the document always
+ * lives at the function. Tying the fetch to the endpoint is what lets the share host change without
+ * the importer noticing.
  */
 class RizxUrlPlaylistProvider(
     private val client: OkHttpClient,
-    shareBaseUrl: String = "",
+    private val shareBaseUrl: String = "",
+    shareReadEndpoint: String = "",
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PlaylistProvider {
 
@@ -37,6 +45,9 @@ class RizxUrlPlaylistProvider(
     /** Normalized share-link prefix; blank when the install has no share backend configured. */
     private val shareBase = shareBaseUrl.trim().trimEnd('/').lowercase()
 
+    /** Where share documents are read from; blank falls back to GETting the link as written. */
+    private val readEndpoint = shareReadEndpoint.trim().trimEnd('/')
+
     override fun canHandle(url: String): Boolean {
         val u = url.lowercase()
         if (shareBase.isNotEmpty() && u.startsWith("$shareBase/")) return true
@@ -46,7 +57,9 @@ class RizxUrlPlaylistProvider(
 
     override suspend fun fetchPlaylist(url: String): PlaylistPreview {
         return try {
-            val body = withContext(io) { get(url) }
+            val shareToken = ShareLinks.tokenFrom(url, shareBaseUrl)
+            val target = if (shareToken != null && readEndpoint.isNotEmpty()) "$readEndpoint/$shareToken" else url
+            val body = withContext(io) { get(target, asJson = shareToken != null) }
             // A hosted CSV has no name of its own — fall back to the file name in the URL.
             val imported = PlaylistTransfer.decodeImport(body, fallbackName = fileNameFromUrl(url))
             PlaylistPreview(name = imported.name, description = imported.description, tracks = imported.tracks)
@@ -61,8 +74,10 @@ class RizxUrlPlaylistProvider(
         }
     }
 
-    private fun get(url: String): String {
-        client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+    private fun get(url: String, asJson: Boolean = false): String {
+        // The share function serves a browser landing page to `text/html`; say what this caller is.
+        val request = Request.Builder().url(url).apply { if (asJson) header("Accept", "application/json") }.build()
+        client.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
             val source = resp.body?.source() ?: throw IOException("empty body")
             // The body is controlled by whoever hosts the URL (a link a third party may have handed the

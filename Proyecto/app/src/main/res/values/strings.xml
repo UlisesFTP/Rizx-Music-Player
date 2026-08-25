@@ -125,6 +125,15 @@
     <string name="account_sync_scope">Synced: playlists, favorites and aggregate taste.</string>
     <string name="account_sync_now">Sync now · %1$d pending</string>
     <string name="account_sync_excludes">Not uploaded: downloads, local paths, stream URLs, queue, detailed history, recognition or provider credentials.</string>
+    <string name="account_sync_status_syncing">Syncing…</string>
+    <string name="account_sync_status_synced">Synced %1$s</string>
+    <string name="account_sync_status_never">Not synced yet</string>
+    <string name="account_sync_status_failed">Couldn\'t sync — will retry</string>
+    <string name="account_merge_title">This phone already has a library</string>
+    <string name="account_merge_body">It was last synced with a different account. What should happen to the playlists, favorites and history on this phone?</string>
+    <string name="account_merge_union">Merge into this account</string>
+    <string name="account_merge_cloud">Use the cloud copy</string>
+    <string name="account_merge_keep">Stay signed out</string>
     <string name="account_sign_out">Sign out and keep local library</string>
     <string name="account_delete">Delete cloud account</string>
     <string name="account_delete_title">Delete cloud account?</string>

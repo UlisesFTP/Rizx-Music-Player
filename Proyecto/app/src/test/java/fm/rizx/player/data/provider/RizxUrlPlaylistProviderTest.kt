@@ -23,8 +23,8 @@ class RizxUrlPlaylistProviderTest {
     @Before fun setUp() { server = MockWebServer().apply { start() } }
     @After fun tearDown() { server.shutdown() }
 
-    private fun provider(shareBase: String = "") =
-        RizxUrlPlaylistProvider(OkHttpClient(), shareBaseUrl = shareBase)
+    private fun provider(shareBase: String = "", readEndpoint: String = "") =
+        RizxUrlPlaylistProvider(OkHttpClient(), shareBaseUrl = shareBase, shareReadEndpoint = readEndpoint)
 
     private val token = "iS_UBbQ-InTyjHsGRcBwCk7s1tWiK_qJSv8np62mxLY"
 
@@ -65,5 +65,31 @@ class RizxUrlPlaylistProviderTest {
         assertEquals("Compartida", preview.name)
         assertEquals("de un amigo", preview.description)
         assertEquals("/functions/v1/playlist-shares/$token", server.takeRequest().path)
+    }
+
+    @Test
+    fun `a share link is read from the function, not from its own address`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"format":"rizx.playlist","version":2,"name":"Via dominio","items":[]}"""))
+        // The link lives on a share domain that serves a landing page to browsers; the document lives
+        // at the function. Only the endpoint is ever asked.
+        val p = provider(shareBase = "https://rizx.example/s", readEndpoint = server.url("/functions/v1/playlist-shares").toString())
+
+        val preview = p.fetchPlaylist("https://rizx.example/s/$token")
+
+        assertEquals("Via dominio", preview.name)
+        val request = server.takeRequest()
+        assertEquals("/functions/v1/playlist-shares/$token", request.path)
+        assertEquals("the function serves HTML to browsers, so say JSON", "application/json", request.getHeader("Accept"))
+    }
+
+    @Test
+    fun `plain playlist files are still fetched from where they are`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"format":"rizx.playlist","version":2,"name":"Archivo","items":[]}"""))
+        val p = provider(shareBase = "https://rizx.example/s", readEndpoint = "https://unused.example/functions/v1/playlist-shares")
+
+        val preview = p.fetchPlaylist(server.url("/lists/mine.json").toString())
+
+        assertEquals("Archivo", preview.name)
+        assertEquals("/lists/mine.json", server.takeRequest().path)
     }
 }

@@ -1,5 +1,8 @@
 package fm.rizx.player.data.repository
 
+import fm.rizx.player.data.local.db.InMemoryTasteContributionDao
+import fm.rizx.player.data.local.db.TasteContributionDao
+import fm.rizx.player.data.local.db.TasteContributionEntity
 import fm.rizx.player.data.local.db.RecentlyPlayedDao
 import fm.rizx.player.data.local.db.RecentlyPlayedEntity
 import fm.rizx.player.data.local.db.SyncOutboxEntity
@@ -15,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
+import fm.rizx.player.data.local.store.TrackJson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,7 +34,12 @@ class RecentlyPlayedRepositoryTest {
         val rows = MutableStateFlow<Map<String, RecentlyPlayedEntity>>(emptyMap())
         private fun key(e: RecentlyPlayedEntity) = "${e.provider}:${e.sourceId}"
         override suspend fun upsert(entry: RecentlyPlayedEntity) { rows.value = rows.value + (key(entry) to entry) }
-        override suspend fun insertSyncOperation(operation: SyncOutboxEntity) = Unit
+        val operations = mutableListOf<SyncOutboxEntity>()
+        override suspend fun deleteSyncOperationsFor(entityType: String, entityId: String) {
+            operations.removeAll { it.entityType == entityType && it.entityId == entityId }
+        }
+        override suspend fun insertSyncOperationRow(operation: SyncOutboxEntity) { operations += operation }
+        override suspend fun all(): List<RecentlyPlayedEntity> = rows.value.values.toList()
         override suspend fun find(provider: String, sourceId: String): RecentlyPlayedEntity? =
             rows.value["$provider:$sourceId"]
         override suspend fun delete(provider: String, sourceId: String) {
@@ -48,8 +57,8 @@ class RecentlyPlayedRepositoryTest {
     }
 
     private var clock = 0L
-    private fun repo(dao: RecentlyPlayedDao) =
-        RecentlyPlayedRepositoryImpl(dao, nowIso = { "t${clock++}" })
+    private fun repo(dao: RecentlyPlayedDao, contributions: TasteContributionDao = InMemoryTasteContributionDao()) =
+        RecentlyPlayedRepositoryImpl(dao, contributions, nowIso = { "t${clock++}" })
 
     private fun track(title: String) = Track(title = title, source = ProviderRef("itunes", "id-$title"))
 
@@ -153,6 +162,7 @@ class RecentlyPlayedRepositoryTest {
         val dao = FakeDao()
         val morning = RecentlyPlayedRepositoryImpl(
             dao,
+            InMemoryTasteContributionDao(),
             nowIso = { "2026-07-30T08:30:00Z" },
             zone = { ZoneId.of("UTC") },
         )
@@ -179,4 +189,41 @@ class RecentlyPlayedRepositoryTest {
             dao.rows.value.values.any { it.sourceId == "id-Old" },
         )
     }
+
+    @Test
+    fun `counts add up across devices, and a track played only elsewhere still shows`() = runTest {
+        val dao = FakeDao()
+        val contributions = InMemoryTasteContributionDao()
+        val r = repo(dao, contributions)
+        r.record(track("A"))
+        r.record(track("A"))
+        contributions.upsert(TasteContributionEntity("dev-B", "itunes", "id-A", TrackJson.encodeTrack(track("A")), "t9", playCount = 3, msListened = 10))
+        contributions.upsert(TasteContributionEntity("dev-C", "itunes", "id-A", TrackJson.encodeTrack(track("A")), "t0", playCount = 1, firstPlayedAtIso = "s0"))
+        contributions.upsert(TasteContributionEntity("dev-B", "itunes", "id-B", TrackJson.encodeTrack(track("B")), "t8", playCount = 1))
+
+        val stats = r.stats(10).first()
+
+        val a = stats.first { it.track.title == "A" }
+        assertEquals("2 here + 3 + 1 elsewhere", 6, a.plays)
+        assertEquals(10L, a.msListened)
+        assertEquals("earliest first play anywhere", "s0", a.firstPlayedAtIso)
+        assertEquals("latest play anywhere", "t9", a.lastPlayedAtIso)
+        assertEquals(listOf("A", "B"), stats.map { it.track.title })
+        assertEquals(listOf("A", "B"), r.recent(10).first().map { it.title })
+    }
+
+    @Test
+    fun `clearing history journals deletes for this device's rows only`() = runTest {
+        val dao = FakeDao()
+        val contributions = InMemoryTasteContributionDao()
+        val r = repo(dao, contributions)
+        r.record(track("A"))
+        contributions.upsert(TasteContributionEntity("dev-B", "itunes", "id-B", TrackJson.encodeTrack(track("B")), "t8", playCount = 1))
+
+        r.clear()
+
+        assertEquals(listOf("itunes:id-A"), dao.operations.filter { it.operation == "DELETE" }.map { it.entityId })
+        assertEquals(listOf("B"), r.recent(10).first().map { it.title })
+    }
+
 }

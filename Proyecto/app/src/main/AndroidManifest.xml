@@ -61,15 +61,42 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Rizx">
 
+        <!-- singleTask: a share link opened while Rizx is running lands in onNewIntent of the live
+             activity instead of stacking a second one with its own player UI. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.Rizx.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Share links: https://<share host><share path>/<token>. Host and path come from
+                 RIZX_SHARE_BASE_URL at build time. autoVerify makes this an App Link — opened straight
+                 in Rizx, no chooser, no browser — once the share host serves
+                 /.well-known/assetlinks.json (see share-site/). Until then Android 8–11 offer a chooser
+                 and Android 12+ let the user enable it under App info › Open by default. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="${shareLinkHost}"
+                    android:pathPrefix="${shareLinkPath}" />
+            </intent-filter>
+
+            <!-- rizx://share/<token>: the app's own scheme. Needs no domain verification — it is what the
+                 browser landing page's "Open in Rizx" button fires. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="rizx" android:host="share" />
             </intent-filter>
         </activity>
 

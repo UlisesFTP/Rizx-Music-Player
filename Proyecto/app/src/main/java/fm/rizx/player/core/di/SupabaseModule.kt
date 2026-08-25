@@ -16,11 +16,22 @@ import fm.rizx.player.data.remote.supabase.SupabaseShareApi
 import fm.rizx.player.data.remote.supabase.SupabaseSyncApi
 import fm.rizx.player.data.remote.supabase.SupabaseWireJson
 import fm.rizx.player.data.repository.AccountRepositoryImpl
+import fm.rizx.player.data.local.store.PlaylistShareStore
 import fm.rizx.player.data.repository.PlaylistShareRepositoryImpl
 import fm.rizx.player.domain.account.AccountRepository
 import fm.rizx.player.domain.repository.PlaylistExportRepository
 import fm.rizx.player.domain.share.PlaylistShareRepository
+import fm.rizx.player.domain.share.ShareLinkInbox
 import fm.rizx.player.domain.sync.SyncCoordinator
+import android.util.Log
+import fm.rizx.player.core.network.DataSaverState
+import fm.rizx.player.data.local.db.SyncDao
+import fm.rizx.player.data.local.store.SyncPrefsStore
+import fm.rizx.player.data.sync.LibraryJournal
+import fm.rizx.player.data.sync.PlaylistSyncEngine
+import fm.rizx.player.data.sync.SyncEvents
+import fm.rizx.player.data.sync.SyncRunner
+import fm.rizx.player.data.sync.SyncScheduler
 import fm.rizx.player.data.sync.WorkManagerSyncCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -99,11 +110,16 @@ object SupabaseModule {
     fun provideSupabaseSyncApi(client: OkHttpClient): SupabaseSyncApi {
         val configured = BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_PUBLISHABLE_KEY.isNotBlank()
         val baseUrl = if (configured) BuildConfig.SUPABASE_URL.trimEnd('/') + "/" else "https://invalid.local/"
-        val apiClient = client.newBuilder().cache(null).addInterceptor { chain ->
-            chain.proceed(chain.request().newBuilder()
-                .header("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
-                .header("Cache-Control", "no-store").build())
-        }.build()
+        // The function applies each operation with its own RPC, so a batch answers slowly by design:
+        // give it well past the shared client's read timeout before calling the run a failure.
+        val apiClient = client.newBuilder().cache(null)
+            .readTimeout(90, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                chain.proceed(chain.request().newBuilder()
+                    .header("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+                    .header("Cache-Control", "no-store").build())
+            }.build()
         return Retrofit.Builder().baseUrl(baseUrl).client(apiClient)
             .addConverterFactory(SupabaseWireJson.asConverterFactory("application/json".toMediaType()))
             .build().create(SupabaseSyncApi::class.java)
@@ -112,6 +128,36 @@ object SupabaseModule {
     @Provides
     @Singleton
     fun provideSyncCoordinator(implementation: WorkManagerSyncCoordinator): SyncCoordinator = implementation
+
+    @Provides
+    @Singleton
+    fun provideSyncRunner(
+        account: AccountRepository,
+        syncDao: SyncDao,
+        api: SupabaseSyncApi,
+        exports: PlaylistExportRepository,
+        engine: PlaylistSyncEngine,
+        journal: LibraryJournal,
+        prefs: SyncPrefsStore,
+        events: SyncEvents,
+        json: Json,
+        dataSaver: DataSaverState,
+    ): SyncRunner = SyncRunner(
+        account = account, syncDao = syncDao, api = api, exports = exports, applier = engine, journal = journal,
+        prefs = prefs, events = events, json = json,
+        tasteUploadsPaused = dataSaver::blocksBulkTransfer,
+        log = { Log.w("Sync", it) },
+    )
+
+    @Provides
+    @Singleton
+    fun provideSyncScheduler(
+        account: AccountRepository,
+        sync: SyncCoordinator,
+        syncDao: SyncDao,
+        prefs: SyncPrefsStore,
+        journal: LibraryJournal,
+    ): SyncScheduler = SyncScheduler(account, sync, syncDao, prefs, journal)
 
     @Provides
     @Singleton
@@ -130,6 +176,11 @@ object SupabaseModule {
         scope = scope,
     )
 
+    /** One slot for the whole process: the Activity drops a scanned link in, the Library takes it out. */
+    @Provides
+    @Singleton
+    fun provideShareLinkInbox(): ShareLinkInbox = ShareLinkInbox()
+
     @Provides
     @Singleton
     fun providePlaylistShareRepository(
@@ -137,6 +188,7 @@ object SupabaseModule {
         exports: PlaylistExportRepository,
         api: SupabaseShareApi,
         json: Json,
+        store: PlaylistShareStore,
     ): PlaylistShareRepository = PlaylistShareRepositoryImpl(
         configured = BuildConfig.SUPABASE_URL.isNotBlank() &&
             BuildConfig.SUPABASE_PUBLISHABLE_KEY.isNotBlank() && BuildConfig.SHARE_BASE_URL.isNotBlank(),
@@ -144,5 +196,6 @@ object SupabaseModule {
         exports = exports,
         api = api,
         json = json,
+        store = store,
     )
 }

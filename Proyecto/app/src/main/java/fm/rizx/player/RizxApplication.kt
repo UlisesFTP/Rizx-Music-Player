@@ -1,6 +1,8 @@
 package fm.rizx.player
 
+import android.app.Activity
 import android.app.Application
+import android.os.Bundle
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -10,6 +12,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.components.SingletonComponent
+import fm.rizx.player.data.sync.SyncScheduler
 import fm.rizx.player.domain.plugin.PluginRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +35,17 @@ class RizxApplication : Application(), ImageLoaderFactory {
     interface PluginBootstrapEntryPoint {
         fun pluginRepository(): PluginRepository
     }
+
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface SyncBootstrapEntryPoint {
+        fun syncScheduler(): SyncScheduler
+    }
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Volatile
+    private var syncScheduler: SyncScheduler? = null
 
     /** Lets Coil borrow the app's HTTP stack; resolved lazily, on Coil's first image load. */
     @EntryPoint
@@ -80,7 +94,7 @@ class RizxApplication : Application(), ImageLoaderFactory {
         // singleton graph (23 providers, 10 Retrofit services) to be constructed, including the
         // blocking DataStore reads that reconcile the active providers. Doing that here used to happen
         // on the main thread before the first frame.
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+        appScope.launch {
             runCatching {
                 val plugins = EntryPointAccessors
                     .fromApplication(this@RizxApplication, PluginBootstrapEntryPoint::class.java)
@@ -93,6 +107,36 @@ class RizxApplication : Application(), ImageLoaderFactory {
                 // Swallowing this silently made a startup failure indistinguishable from "no plugins
                 // installed" — the screen simply shows nothing and there is no thread to pull.
                 .onFailure { android.util.Log.w("JsPlugin", "plugin bootstrap failed", it) }
+            // Cloud sync watches the session from here on: signing in (or opening the app signed in)
+            // starts it, edits keep it going, and a broken start is a logged line, never a crash.
+            runCatching {
+                EntryPointAccessors
+                    .fromApplication(this@RizxApplication, SyncBootstrapEntryPoint::class.java)
+                    .syncScheduler()
+                    .also { syncScheduler = it }
+                    .start(appScope)
+            }.onFailure { android.util.Log.w("Sync", "sync bootstrap failed", it) }
         }
+        registerActivityLifecycleCallbacks(ForegroundWatcher { syncScheduler?.onForeground() })
+    }
+
+    /**
+     * Fires once when the app comes on screen — the first activity started while none was — so sync
+     * can catch up after a quiet spell. Counts starts against stops, so rotating or moving between the
+     * app's own screens never counts as "coming back".
+     */
+    private class ForegroundWatcher(private val onForeground: () -> Unit) : ActivityLifecycleCallbacks {
+        private var started = 0
+        override fun onActivityStarted(activity: Activity) {
+            if (started++ == 0) onForeground()
+        }
+        override fun onActivityStopped(activity: Activity) {
+            started = (started - 1).coerceAtLeast(0)
+        }
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+        override fun onActivityResumed(activity: Activity) = Unit
+        override fun onActivityPaused(activity: Activity) = Unit
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+        override fun onActivityDestroyed(activity: Activity) = Unit
     }
 }
