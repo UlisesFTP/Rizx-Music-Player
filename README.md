@@ -2,15 +2,12 @@
 
 **A native Android music player.** Kotlin · Jetpack Compose · Material 3 · Media3/ExoPlayer.
 
-Rizx is a from-scratch Android reimplementation of the *business logic* of
-[**Nuclear**](https://github.com/nukeop/nuclear) — the open-source desktop music player — rebuilt on
-native Android architecture. It streams full-length tracks from free, **keyless** sources, plays your
-**on-device** music, works **offline**, and runs background playback through a real
-`MediaSessionService`. It is **not** a port of Nuclear's React/Tauri desktop UI: only the domain logic
-(providers, queue, two-phase stream resolution, playback, favorites, playlists) is shared in spirit.
+Rizx streams full-length tracks from free, **keyless** sources, plays your **on-device** music, works
+**offline**, and runs background playback through a real `MediaSessionService`. It is built on a
+provider architecture that keeps metadata and streaming separate, resolves stream URLs just-in-time,
+and treats every provider as independently failable.
 
-> **License:** GNU Affero General Public License v3.0 (AGPL-3.0). Rizx is a derived work of Nuclear and
-> carries the full AGPL obligations — see [Licensing](#licensing).
+> **License:** GNU General Public License v3.0 (GPL-3.0) — see [Licensing](#licensing).
 
 ---
 
@@ -54,6 +51,16 @@ native Android architecture. It streams full-length tracks from free, **keyless*
   source allows) or from Nuclear-JSON / Exportify-CSV files; imports become normal editable playlists.
 - ❤️ **Library** — favorites, user playlists, recently played, per-tab filter bars, and contextual
   queue/radio (Next/Prev traverse the album/artist/playlist you started from).
+- ☁️ **Optional account & sync** — the app is complete without an account. Sign in with Google or a
+  passwordless e-mail code and your playlists, favorites and listening taste follow you to every
+  device: local-first (Room stays the source of truth), a per-account server transaction, and a
+  private channel that lets other devices catch up in seconds while the app is on screen. Playlists
+  can also leave the app as portable files (Rizx JSON, XSPF, M3U8) or as an unlisted link / QR that
+  opens straight in Rizx. Downloads, local files, stream URLs, the queue and recognition history
+  never leave the phone.
+- 🧩 **Home screen widgets** — a Nothing-OS-style card (cover, dot-matrix title, transport, ♥, a red
+  tap-to-seek bar and a microphone), a compact 4×1 bar, and a 2×2 **Audio ID** widget that keeps
+  the last identified song with a play button. They work with the app closed.
 - 🔌 **Plugin runtime** — a sandboxed QuickJS runtime runs compatible Nuclear plugins (`fetch` plus a
   pure-JS `DOMParser`, no filesystem or Android APIs), with per-plugin isolation and quarantine. The
   store hides integrations replaced by native code or unsupported by this host; the community lossless
@@ -82,8 +89,8 @@ See **[docs/FEATURES.md](docs/FEATURES.md)** for the full feature tour.
 | Tests | JUnit4 · MockK · Turbine · MockWebServer |
 | Build | Gradle 8.12 (Kotlin DSL) · AGP 8.9.1 · KSP 2.0.21-1.0.28 · `minSdk 26` · `compileSdk 36` · JDK 21 recommended |
 
-421 main Kotlin files, 172 JVM-test files and 3 instrumented-test files across a clean `domain` / `data`
-/ `playback` / `ui` layering. The current JVM suite contains 1,473 passing tests. Full dependency list &
+476 main Kotlin files, 195 JVM-test files and 4 instrumented-test files across a clean `domain` / `data`
+/ `playback` / `ui` layering. The current JVM suite contains 1,651 passing tests. Full dependency list &
 licenses: **[docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md)**.
 
 ---
@@ -96,8 +103,8 @@ UI (Compose) → ViewModel → UseCase → Repository / Controller → Provider 
 
 - **`domain/`** — pure Kotlin: models, provider/repository contracts, use cases. **No Android imports.**
 - **`data/`** — providers (Deezer, Audius, Apple, YouTube, SoundCloud, lyrics…), Room/DataStore stores,
-  DTO↔domain mappers, repositories, the download/transcode pipeline, canvas, and the plugin runtime.
-  Depends on `domain`.
+  DTO↔domain mappers, repositories, the download/transcode pipeline, canvas, the optional account/sync
+  client, and the plugin runtime. Depends on `domain`.
 - **`playback/`** — `PlaybackService : MediaSessionService` owns the *single* ExoPlayer; the stream
   resolver, audio effects (AutoEQ, fixed loudness boost, float output) and the PCM tap live here. Depends on
   `domain` + Media3.
@@ -130,11 +137,13 @@ Rizx-Music-Player/
 │  │     ├─ domain/          # models, provider/repository contracts, use cases (no Android)
 │  │     ├─ data/            # providers, local stores, remote clients, mappers, repositories
 │  │     ├─ playback/        # PlaybackService, stream resolver, audio effects
+│  │     ├─ widget/          # home screen widgets (RemoteViews)
 │  │     └─ ui/              # Compose screens, theme, navigation
 │  ├─ baselineprofile/       # startup-profile generator (com.android.test module)
 │  ├─ build.gradle.kts · settings.gradle.kts · gradlew
 ├─ docs/                     # project documentation (this repo)
-├─ LICENSE · NOTICE          # AGPL-3.0 + upstream attribution
+├─ share-site/               # static files for a share-link domain (App Links + landing page)
+├─ LICENSE · NOTICE          # GPL-3.0 license and notices
 └─ README.md
 ```
 
@@ -163,6 +172,10 @@ Or open `Proyecto/` in Android Studio, select JDK 21 for Gradle, and run the **a
 or emulator (API 26+). Detailed instructions, signing (including creating a keystore), and
 troubleshooting: **[docs/BUILD.md](docs/BUILD.md)**.
 
+A clean clone builds a fully working player. The optional account/sync/share features need a backend
+of your own and are enabled by a handful of *public* configuration values passed at build time
+(never committed) — see [docs/BUILD.md § Public runtime configuration](docs/BUILD.md#public-runtime-configuration).
+
 ---
 
 ## Documentation
@@ -176,7 +189,7 @@ troubleshooting: **[docs/BUILD.md](docs/BUILD.md)**.
 | [docs/plugins/PLUGIN_GUIDE.md](docs/plugins/PLUGIN_GUIDE.md) | Writing a plugin: the contract, the rules, and what the sandbox does and does not guarantee |
 | [docs/plugins/PLUGIN_SPEC_FOR_AGENTS.md](docs/plugins/PLUGIN_SPEC_FOR_AGENTS.md) | The same contract as imperative rules, exact shapes and a template, for coding agents |
 | [docs/BUILD.md](docs/BUILD.md) | Build, run, test, signing, Room schemas, project structure |
-| [docs/LICENSING.md](docs/LICENSING.md) | AGPL compliance, attribution, corresponding source |
+| [docs/LICENSING.md](docs/LICENSING.md) | GPL compliance, trademarks, corresponding source |
 | [docs/THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md) | Bundled dependencies & their licenses |
 | [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md) | Privacy policy |
 
@@ -184,13 +197,16 @@ troubleshooting: **[docs/BUILD.md](docs/BUILD.md)**.
 
 ## Licensing
 
-Rizx Player is licensed under the **GNU Affero General Public License v3.0** ([`LICENSE`](LICENSE)).
+Rizx Player is licensed under the **GNU General Public License v3.0** ([`LICENSE`](LICENSE)).
 
-It is an independent, clean-room reimplementation of the *business logic* of
-[**nukeop/nuclear**](https://github.com/nukeop/nuclear) (also AGPL-3.0). As a derived work it carries the
-full AGPL obligations independently — the license text, upstream attribution ([`NOTICE`](NOTICE)), the
-Corresponding Source (this repository), and a log of major modifications are preserved with every build.
-Rizx is not affiliated with or endorsed by the Nuclear project.
+The GPL obligations travel with every build: the license text, the notices ([`NOTICE`](NOTICE)) and the
+Corresponding Source (this repository, tagged per release) are preserved and distributed together. The
+in-app **About** screen shows the copyright and no-warranty notice, links the licence text and this
+repository, and lists every bundled component with its licence.
+
+**Trademarks.** The GPL covers the *code*. The name **Rizx** / **Rizx Player**, the logomark and the
+app icon are **not** covered by it and are reserved. Fork freely — but ship your fork under its own
+name and icon, without implying it is Rizx or endorsed by it.
 
 Content is fetched at runtime from third-party services under their own terms; no third-party API keys,
 code, or assets are bundled. Bundled fonts are licensed under the SIL Open Font License 1.1. See

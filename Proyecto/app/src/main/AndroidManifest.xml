@@ -116,6 +116,46 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Home screen widgets (widget/): the Now Playing card and its compact row. The launcher's
+             update broadcast is a protected system action, which is why these are exported. -->
+        <receiver
+            android:name=".widget.NowPlayingCardWidget"
+            android:exported="true"
+            android:label="@string/widget_card_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_now_playing_card_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.NowPlayingBarWidget"
+            android:exported="true"
+            android:label="@string/widget_bar_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_now_playing_bar_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.AudioIdWidget"
+            android:exported="true"
+            android:label="@string/widget_audio_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_audio_id_info" />
+        </receiver>
+        <!-- The widgets' buttons: explicit intents from our own PendingIntents only. -->
+        <receiver
+            android:name=".widget.WidgetActionReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

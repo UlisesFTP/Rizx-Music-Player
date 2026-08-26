@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /**
  * Lightweight references returned in search results and nested in heavier entities (kept light to
  * avoid recursive, heavy object graphs). All carry a [ProviderRef] [source] for identity.
- * See NUCLEAR_UPSTREAM_STUDY.md §2.
+ * See docs/ARCHITECTURE.md
  */
 
 /** A credited artist on a track/album, including roles (e.g. "main", "featured"). */

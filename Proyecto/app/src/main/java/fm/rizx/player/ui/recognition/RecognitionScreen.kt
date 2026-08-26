@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -153,6 +154,12 @@ fun RecognitionScreen(
             blocked -> context.openAppSettings()
             else -> launcher.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    // Brought here by a widget's microphone: start straight away, asking for the permission if needed.
+    val pendingRequest by vm.pendingRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingRequest) {
+        if (pendingRequest != 0L && vm.consumeRequest()) listen()
     }
 
     Column(

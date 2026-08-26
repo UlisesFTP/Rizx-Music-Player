@@ -26,7 +26,7 @@ import java.io.IOException
 /**
  * Imports Spotify playlists by URL, **keyless**: it reads the public embed page
  * (`open.spotify.com/embed/playlist/<id>`), whose `__NEXT_DATA__` script carries the tracklist as JSON —
- * no API key, no token, no login. (Upstream Nuclear instead embeds a rotating TOTP secret to mint an
+ * no API key, no token, no login. (Nuclear instead embeds a rotating TOTP secret to mint an
  * anonymous bearer for the official API; that would break the project's keyless rule and Spotify rotates
  * the secret, so their import breaks periodically.)
  *

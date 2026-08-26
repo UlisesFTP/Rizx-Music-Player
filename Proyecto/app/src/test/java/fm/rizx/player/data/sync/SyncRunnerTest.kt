@@ -9,6 +9,7 @@ import fm.rizx.player.domain.repository.PlaylistExportArtifact
 import fm.rizx.player.domain.repository.PlaylistExportFormat
 import fm.rizx.player.domain.repository.PlaylistExportRepository
 import fm.rizx.player.domain.sync.SyncApplied
+import fm.rizx.player.domain.sync.SyncReason
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -50,6 +51,7 @@ class SyncRunnerTest {
     }
     private var paused = false
     private var stamp = 0
+    private val logs = mutableListOf<String>()
 
     private fun prefs() = SyncPrefsStore(File(tmp.root, "sync_prefs.json"))
 
@@ -57,6 +59,7 @@ class SyncRunnerTest {
         account = account, syncDao = syncDao, api = api, exports = exports, applier = applier, journal = journal,
         prefs = prefs(), events = events, json = json,
         tasteUploadsPaused = { paused }, now = { Instant.parse("2026-08-21T12:00:00Z") }, newDeviceId = { "dev-A" },
+        log = { logs += it },
     )
 
     /** Most tests start with the account already set up on this device: the backfill is not the subject. */
@@ -86,7 +89,7 @@ class SyncRunnerTest {
 
         assertEquals(SyncRunner.Outcome.SUCCESS, runner().run())
 
-        assertEquals(listOf(50, 50, 20), api.requests.map { it.operations.size })
+        assertEquals(listOf(100, 20), api.requests.map { it.operations.size })
         assertEquals(0, syncDao.pendingCount())
         assertEquals(120, api.records.size)
         assertTrue("its own writes never come back as changes", applier.applied.isEmpty())
@@ -269,5 +272,31 @@ class SyncRunnerTest {
         assertEquals(50L, api.requests.first().cursor)
         assertNotNull(syncDao.states["acct-1"]!!.lastSyncedAtIso)
         assertEquals(events.running.first(), false)
+    }
+
+    @Test
+    fun `a 403 is final - no retry, and the status says failed`() = runTest {
+        alreadyBackfilled()
+        api.refuseWith = 403
+        syncDao.outbox.insert(op("TRACK:deezer:1"))
+
+        assertEquals(SyncRunner.Outcome.FAILURE, runner().run())
+
+        assertTrue(events.failed.value)
+        assertFalse(events.running.value)
+        assertEquals("kept for a later, permitted run", 1, syncDao.pendingCount())
+        assertTrue(logs.any { it.startsWith("run refused") })
+    }
+
+    @Test
+    fun `every run leaves one summary line with its reason and what moved`() = runTest {
+        alreadyBackfilled()
+        api.seed(SyncDocuments.FAVORITE, "TRACK:deezer:1", doc("""{"json":"1"}"""))
+        syncDao.outbox.insert(op("TRACK:deezer:2"))
+
+        runner().run(SyncReason.REALTIME)
+
+        val line = logs.single { it.startsWith("run ok") }
+        assertTrue(line, line.startsWith("run ok reason=REALTIME cursor=0->2 sent=1 acked=1 applied=0/1/0 rounds=1"))
     }
 }

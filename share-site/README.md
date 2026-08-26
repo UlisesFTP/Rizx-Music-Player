@@ -14,7 +14,7 @@ control.
 | Path | Purpose |
 |---|---|
 | `.well-known/assetlinks.json` | App Links statement: `fm.rizx.player` (release-signed and the debug-signed `releaseTest`) and `fm.rizx.player.debug`. Certificate fingerprints are public by design. |
-| `s/index.html` | Landing page for `https://<host>/s/<token>`: "Open in Rizx" (`intent://` → `rizx://share/<token>`), download link, playlist preview fetched from the share function. |
+| `s/index.html` | Landing page for `https://<host>/s/<token>`: "Open in Rizx" (`intent://` → `rizx://share/<token>`), download link, playlist preview fetched from the share function. Its `READ_ENDPOINT` constant is a placeholder in the repository; step 1 below fills it in. |
 | `404.html` | The same page, for hosts that cannot rewrite `/s/<token>` to `s/index.html` (GitHub Pages serves it for unknown paths). |
 | `_redirects` | Rewrite rule for Cloudflare Pages / Netlify. |
 | `.nojekyll` | Makes GitHub Pages serve the dot-directory `.well-known/` as-is. |
@@ -26,7 +26,10 @@ site cannot serve `/.well-known/` at the host root), Cloudflare Pages, Netlify, 
 server. `assetlinks.json` must be served over HTTPS with status 200, content type `application/json`
 and no redirects.
 
-1. Publish this folder at the root of the host.
+1. In `s/index.html` **and** `404.html`, set `READ_ENDPOINT` to your backend's public
+   `playlist-shares` function: `<RIZX_SUPABASE_URL>/functions/v1/playlist-shares`. This is the same
+   public project URL the app is built with — not a secret — but, like every deployment coordinate,
+   it is kept out of the repository. Then publish this folder at the root of the host.
 2. Check it: `https://<host>/.well-known/assetlinks.json` returns the JSON above. Google's checker:
    `https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://<host>&relation=delegate_permission/common.handle_all_urls`
 3. Point both sides at the new host — they must agree to the character:

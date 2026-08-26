@@ -5,13 +5,14 @@ Rizx Player bundles the open-source libraries below. This report is surfaced in-
 
 > Regenerate at release time from the actual resolved dependency graph (e.g. a Gradle license-reporting
 > plugin such as `com.jaredsburrows.license` or `com.github.jk1.dependency-license-report`) so the list
-> stays accurate. This hand-curated report was checked against `app/build.gradle.kts` on 2026-08-14 for
-> version 0.2.0. Transitive versions must still be regenerated before distribution.
+> stays accurate. This hand-curated report was checked against `app/build.gradle.kts` on 2026-08-25 for
+> version 1.0.0 (no dependency was added for the sync, widget or recognition work since the previous
+> review). Transitive versions must still be regenerated before distribution.
 
 ## App license
 
-Rizx Player is a derived work of [nukeop/nuclear](https://github.com/nukeop/nuclear) and is licensed
-under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the repository `LICENSE`.
+Rizx Player is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. See the repository
+`LICENSE`.
 
 ## Runtime dependencies
 
@@ -27,6 +28,11 @@ under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the reposit
 | Jetpack Compose (BOM `androidx.compose:compose-bom`, incl. animation/foundation/material3/icons) | 2024.12.01 | Apache-2.0 |
 | Navigation Compose (`androidx.navigation:navigation-compose`) | 2.8.5 | Apache-2.0 |
 | Media3 ExoPlayer / ExoPlayer-HLS / Common / Session (`androidx.media3:*`) | 1.5.1 | Apache-2.0 |
+| Compose Material Icons Extended (`androidx.compose.material:material-icons-extended`) | BOM | Apache-2.0 |
+| AndroidX WorkManager (`androidx.work:work-runtime-ktx`) | 2.11.2 | Apache-2.0 |
+| AndroidX Credentials (`androidx.credentials:credentials`, `credentials-play-services-auth`) | 1.6.0 | Apache-2.0 |
+| Google Identity (`com.google.android.libraries.identity.googleid:googleid`) | 1.1.1 | Apache-2.0 |
+| ZXing Core (`com.google.zxing:core`) — QR generation | 3.5.3 | Apache-2.0 |
 | AndroidX Profile Installer (`androidx.profileinstaller:profileinstaller`) | 1.4.1 | Apache-2.0 |
 | Hilt (`com.google.dagger:hilt-android`) | 2.52 | Apache-2.0 |
 | Hilt Navigation Compose (`androidx.hilt:hilt-navigation-compose`) | 1.2.0 | Apache-2.0 |
@@ -41,7 +47,7 @@ under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the reposit
 ## Audio format dependencies
 
 Both are LGPL-family libraries used as unmodified library jars; distributing the combined work under
-AGPL-3.0 is compatible with the LGPL's terms.
+GPL-3.0 is compatible with the LGPL's terms.
 
 | Library | Version | License | Role |
 |---|---|---|---|
@@ -52,8 +58,8 @@ AGPL-3.0 is compatible with the LGPL's terms.
 
 ## Plugin system dependencies
 
-The app stays **AGPL-3.0**. The **GPLv3** NewPipeExtractor is combinable with AGPL-3.0 under §13 of both
-licenses; the combined work is distributed under AGPL-3.0. Downloaded Nuclear plugins are separate *data*
+The app is **GPL-3.0**, the same licence as NewPipeExtractor, so the combined work is simply GPL-3.0
+with no cross-licence clause involved. Downloaded Nuclear plugins are separate *data*
 (their own licenses), transpiled and run at runtime, not linked into the APK.
 
 | Library | Version | License | Role |
@@ -73,7 +79,7 @@ is owed even where no jar ships.
 
 | Source | License | What was used |
 |---|---|---|
-| [SongRec](https://github.com/marin-m/SongRec) | GPL-3.0 | The Shazam-compatible acoustic fingerprint format used by `ShazamSignatureGenerator`: FFT/window parameters, peak spreading and recognition, band split, and the binary framing with its CRC32 header. Reimplemented in Kotlin; no SongRec code is linked or bundled. GPL-3.0 is compatible with this app's AGPL-3.0. |
+| [SongRec](https://github.com/marin-m/SongRec) | GPL-3.0 | The Shazam-compatible acoustic fingerprint format used by `ShazamSignatureGenerator`: FFT/window parameters, peak spreading and recognition, band split, and the binary framing with its CRC32 header. Reimplemented in Kotlin; no SongRec code is linked or bundled. SongRec is GPL-3.0, the same licence as this app. |
 
 No official Shazam SDK, ShazamKit or Apple library is used, bundled or linked, and the app is not
 affiliated with or endorsed by Apple.
@@ -105,7 +111,7 @@ Variable TrueType fonts under `app/src/main/res/font/`, all licensed **SIL Open 
 - **Apache License 2.0** — https://www.apache.org/licenses/LICENSE-2.0
 - **GPL-2.0 with Classpath Exception** (desugar_jdk_libs, from OpenJDK) — https://openjdk.org/legal/gplv2+ce.html
 - **Eclipse Public License 1.0** — https://www.eclipse.org/legal/epl-v10.html
-- **AGPL-3.0** (this app) — https://www.gnu.org/licenses/agpl-3.0.html
+- **GPL-3.0** (this app) — https://www.gnu.org/licenses/gpl-3.0.html
 - **GPLv3** — https://www.gnu.org/licenses/gpl-3.0.html
 - **LGPL-2.1** — https://www.gnu.org/licenses/lgpl-2.1.html
 - **MPL-2.0** — https://www.mozilla.org/MPL/2.0/

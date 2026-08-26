@@ -20,7 +20,7 @@ import java.io.IOException
 
 /**
  * Real streaming provider backed by the keyless Audius API (Phase 16) — serves **full-length** tracks,
- * unlike the iTunes 30-second previews. Two-phase resolution (NUCLEAR_UPSTREAM_STUDY.md §5): phase 1
+ * unlike the iTunes 30-second previews. Two-phase resolution (docs/ARCHITECTURE.md): phase 1
  * text-searches Audius for candidates; phase 2 builds the just-in-time stream URL
  * (`/v1/tracks/{id}/stream`, a 302 to an ephemeral CDN file that ExoPlayer follows). Works for tracks
  * from any metadata provider (matches by artist/title). Resolved URLs are never persisted.

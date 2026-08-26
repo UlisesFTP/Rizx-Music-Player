@@ -1,6 +1,6 @@
 # Writing a Rizx plugin
 
-_Reviewed against Rizx 0.2.0 and plugin API v1 on 2026-08-14._
+_Reviewed against Rizx 1.0.0 and plugin API v1 on 2026-08-25._
 
 A Rizx plugin is a small JavaScript package that registers one or more **providers** — a catalogue to
 search, a source of audio, a lyrics service, a chart feed, a playlist importer. Rizx runs it in a
@@ -206,7 +206,7 @@ These are conditions of being listed and of being a good citizen on someone's ph
 as readable source, so a key in it is a published key. A public API, or a token a service publishes in
 its own page, is fine. Defeating an access control is not: if a service added a check specifically to
 keep non-browser clients out, working around it is out of scope for Rizx (see
-[ADR 0018](../adr/0018-platform-catalogues-keyless-only.md)).
+[PROVIDERS.md](../PROVIDERS.md#content-sources)).
 
 **Do not act against the user.**
 
@@ -218,7 +218,7 @@ keep non-browser clients out, working around it is out of scope for Rizx (see
 - `api.Ytdlp` runs on the user's IP and connection. Do not build a scraping farm out of it.
 - No obfuscated or remotely-fetched code. Ship what you wrote.
 
-**Licensing.** Rizx is AGPL-3.0, but a downloaded plugin is **separate data** — transpiled and run at
+**Licensing.** Rizx is GPL-3.0, but a downloaded plugin is **separate data** — transpiled and run at
 runtime, not linked into the app — so your plugin may carry any licence you like (see
 [LICENSING.md](../LICENSING.md)). Content you fetch stays under the terms of whoever serves it.
 

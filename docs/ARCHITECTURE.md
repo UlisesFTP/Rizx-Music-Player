@@ -1,6 +1,6 @@
 # Architecture
 
-_Current implementation snapshot: 2026-08-18 · app 0.2.0 · Room schema 6_
+_Current implementation snapshot: 2026-08-25 · app 1.0.0 · Room schema 7_
 
 Rizx Player is a single-module Android app (`fm.rizx.player`) built on a clean, one-directional layering.
 This document describes the layers, the identity model, how streaming and playback work, and the queue —
@@ -24,6 +24,7 @@ ViewModel  ──►  UseCase  ──►  Repository / Controller
 | **data** | `data/` | `domain` | Providers, remote clients (Retrofit/OkHttp/NewPipe), local stores (Room/DataStore), DTO↔domain mappers, repositories. |
 | **playback** | `playback/` | `domain` + Media3 | `PlaybackService : MediaSessionService` owns the single ExoPlayer; the stream resolver and Media3 mappers live here. |
 | **ui** | `ui/` | `domain` (via ViewModels/use cases) | Compose screens, theme tokens, navigation. Never touches a provider or ExoPlayer directly. |
+| **widget** | `widget/` | `domain` + Media3 session | Home screen widgets (`RemoteViews`); drive playback through a `MediaController`, never a player of their own. |
 | **core** | `core/` | — | Cross-cutting: error types, network monitor, cache, DI modules, formatting. |
 
 The dependency arrow only ever points **inward**: `ui → domain`, `data → domain`, `playback → domain`.
@@ -51,7 +52,7 @@ class ProviderRef(val provider: String, val id: String, val url: String? = null)
 ### The `Track` shape
 
 A `Track` has **no `id`** — its identity *is* `source: ProviderRef`. Other notable shapes (aligned with
-upstream Nuclear's `packages/model`):
+the domain model):
 
 - `artists` are full `ArtistCredit`s (name + roles + optional `source`), not plain strings.
 - `album` is a lightweight `AlbumRef` (not a full album object).
@@ -160,10 +161,10 @@ written by an in-repo tagger (`OggOpusTagger`) because no bundled library can wr
 
 ## Canvas (animated covers)
 
-`data/canvas/` resolves a muted video loop for the current song (the song's own music video via
-NewPipe; Apple motion artwork where it exists) behind a policy gate: network type, quality cap, battery
-saver, per-source toggles, and an **anti-static filter** that rejects uploads that are really still
-images. The player renders it on a `TextureView` beneath the artwork; playback audio never depends on
+`data/canvas/` resolves a muted video loop for the current song (Apple Music motion artwork, TIDAL
+video covers, then the song's own music video via NewPipe — in that priority) behind a policy gate:
+network type, quality cap, battery saver, per-source toggles, and an **anti-static filter** that rejects
+uploads that are really still images. The player renders it on a `TextureView` beneath the artwork; playback audio never depends on
 the canvas stream.
 
 ## Lyrics
@@ -297,7 +298,8 @@ bridge.
 ## Persistence
 
 - **Room** — favorites, playlists (+ items), the recently-played listening log, recognition history and
-  local-first sync bookkeeping (v6; audio, fingerprints and resolved stream URLs are never stored).
+  local-first sync bookkeeping — the outbox, the cursor and other devices' listening counters (v7;
+  audio, fingerprints and resolved stream URLs are never stored).
   `exportSchema` is
   **on**: each version's schema JSON is committed under `app/schemas/`, and every version bump ships its
   `Migration` together with the new JSON (see [BUILD.md](BUILD.md#room-schemas)).
@@ -309,18 +311,50 @@ bridge.
 ## Optional account, sync and portable sharing
 
 Room remains authoritative. Local playlist, favorite and taste mutations enqueue idempotent outbox
-operations in the same local transaction; the Supabase sync function assigns monotonic revisions and
-the client retains recoverable snapshots before replacing dirty playlist state. Signing out stops sync
-without deleting the local library.
+operations in the same local transaction (`sync_outbox`, coalesced per entity). `SyncRunner` drains
+them in batches of 100 through **one PostgREST RPC call** (`rizx_sync`): a single server transaction,
+serialized per account with an advisory lock, applies the operations, assigns monotonic revisions and
+returns the changes since the client's cursor (pages of 500). Revisions therefore commit in order and a
+pull can never skip one. The client keeps a recoverable snapshot before replacing a dirty playlist,
+filters its own echo, and stores the cursor in Room only after a page is applied. Signing out stops
+sync without deleting the local library.
+
+`SyncScheduler` decides *when*: sign-in, app start, a debounce after local edits, foreground after a
+quiet period, and a 6-hour WorkManager backstop. While the app is on screen it also holds a
+**realtime invalidation channel** — a plain OkHttp WebSocket to the backend's Phoenix endpoint, joined
+privately with the user's token — on which the server publishes *one* message per completed sync
+(`revision`, `device_id`). The message never carries data and never applies anything: it only makes
+the client pull, and only when the revision is newer than its cursor and came from another device. The
+socket closes in the background and degrades silently (bounded reconnect backoff, a fixed list of
+refusals that stop it until the next foreground), so nothing depends on it.
+
+Listening taste syncs **per device**: each installation publishes its own counters under a device id
+and reads everyone else's into `taste_contributions`; the app sums them on read, so no device ever
+overwrites another's history.
 
 Google Credential Manager or a six-digit email OTP creates an optional permanent account. Tokens are
 encrypted with Android Keystore-backed AES-GCM. Guest users are created only when an unlisted cloud
 share needs ownership. Portable JSON/XSPF/M3U8 and every cloud payload are sanitized before crossing the
 device boundary: local paths, local URIs and ephemeral stream candidates are excluded.
 
-The Android client contains only publishable Supabase/Google/share configuration. Migrations and the
-`sync`, `playlist-shares`, `guest-claim` and `account-delete` Edge Functions live in `supabase/`; remote
-deployment and provider configuration remain an external release gate and must be verified separately.
+The Android client contains only *publishable* configuration (project URL, publishable key, Google web
+client id, share base URL), injected at build time and absent from the repository. The backend — a
+Postgres schema with row-level security, the `rizx_sync` RPC and the `playlist-shares`, `guest-claim`
+and `account-delete` Edge Functions — is a separate deployment that communicates with the app over
+HTTPS; it is not part of this repository or of the app's Corresponding Source. Without that
+configuration the account features are hidden and every other feature works.
+
+## Home screen widgets
+
+`widget/` renders three `RemoteViews` widgets (a 4×2 card, a 4×1 bar and a 2×2 Audio ID card) from a
+`WidgetSnapshot`: `PlaybackService` pushes one on every transition, play/pause change, seek and a
+5-second ticker, and the updater falls back to the on-disk playback snapshot when the service is not
+running — so the widgets show the last song with the app closed. Taps are broadcast to a
+`WidgetActionReceiver`, which connects a `MediaController` to the session on demand (there is no
+second player); the red dotted bar is 24 tap zones over one bitmap, each mapped to a seek fraction.
+The microphone deep-links into the Audio ID screen already listening; the widget's play button hands a
+recognized track to the normal `PlaybackController`. Titles are drawn into bitmaps with the app's
+dot-matrix face because `RemoteViews` cannot load a custom typeface.
 
 ## Testing
 
@@ -338,5 +372,7 @@ composables, so the JVM-tested pipeline never branches on SDK level.
 Instrumented tests (`app/src/androidTest/`, device required) cover what the JVM cannot: the karaoke
 lyrics timing screen, and **Room migrations** — `RizxMigrationTest` opens a database at the previous
 version from its exported schema, runs the real `Migration`, and asserts that favorites, playlists and
-the listening log survive it. It covers both 4 → 5 and 5 → 6. A migration bug is unrecoverable by the time a user notices, so from v5
-onward every version bump ships its migration, its schema JSON and its test together.
+the listening log survive it. It covers 4 → 5, 5 → 6 and 6 → 7. A migration bug is unrecoverable by
+the time a user notices, so from v5 onward every version bump ships its migration, its schema JSON and
+its test together. The sync engine is driven end to end on the JVM against an in-memory replica of the
+server RPC, and the invalidation socket against `MockWebServer`.

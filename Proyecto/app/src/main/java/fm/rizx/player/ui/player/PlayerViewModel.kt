@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.domain.model.ThemeMode
+import fm.rizx.player.domain.recognition.RecognitionInbox
 import fm.rizx.player.domain.repository.SettingsRepository
 import fm.rizx.player.ui.model.SampleData
 import kotlinx.coroutines.delay
@@ -35,7 +36,12 @@ data class PlayerUiState(
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val settings: SettingsRepository,
+    /** The default keeps the existing tests trivial; Hilt injects the app-wide singleton. */
+    private val recognitionRequests: RecognitionInbox = RecognitionInbox(),
 ) : ViewModel() {
+
+    /** A widget asked to identify a song (see MainActivity); non-zero until the recognition screen takes it. */
+    val pendingRecognition: StateFlow<Long> get() = recognitionRequests.pending
 
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()

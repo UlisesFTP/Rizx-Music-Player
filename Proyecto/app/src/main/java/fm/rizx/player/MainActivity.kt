@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import fm.rizx.player.domain.model.ThemeMode
+import fm.rizx.player.domain.recognition.RecognitionInbox
 import fm.rizx.player.domain.share.ShareLinkInbox
 import fm.rizx.player.domain.share.ShareLinks
 import fm.rizx.player.ui.RizxApp
@@ -49,6 +50,9 @@ class MainActivity : ComponentActivity() {
     /** Where a share link opened from outside (a scanned QR, a tapped link) waits for the Library. */
     @Inject lateinit var shareLinks: ShareLinkInbox
 
+    /** Where a widget's microphone tap waits for the recognition screen. */
+    @Inject lateinit var recognitionRequests: RecognitionInbox
+
     /**
      * Below API 33 the app language is applied by hand from its stored preference (see AppLanguage.kt);
      * on 33+ this wrap is a no-op because LocaleManager already localized the base context.
@@ -62,7 +66,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Only on a genuine launch: Android re-delivers the launch intent when it recreates the activity
         // (theme change, a tablet rotating), and that must not import the same playlist again.
-        if (savedInstanceState == null) receiveShareLink(intent)
+        if (savedInstanceState == null) {
+            receiveShareLink(intent)
+            receiveRecognitionRequest(intent)
+        }
         applyOrientationPolicy()
         keepScreenAwake()
         setContent {
@@ -109,6 +116,12 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         receiveShareLink(intent)
+        receiveRecognitionRequest(intent)
+    }
+
+    /** The microphone on a home screen widget: the app opens on the recognition screen and listens. */
+    private fun receiveRecognitionRequest(intent: Intent?) {
+        if (intent?.action == ACTION_RECOGNIZE) recognitionRequests.offer()
     }
 
     /**
@@ -123,6 +136,11 @@ class MainActivity : ComponentActivity() {
         if (base.isBlank()) return
         val token = ShareLinks.tokenFrom(uri, base) ?: return
         shareLinks.offer(ShareLinks.shareUrl(base, token))
+    }
+
+    companion object {
+        /** Explicit intent action a widget uses to ask for song identification. */
+        const val ACTION_RECOGNIZE = "fm.rizx.player.action.RECOGNIZE"
     }
 
     /**

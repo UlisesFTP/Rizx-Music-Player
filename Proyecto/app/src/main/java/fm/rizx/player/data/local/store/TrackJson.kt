@@ -9,7 +9,7 @@ import kotlinx.serialization.json.Json
 /**
  * kotlinx.serialization codec for persisted domain entities. Tracks are run through
  * [stripResolutionState] before encoding, so ephemeral stream URLs (`Track.streamCandidates`) are
- * **never** written to disk (AGENTS.md / NUCLEAR_UPSTREAM_STUDY.md §7.3). `ignoreUnknownKeys` keeps
+ * **never** written to disk (AGENTS.md). `ignoreUnknownKeys` keeps
  * forward/legacy compatibility for import.
  */
 internal object TrackJson {

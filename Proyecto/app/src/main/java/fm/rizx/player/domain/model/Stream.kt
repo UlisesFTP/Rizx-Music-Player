@@ -37,7 +37,7 @@ data class Stream(
 /**
  * One provider's offering for a [Track] (phase 1 of two-phase resolution). The concrete [stream]
  * is populated just-in-time during phase 2; [failed] flags a dead candidate; [lastResolvedAtIso]
- * gates expiry / re-resolution. See NUCLEAR_UPSTREAM_STUDY.md §2 / §5.
+ * gates expiry / re-resolution. See docs/ARCHITECTURE.md
  */
 @Serializable
 data class StreamCandidate(

@@ -8,7 +8,7 @@ package fm.rizx.player.domain.model
  * so this carries the counters the log keeps: how often it started, how often it finished, how often it
  * was taken off early, when it was first and last played, and at what times of day.
  *
- * Timestamps are ISO-8601 strings, like every other timestamp in the domain (NUCLEAR_UPSTREAM_STUDY.md
+ * Timestamps are ISO-8601 strings, like every other timestamp in the domain (docs/ARCHITECTURE.md
  * §2). A blank or unparseable one is an ordinary case, not an error — see `TasteProfile`.
  */
 data class PlayStat(

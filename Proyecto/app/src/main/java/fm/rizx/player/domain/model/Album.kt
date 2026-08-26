@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * A full album — the heavier counterpart to [AlbumRef], carrying the actual [tracks]. Identity is
- * [source] (a [ProviderRef]); no `id` of its own (NUCLEAR_UPSTREAM_STUDY.md §2). Pure Kotlin,
+ * [source] (a [ProviderRef]); no `id` of its own (docs/ARCHITECTURE.md). Pure Kotlin,
  * Android-free. Fetched on demand via `MetadataProvider.albumDetail`.
  */
 @Serializable

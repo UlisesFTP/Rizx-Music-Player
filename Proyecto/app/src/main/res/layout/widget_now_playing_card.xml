@@ -1,0 +1,305 @@
+<!-- Now Playing card widget (widget/WidgetRenderer.kt). The Nothing card shape with Rizx type and colours:
+     the title is a bitmap (Doto, rendered in-process so the dot-matrix face survives every launcher), the
+     labels are Martian Mono, the progress is a bitmap of little squares. Colours and drawables are set
+     from code per theme; what is here is the dark preview. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card_dark"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/art"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/widget_art_placeholder"
+                android:contentDescription="@string/widget_open" />
+
+            <ImageView
+                android:id="@+id/title_image"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:adjustViewBounds="true"
+                android:scaleType="fitStart"
+                android:contentDescription="@string/widget_open" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/row_labels"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="9dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/artist"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#B9B2A5"
+                android:textSize="11sp"
+                android:fontFamily="@font/martian_mono"
+            android:fontVariationSettings="'wght' 600, 'wdth' 88"
+            android:letterSpacing="0.08"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textAllCaps="true"
+                android:text="@string/widget_preview_artist" />
+
+            <TextView
+                android:id="@+id/clock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:textColor="#B9B2A5"
+                android:textSize="11sp"
+                android:fontFamily="@font/martian_mono"
+            android:fontVariationSettings="'wght' 600, 'wdth' 88"
+            android:letterSpacing="0.08"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textAllCaps="true"
+                android:text="1:24 / 3:40" />
+        </LinearLayout>
+
+        <!-- The seek bar: the dotted progress (red up to the playhead, with a knob) under a row of
+             invisible tap zones — RemoteViews cannot drag, but a tap anywhere along it lands there. -->
+        <FrameLayout
+            android:id="@+id/seek_area"
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
+            android:layout_marginTop="2dp">
+
+            <ImageView
+                android:id="@+id/dots"
+                android:layout_width="match_parent"
+                android:layout_height="12dp"
+                android:layout_gravity="center_vertical"
+                android:scaleType="fitStart"
+                android:contentDescription="@string/widget_seek" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
+                <FrameLayout
+                    android:id="@+id/seek_00"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_01"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_02"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_03"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_04"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_05"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_06"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_07"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_08"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_09"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_10"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_11"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_12"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_13"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_14"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_15"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_16"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_17"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_18"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_19"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_20"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_21"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_22"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+                <FrameLayout
+                    android:id="@+id/seek_23"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/row_controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/btn_prev"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="9dp"
+            android:scaleType="fitCenter"
+            android:background="@drawable/widget_square_dark"
+            android:src="@drawable/ic_widget_prev"
+            android:contentDescription="@string/player_previous" />
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp">
+
+                <ImageView
+                    android:id="@+id/btn_play"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:padding="9dp"
+                    android:scaleType="fitCenter"
+                    android:background="@drawable/widget_fill_dark"
+                    android:src="@drawable/ic_widget_play"
+                    android:contentDescription="@string/widget_play" />
+
+                <FrameLayout
+                    android:id="@+id/play_marker"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="4dp"
+                    android:background="#FF3B2F"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+        <ImageView
+            android:id="@+id/btn_next"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="9dp"
+            android:scaleType="fitCenter"
+            android:background="@drawable/widget_square_dark"
+            android:src="@drawable/ic_widget_next"
+            android:contentDescription="@string/player_next"
+            android:layout_marginStart="8dp" />
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+        <ImageView
+            android:id="@+id/btn_like"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="9dp"
+            android:scaleType="fitCenter"
+            android:background="@drawable/widget_square_dark"
+            android:src="@drawable/ic_media_favorite"
+            android:contentDescription="@string/player_like" />
+
+            <ImageView
+                android:id="@+id/btn_mic"
+                android:layout_width="56dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:padding="9dp"
+                android:scaleType="fitCenter"
+                android:background="@drawable/widget_pill_dark"
+                android:src="@drawable/ic_widget_mic"
+                android:contentDescription="@string/recognition_open" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

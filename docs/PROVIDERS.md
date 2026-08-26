@@ -1,6 +1,6 @@
 # Providers
 
-_Current provider inventory: 2026-08-14 · native providers plus plugin API v1_
+_Current provider inventory: 2026-08-25 · Rizx 1.0.0 · native providers plus plugin API v1_
 
 Rizx separates **metadata** (what to play) from **streaming** (how to play it), and registers both kinds in
 a single registry. Every source is **keyless** — no API keys, tokens, or secrets ship in the app.
@@ -71,6 +71,8 @@ crash the app. Repositories degrade gracefully — if one source is down, the ot
 | **Wikipedia** | Metadata | Artist biographies, validated against the live API so the wrong article never shows | Public MediaWiki API |
 | **Community lossless index** | Streaming (lossless) | True-FLAC sources for downloads and Hi-Res playback | Via **plugin** — the repository bundles no index |
 | **Shazam-compatible recognition** | *(not a registry provider)* | Identifies ambient audio from a fingerprint computed on the device | Unofficial keyless endpoint — no key, no account, and the app identifies itself honestly rather than imitating a device |
+| **Apple Music · TIDAL · YouTube** (canvas) | *(not a registry provider)* | Animated covers: Apple motion artwork, TIDAL video covers, the song's own music video as a muted fallback — in that priority | Public page data and embed tokens; per-source toggles |
+| **Your own backend** (optional) | *(not a content provider)* | Account, cross-device sync of playlists/favorites/taste, unlisted share links | A Supabase project you deploy; the app only ships its publishable coordinates and works fully without it |
 
 **Recognition is deliberately outside the registry.** `ProviderRegistry` models interchangeable
 catalogues — one active, the rest as fallbacks — and its `ProviderKind` enum is mirrored by the plugin
@@ -85,15 +87,16 @@ Notes:
 
 - **Native, not a plugin:** full YouTube audio is a **native** provider built on
   [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) — it extracts stream URLs directly,
-  with no API key and no browser. (NewPipeExtractor is GPLv3, compatible with this app's AGPL-3.0.)
+  with no API key and no browser. (NewPipeExtractor is GPL-3.0, the same licence as this app.)
 - **Keyless means public, not merely reachable.** A public API or a token published in a page is fine.
   Defeating an access control is not: Spotify's search endpoint is gated by an obfuscated anti-bot
   token, so Spotify **search is deliberately absent** — Spotify appears through public editorial/chart
   playlists and playlists you can **import by URL**, read from public embed data. Album cards derived
   from those charts resolve through the public album embed. Imports cover playlists of any length: past
   the embed's 100 rows it pages through the same gateway the web player uses, carrying the anonymous
-  bearer the embed itself publishes. See [ADR 0018](adr/0018-platform-catalogues-keyless-only.md) for
-  why that stays on the public side of the line while search does not.
+  bearer the embed itself publishes. The line is drawn at *access controls*: data a page hands to any
+  anonymous visitor is public; a token whose only purpose is to keep automated clients out is not,
+  and defeating it is out of scope no matter how easy.
 - **Import limits, per source.** Deezer, Spotify and YouTube/YT-Music all page to the same 10,000-track
   ceiling the library applies when saving; Apple Music's playlist page carries its whole tracklist in one
   response. When a source genuinely cuts a list short, the playlist says so on its own screen rather than

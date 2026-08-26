@@ -42,6 +42,30 @@ java.home=C\:\\Program Files\\Java\\jdk-21
 Use **Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK** if your JDK is in a
 different location. Keep machine-specific paths out of Git.
 
+## Public runtime configuration
+
+The optional account, sync and share-link features talk to a backend of your own. The build reads its
+*public* coordinates from Gradle properties or environment variables of the same name:
+
+| Property | What it is |
+|---|---|
+| `RIZX_SUPABASE_URL` | Base URL of the Supabase project (`https://<ref>.supabase.co`) |
+| `RIZX_SUPABASE_PUBLISHABLE_KEY` | The project's **publishable** (`sb_publishable_…`) key — designed to ship in clients |
+| `RIZX_GOOGLE_WEB_CLIENT_ID` | The Google OAuth **web** client id the native Google sign-in exchanges its token against |
+| `RIZX_SHARE_BASE_URL` | Prefix printed on share links and QR codes (`https://<host>/s`); also cuts the App Links intent filter |
+| `RIZX_TURNSTILE_CHALLENGE_URL` | Reserved for a CAPTCHA challenge page for guest (anonymous) share sessions. Compiled into `BuildConfig` but not consumed by 1.0.0: the app sends no CAPTCHA token, so the backend must allow anonymous sign-ins without one for guest links to work |
+
+Put them in **`~/.gradle/gradle.properties`** (outside the repository) or export them in the
+environment; the tracked `Proyecto/gradle.properties` must never carry them. Every value is public by
+design — none of them grants more than an anonymous client already has — but they identify *your*
+deployment, so they stay out of the repository. **Never** pass a service-role key, a Google client
+secret, SMTP or CAPTCHA secrets: the app has no use for them and they must not exist in an APK.
+
+When they are absent the build still succeeds: `BuildConfig` holds empty strings, the account screen
+reports that no backend is configured, share links are unavailable, and the App Links filter points at
+a reserved `.invalid` host. The backend itself (schema, RLS policies, the `rizx_sync` RPC, Edge
+Functions) is a separate deployment and is not part of this repository.
+
 ## Build
 
 ```bash
@@ -100,8 +124,9 @@ losing them means never being able to update the published app under the same id
 policy: every `version` bump ships its `Migration`, the newly exported schema JSON, **and** a
 `MigrationTestHelper` case in `RizxMigrationTest` — in the same commit, so migrations are reviewable and
 provable against the real history. The export starts at version 4; versions 1–3 predate it and are
-reconstructible only from the migrations in `RizxDatabase.kt`. The instrumented suite covers 4 → 5 and
-5 → 6; schema 6 adds local-first account/sync bookkeeping without replacing existing media data.
+reconstructible only from the migrations in `RizxDatabase.kt`. The instrumented suite covers 4 → 5,
+5 → 6 and 6 → 7; schema 6 adds local-first account/sync bookkeeping and schema 7 the per-device
+listening contributions, neither replacing existing media data.
 
 Two artifacts are generated **into the source tree** by builds — worth knowing if you build from a
 mirror/copy of the checkout (CI caches, synced build dirs): `app/schemas/` (any KSP build) and
@@ -118,7 +143,7 @@ cd Proyecto
 ```
 
 Unit tests use JUnit4 · MockK · Turbine · OkHttp MockWebServer and run on the JVM (no emulator needed).
-The 2026-08-18 repository snapshot runs **1,489 tests in 168 suites with zero failures or skips**.
+The 2026-08-25 repository snapshot runs **1,651 tests in 186 suites with zero failures or skips**.
 Instrumented tests run via `./gradlew connectedDebugAndroidTest` (device/emulator required): the
 karaoke-lyrics timing screen, and the **Room migration tests** (`RizxMigrationTest`), which open a
 database at the previous version from the exported schema, apply the real `Migration`, and check that
@@ -149,9 +174,10 @@ Proyecto/
 │     │  │  ├─ model/  provider/  repository/  usecase/  playback/
 │     │  ├─ data/                 # providers, remote clients, local stores, mappers, repositories
 │     │  │  ├─ provider/  remote/  repository/  local/  download/  plugin/  search/  canvas/
-│     │  │  ├─ lossless/  lyrics/
+│     │  │  ├─ lossless/  lyrics/  sync/  recognition/
 │     │  ├─ playback/             # PlaybackService (MediaSessionService), stream resolver, effects
-│     │  │  ├─ service/  cache/  canvas/
+│     │  │  ├─ service/  cache/  canvas/  spatial/
+│     │  ├─ widget/               # home screen widgets (RemoteViews, MediaController on tap)
 │     │  └─ ui/                   # Compose screens, theme, navigation, components
 │     │     ├─ screens/  components/  theme/  navigation/  player/  home/  library/ …
 │     ├─ main/assets/plugins/     # git-ignored on purpose — see below

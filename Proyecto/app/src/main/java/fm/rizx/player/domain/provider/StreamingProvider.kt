@@ -11,7 +11,7 @@ import fm.rizx.player.domain.model.Track
  * [ProviderKind.STREAMING], so they live in the registry and are single-active.
  *
  * The upstream V1/V2 method pair is collapsed to a single Track-based signature (see
- * NUCLEAR_UPSTREAM_STUDY.md §3.8). Resolution is two-phase (§5): first [searchForTrack] discovers
+ * docs/ARCHITECTURE.md). Resolution is two-phase (§5): first [searchForTrack] discovers
  * candidates (matches are imperfect — usually several), then [getStreamUrl] resolves one to a
  * concrete [Stream] just before playback.
  */

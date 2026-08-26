@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.domain.playback.PlaybackController
 import fm.rizx.player.domain.recognition.RecognitionHistoryItem
+import fm.rizx.player.domain.recognition.RecognitionInbox
 import fm.rizx.player.domain.recognition.RecognitionRepository
 import fm.rizx.player.domain.recognition.RecognitionState
 import fm.rizx.player.domain.usecase.RecognizeAmbientSong
@@ -27,9 +28,16 @@ class RecognitionViewModel @Inject constructor(
     private val recognize: RecognizeAmbientSong,
     private val repository: RecognitionRepository,
     private val playback: PlaybackController,
+    private val requests: RecognitionInbox = RecognitionInbox(),
 ) : ViewModel() {
 
     val state: StateFlow<RecognitionState> = repository.state
+
+    /** A request from a widget's microphone, waiting for this screen to act on it. */
+    val pendingRequest: StateFlow<Long> get() = requests.pending
+
+    /** Takes the pending request; true when there was one, so [listen] runs exactly once for it. */
+    fun consumeRequest(): Boolean = requests.consume()
 
     val history: StateFlow<List<RecognitionHistoryItem>> = repository.history()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())

@@ -7,6 +7,7 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import fm.rizx.player.domain.sync.SyncReason
 
 /**
  * WorkManager's handle on a sync run. The run itself is [SyncRunner]; this only maps its outcome onto
@@ -21,11 +22,18 @@ class RizxSyncWorker(appContext: Context, params: WorkerParameters) : CoroutineW
 
     override suspend fun doWork(): Result {
         val runner = EntryPointAccessors.fromApplication(applicationContext, Dependencies::class.java).syncRunner()
-        return when (runner.run()) {
+        val reason = inputData.getString(KEY_REASON)?.let { name -> SyncReason.entries.firstOrNull { it.name == name } }
+            ?: SyncReason.MANUAL
+        return when (runner.run(reason)) {
             SyncRunner.Outcome.SUCCESS -> Result.success()
             SyncRunner.Outcome.RETRY -> if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.failure()
+            // The server said this account may not sync: no amount of retrying changes that.
+            SyncRunner.Outcome.FAILURE -> Result.failure()
         }
     }
 
-    private companion object { const val MAX_ATTEMPTS = 5 }
+    companion object {
+        const val KEY_REASON = "reason"
+        private const val MAX_ATTEMPTS = 5
+    }
 }

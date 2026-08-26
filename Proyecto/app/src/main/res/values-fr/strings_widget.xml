@@ -1,0 +1,29 @@
+<resources>
+    <!-- Home screen widgets (widget/) -->
+    <string name="widget_card_label">En lecture</string>
+    <string name="widget_card_description">Pochette, commandes, j\'aime et identification de titres dans une carte façon Nothing.</string>
+    <string name="widget_bar_label">En lecture · compact</string>
+    <string name="widget_bar_description">Une ligne : pochette, titre, commandes et j\'aime.</string>
+    <string name="widget_nothing_playing">Rien en lecture</string>
+    <string name="widget_open_rizx">Ouvrez Rizx pour choisir un titre</string>
+    <string name="widget_artist_prefix">Artiste : %1$s</string>
+    <string name="widget_play">Lecture</string>
+    <string name="widget_pause">Pause</string>
+    <string name="widget_unlike">Retirer des favoris</string>
+    <string name="widget_open">Ouvrir Rizx</string>
+    <string name="widget_preview_artist">Artiste : Rizx</string>
+    <string name="widget_seek">Aller à un point du titre</string>
+    <string name="widget_audio_label">Audio ID</string>
+    <string name="widget_audio_description">Identifiez ce qui joue autour de vous ; la dernière correspondance reste ici, prête à être lue.</string>
+    <string name="widget_audio_idle_title">Audio ID</string>
+    <string name="widget_audio_idle_hint">Touchez le micro pour identifier ce qui joue</string>
+    <string name="widget_audio_listening">Écoute…</string>
+    <string name="widget_audio_identifying">Identification…</string>
+    <string name="widget_audio_listening_hint">Rizx écoute dans l\'app</string>
+    <string name="widget_audio_no_match">Aucune correspondance</string>
+    <string name="widget_audio_failed">Identification impossible</string>
+    <string name="widget_audio_retry_hint">Réessayez, plus près de l\'enceinte</string>
+    <string name="widget_album_prefix">Album : %1$s</string>
+    <string name="widget_play_match">Lire le titre identifié</string>
+    <string name="widget_audio_idle_hint_short">Touchez le micro</string>
+</resources>

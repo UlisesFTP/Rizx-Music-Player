@@ -1,6 +1,6 @@
 # Features
 
-_Current feature inventory: 2026-08-14 · Rizx Player 0.2.0_
+_Current feature inventory: 2026-08-25 · Rizx Player 1.0.0_
 
 A tour of what Rizx Player does. Everything below is built on the shared domain pipeline described in
 [ARCHITECTURE.md](ARCHITECTURE.md), so features compose cleanly — a local file, a downloaded track, and a
@@ -281,6 +281,9 @@ every device, the way a streaming service does:
 - **Playlists, favorites and listening taste** travel with the account. Every edit is journaled
   locally and uploaded on its own within seconds; opening the app, or bringing it back after a while,
   pulls what other devices did. A backstop run every few hours catches a phone that sat in a drawer.
+- **Other devices catch up in seconds.** While the app is on screen it listens on a private channel;
+  when another device saves a playlist or likes a song, this one pulls the change within seconds. In
+  the background the schedule above takes over — nothing depends on the channel being there.
 - **Taste adds up across devices.** Each phone publishes its own listening counters; the app sums
   them, so a song played five times here and three times on the tablet is an eight-play song on both —
   and the personalized rows of the Home refresh when another device's history or likes arrive.
@@ -290,6 +293,20 @@ every device, the way a streaming service does:
   30 days), or stay signed out.
 - Never uploaded: downloads, local files, stream URLs, the queue, recognition history, plugins or any
   provider credential. Data saver pauses only the listening-counter uploads.
+
+## Home screen widgets
+
+Two widgets in the look of a Nothing OS card, set in Rizx's own type and colours (Paper by day, Ivory
+by night, the red state marker):
+
+- **Now playing (4×2):** cover, title in the dot-matrix face, artist and clock, a progress bar made of
+  little squares, previous / play / next, ♥, and a microphone that opens song identification.
+- **Now playing · compact (4×1):** cover, title and artist, previous / play / next, ♥.
+- **Audio ID (2×2):** a microphone that identifies what is playing around you; the last match stays
+  on the small card — cover, title, artist · album — with a play button.
+- The card's dotted bar is a **red seek bar**: tap anywhere along it to jump forward or back.
+- They show the last song even with the app closed, and every button works from there: play resumes
+  the restored queue, ♥ likes the current song, the microphone lands on Audio ID already listening.
 
 ## Artist pages
 

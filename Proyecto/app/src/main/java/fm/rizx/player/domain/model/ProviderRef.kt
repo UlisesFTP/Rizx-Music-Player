@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
  * [copy] for value-style updates and [identityKey] for a stable string key.
  *
  * See AGENTS.md ("ProviderRef(provider, id) is the canonical identity") and
- * NUCLEAR_UPSTREAM_STUDY.md §2.
+ * docs/ARCHITECTURE.md
  */
 @Serializable
 class ProviderRef(

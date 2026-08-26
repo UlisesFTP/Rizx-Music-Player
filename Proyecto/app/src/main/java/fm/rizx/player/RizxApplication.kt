@@ -3,6 +3,8 @@ package fm.rizx.player
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -27,6 +29,9 @@ private const val IMAGE_CACHE_DIR = "image_cache"
 private const val IMAGE_CACHE_BYTES = 256L * 1024 * 1024
 private const val CROSSFADE_MS = 150
 
+/** How long the last screen may be gone before the app counts as in the background (a rotation is shorter). */
+private const val BACKGROUND_GRACE_MS = 1_000L
+
 @HiltAndroidApp
 class RizxApplication : Application(), ImageLoaderFactory {
 
@@ -46,6 +51,11 @@ class RizxApplication : Application(), ImageLoaderFactory {
 
     @Volatile
     private var syncScheduler: SyncScheduler? = null
+
+    private val foregroundWatcher = ForegroundWatcher(
+        onForeground = { syncScheduler?.onForeground() },
+        onBackground = { syncScheduler?.onBackground() },
+    )
 
     /** Lets Coil borrow the app's HTTP stack; resolved lazily, on Coil's first image load. */
     @EntryPoint
@@ -87,6 +97,9 @@ class RizxApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        // Registered before anything else so the first activity's start is counted even though the
+        // scheduler that wants to hear about it is still being built below.
+        registerActivityLifecycleCallbacks(foregroundWatcher)
         // Reload installed JS plugins (ADR 0014) off the main thread — each is isolated, so a broken
         // plugin can never block startup or the others.
         //
@@ -110,28 +123,47 @@ class RizxApplication : Application(), ImageLoaderFactory {
             // Cloud sync watches the session from here on: signing in (or opening the app signed in)
             // starts it, edits keep it going, and a broken start is a logged line, never a crash.
             runCatching {
-                EntryPointAccessors
+                val scheduler = EntryPointAccessors
                     .fromApplication(this@RizxApplication, SyncBootstrapEntryPoint::class.java)
                     .syncScheduler()
-                    .also { syncScheduler = it }
-                    .start(appScope)
+                syncScheduler = scheduler
+                scheduler.start(appScope)
+                // The first screen almost always came up while the plugins above were loading, so the
+                // watcher fired into a null scheduler. Replay it: this is what opens the invalidation
+                // channel on a cold start.
+                if (foregroundWatcher.isForeground) scheduler.onForeground()
             }.onFailure { android.util.Log.w("Sync", "sync bootstrap failed", it) }
         }
-        registerActivityLifecycleCallbacks(ForegroundWatcher { syncScheduler?.onForeground() })
     }
 
     /**
      * Fires once when the app comes on screen — the first activity started while none was — so sync
-     * can catch up after a quiet spell. Counts starts against stops, so rotating or moving between the
-     * app's own screens never counts as "coming back".
+     * can catch up after a quiet spell, and once when the last screen goes away so the invalidation
+     * channel can close. Counts starts against stops; the "gone" side waits a moment because a rotation
+     * stops the old activity before it starts the new one, and that is not the app leaving the screen.
      */
-    private class ForegroundWatcher(private val onForeground: () -> Unit) : ActivityLifecycleCallbacks {
+    private class ForegroundWatcher(
+        private val onForeground: () -> Unit,
+        private val onBackground: () -> Unit,
+    ) : ActivityLifecycleCallbacks {
         private var started = 0
+        private val main = Handler(Looper.getMainLooper())
+        private val gone = Runnable { if (started == 0) onBackground() }
+
+        /** Whether some activity is started right now (not subject to the background grace). */
+        @Volatile
+        var isForeground: Boolean = false
+            private set
+
         override fun onActivityStarted(activity: Activity) {
+            main.removeCallbacks(gone)
+            isForeground = true
             if (started++ == 0) onForeground()
         }
         override fun onActivityStopped(activity: Activity) {
             started = (started - 1).coerceAtLeast(0)
+            isForeground = started > 0
+            if (started == 0) main.postDelayed(gone, BACKGROUND_GRACE_MS)
         }
         override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
         override fun onActivityResumed(activity: Activity) = Unit

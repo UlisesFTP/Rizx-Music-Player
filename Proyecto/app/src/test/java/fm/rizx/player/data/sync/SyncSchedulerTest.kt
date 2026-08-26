@@ -5,6 +5,7 @@ import fm.rizx.player.data.local.db.SyncOutboxEntity
 import fm.rizx.player.data.local.db.SyncStateEntity
 import fm.rizx.player.data.local.store.SyncPrefsStore
 import fm.rizx.player.domain.account.AccountState
+import fm.rizx.player.domain.sync.SyncReason
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,14 +41,16 @@ class SyncSchedulerTest {
     private val sync = FakeSyncCoordinator()
     private val syncDao = InMemorySyncDao()
     private val journal = FakeJournal()
+    private val invalidations = FakeInvalidations()
     private val now = Instant.parse("2026-08-21T12:00:00Z")
     private var clock = now
 
     private fun prefs() = SyncPrefsStore(File(tmp.root, "sync_prefs.json"), io = Dispatchers.Unconfined)
 
     private fun scheduler() = SyncScheduler(
-        account, sync, syncDao, prefs(), journal,
-        debounce = Duration.ofSeconds(20), foregroundQuiet = Duration.ofMinutes(5), now = { clock }, newDeviceId = { "dev" },
+        account, sync, syncDao, prefs(), journal, invalidations,
+        debounce = Duration.ofSeconds(20), foregroundQuiet = Duration.ofMinutes(5), invalidationSettle = Duration.ofSeconds(1),
+        foregroundCooldown = Duration.ofSeconds(30), now = { clock }, newDeviceId = { "dev" },
     )
 
     private fun pendingEdit(id: String) = SyncOutboxEntity(id, "FAVORITE", "TRACK:deezer:$id", "UPSERT", "{}", "t$id")
@@ -72,6 +75,7 @@ class SyncSchedulerTest {
 
         assertEquals(1, sync.syncNowCalls)
         assertEquals(1, sync.periodicCalls)
+        assertEquals(listOf(SyncReason.SIGN_IN), sync.reasons)
     }
 
     @Test
@@ -223,6 +227,8 @@ class SyncSchedulerTest {
         testScheduler.advanceUntilIdle()
         assertEquals("just synced, nothing pending", 1, sync.syncNowCalls)
 
+        // Past the cooldown of the sign-in request: this foreground is a moment of its own.
+        clock = now.plusSeconds(31)
         syncDao.states["acct-1"] = SyncStateEntity("acct-1", "dev", lastSyncedAtIso = now.minus(Duration.ofMinutes(6)).toString())
         scheduler.onForeground()
         testScheduler.advanceUntilIdle()
@@ -234,5 +240,93 @@ class SyncSchedulerTest {
         // runCurrent, not advanceUntilIdle: the latter would also run the edit's 20 s debounce.
         testScheduler.runCurrent()
         assertEquals("something waited offline", 3, sync.syncNowCalls)
+    }
+
+    @Test
+    fun `a foreground replayed right after sign-in does not double the run`() = runTest {
+        account.state.value = signedIn("acct-1")
+        syncDao.states["acct-1"] = SyncStateEntity("acct-1", "dev", lastSyncedAtIso = now.minus(Duration.ofDays(1)).toString())
+        val scheduler = scheduler()
+        scheduler.start(appScope())
+        testScheduler.advanceUntilIdle()
+        assertEquals(listOf(SyncReason.SIGN_IN), sync.reasons)
+
+        // The cold-start replay: the sign-in run has not stamped lastSyncedAtIso yet, so this looks quiet.
+        scheduler.onForeground()
+        testScheduler.advanceUntilIdle()
+        assertEquals("the sign-in run is about to do this work", listOf(SyncReason.SIGN_IN), sync.reasons)
+
+        clock = now.plusSeconds(31)
+        scheduler.onForeground()
+        testScheduler.advanceUntilIdle()
+        assertEquals(listOf(SyncReason.SIGN_IN, SyncReason.FOREGROUND), sync.reasons)
+    }
+
+    @Test
+    fun `the invalidation channel is open only while signed in and on screen`() = runTest {
+        account.state.value = signedIn("acct-1")
+        val scheduler = scheduler()
+        scheduler.start(appScope())
+        testScheduler.advanceUntilIdle()
+        assertNull("no screen yet", invalidations.current)
+
+        scheduler.onForeground()
+        testScheduler.advanceUntilIdle()
+        assertEquals("acct-1", invalidations.current)
+
+        scheduler.onBackground()
+        assertNull(invalidations.current)
+
+        scheduler.onForeground()
+        testScheduler.advanceUntilIdle()
+        assertEquals("acct-1", invalidations.current)
+        account.state.value = AccountState.LocalOnly
+        testScheduler.advanceUntilIdle()
+        assertNull("signing out closes it", invalidations.current)
+        assertEquals(listOf("acct-1", "acct-1"), invalidations.connects)
+    }
+
+    @Test
+    fun `another device's nudge syncs inline once it settles - own echoes and stale ones do not`() = runTest {
+        account.state.value = signedIn("acct-1")
+        syncDao.states["acct-1"] = SyncStateEntity("acct-1", "dev", cursor = 10, backfilledAtIso = "x")
+        val scheduler = scheduler()
+        scheduler.start(appScope())
+        scheduler.onForeground()
+        testScheduler.advanceUntilIdle()
+        val before = sync.inlineCalls
+
+        invalidations.nudge(11, "dev") // this device's own write, echoed by the server
+        invalidations.nudge(9, "other") // already pulled
+        testScheduler.advanceTimeBy(2_000); testScheduler.runCurrent()
+        assertEquals("nothing worth a run", before, sync.inlineCalls)
+
+        invalidations.nudge(11, "other")
+        invalidations.nudge(12, "other")
+        testScheduler.advanceTimeBy(500); testScheduler.runCurrent()
+        assertEquals("still settling", before, sync.inlineCalls)
+        testScheduler.advanceTimeBy(600); testScheduler.runCurrent()
+        assertEquals("one run for the burst", before + 1, sync.inlineCalls)
+        assertEquals(SyncReason.REALTIME, sync.reasons.last())
+    }
+
+    @Test
+    fun `a pending merge choice keeps the channel closed and ignores nudges`() = runTest {
+        prefs().setLastAccountId("acct-0")
+        journal.hasLibrary = true
+        val scheduler = scheduler()
+        scheduler.start(appScope())
+        scheduler.onForeground()
+        account.state.value = signedIn("acct-1")
+        testScheduler.advanceUntilIdle()
+
+        assertNull(invalidations.current)
+        invalidations.nudge(99, "other")
+        testScheduler.advanceTimeBy(2_000); testScheduler.runCurrent()
+        assertEquals(0, sync.inlineCalls)
+
+        scheduler.resolveMerge(SyncScheduler.MergeChoice.UNION)
+        testScheduler.advanceUntilIdle()
+        assertEquals("open once the choice is made and a screen is up", "acct-1", invalidations.current)
     }
 }

@@ -33,7 +33,7 @@ import fm.rizx.player.ui.theme.sg
 
 /**
  * Open-source dependency license report (About → Open-source licenses). Surfaces
- * [LicenseData] to satisfy the AGPL attribution / third-party acknowledgement obligation (spec 014).
+ * [LicenseData] to satisfy the GPL / third-party acknowledgement obligations (spec 014).
  */
 @Composable
 fun LicensesScreen(onBack: () -> Unit) {
@@ -67,13 +67,24 @@ fun LicensesScreen(onBack: () -> Unit) {
         Section(stringResource(R.string.licenses_section_bundled))
         LicenseData.runtime.forEach { LicenseRow(it.name, it.version, it.license) }
 
+        Section(stringResource(R.string.licenses_section_fonts))
+        LicenseData.fonts.forEach { LicenseRow(it.name, it.version, it.license) }
+
         Section(stringResource(R.string.licenses_section_test_only))
         LicenseData.testOnly.forEach { LicenseRow(it.name, it.version, it.license) }
 
+        // One link per licence family named above, so every obligation is one tap from the list.
         Section(stringResource(R.string.licenses_section_license_texts))
         LinkBody("Apache-2.0 — apache.org/licenses/LICENSE-2.0")
+        LinkBody("MIT — opensource.org/license/mit")
+        LinkBody("BSD-2-Clause — opensource.org/license/bsd-2-clause")
+        LinkBody("MPL-2.0 — mozilla.org/MPL/2.0")
+        LinkBody("GPL-3.0 — gnu.org/licenses/gpl-3.0.html")
+        LinkBody("LGPL-2.1 — gnu.org/licenses/lgpl-2.1.html")
+        LinkBody("LGPL-3.0 — gnu.org/licenses/lgpl-3.0.html")
+        LinkBody("SIL OFL 1.1 — openfontlicense.org")
         LinkBody("EPL-1.0 — eclipse.org/legal/epl-v10.html")
-        LinkBody(stringResource(R.string.licenses_agpl_this_app))
+        LinkBody(stringResource(R.string.licenses_this_app))
 
         Spacer(Modifier.height(60.dp))
     }

@@ -34,13 +34,12 @@
     <string name="about_cd_back">Voltar</string>
     <string name="about_title">Sobre</string>
     <string name="about_version_label">Versão %1$s (%2$s)</string>
-    <string name="about_label_based_on">Baseado em</string>
-    <string name="about_body_based_on">O Rizx reimplementa a lógica de negócio do Nuclear, o reprodutor de música de desktop de código aberto criado por nukeop e colaboradores. O Rizx é um fork independente e não é afiliado nem endossado pelo projeto Nuclear.</string>
-    <string name="about_label_source">Source (Corresponding Source, AGPL §6)</string>
-    <string name="about_body_source_intro">O código-fonte completo deste app — marcado para corresponder a esta versão — e o projeto original são públicos:</string>
-    <string name="about_body_source_nuclear">• Nuclear original: github.com/nukeop/nuclear</string>
+    <string name="about_label_source">Código-fonte (Corresponding Source, GPL §6)</string>
+    <string name="about_body_source_intro">O código-fonte completo deste app — marcado para corresponder a esta versão — é público:</string>
     <string name="about_label_license">Licença</string>
-    <string name="about_body_license">Nuclear is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). As a derived work Rizx is also AGPL-3.0: its source and modifications are made available under the same terms and copyright notices are retained.</string>
+    <string name="about_body_license">O Rizx Player é distribuído sob a Licença Pública Geral GNU v3.0 (GPL-3.0). Seu código-fonte completo e suas modificações estão disponíveis sob os mesmos termos, e os avisos de direitos autorais são mantidos.</string>
+    <string name="about_label_legal">Aviso legal</string>
+    <string name="about_body_legal">Este programa é distribuído SEM NENHUMA GARANTIA. É software livre e você pode redistribuí-lo sob os termos da Licença Pública Geral GNU, versão 3 ou (a seu critério) qualquer versão posterior. O texto completo da licença está em Licenças de código aberto e em gnu.org/licenses/gpl-3.0.html.</string>
     <string name="about_cd_open_licenses">Abrir licenças</string>
     <string name="about_label_open_source_licenses">Licenças de código aberto</string>
     <string name="about_body_third_party">Dependências de terceiros incluídas neste app</string>
@@ -48,9 +47,10 @@
     <!-- LicensesScreen -->
     <string name="licenses_cd_back">Voltar</string>
     <string name="licenses_title">Licenças de código aberto</string>
-    <string name="licenses_intro">O Rizx Player é licenciado sob AGPL-3.0. Ele inclui as bibliotecas de código aberto abaixo, cada uma sob sua própria licença.</string>
+    <string name="licenses_intro">O Rizx Player é distribuído sob a GPL-3.0. Ele inclui as bibliotecas de código aberto abaixo, cada uma sob sua própria licença.</string>
     <string name="licenses_section_bundled">Incluído no app</string>
+    <string name="licenses_section_fonts">Fontes incluídas</string>
     <string name="licenses_section_test_only">Apenas para testes (não incluído)</string>
     <string name="licenses_section_license_texts">Textos das licenças</string>
-    <string name="licenses_agpl_this_app">AGPL-3.0 (este app) — gnu.org/licenses/agpl-3.0.html</string>
+    <string name="licenses_this_app">GPL-3.0 (este app) — gnu.org/licenses/gpl-3.0.html</string>
 </resources>

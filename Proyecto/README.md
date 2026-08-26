@@ -17,6 +17,10 @@ in Android Studio, or build from here with the Gradle wrapper.
 - **Local config:** create `local.properties` with `sdk.dir=…` (git-ignored). Release signing reads from an
   uncommitted `keystore.properties`; without it `assembleRelease` **fails on purpose** — build
   `assembleReleaseTest` for a minified, debug-signed smoke APK. Details: [`../docs/BUILD.md`](../docs/BUILD.md).
+- **Optional backend:** the account/sync/share features read five public `RIZX_*` values from
+  `~/.gradle/gradle.properties` or the environment — never from the tracked `gradle.properties`. Without
+  them the app builds and runs with those features hidden. See
+  [`../docs/BUILD.md`](../docs/BUILD.md#public-runtime-configuration).
 
 ## Documentation
 
@@ -28,9 +32,9 @@ Project-level documentation lives at the repository root:
 - [`../docs/FEATURES.md`](../docs/FEATURES.md) — full feature tour
 - [`../docs/PROVIDERS.md`](../docs/PROVIDERS.md) — the provider model & content sources
 - [`../docs/BUILD.md`](../docs/BUILD.md) — detailed build/run/test guide & project structure
-- [`../docs/LICENSING.md`](../docs/LICENSING.md) — AGPL compliance & attribution
+- [`../docs/LICENSING.md`](../docs/LICENSING.md) — GPL compliance & trademarks
+- [`../docs/PRIVACY_POLICY.md`](../docs/PRIVACY_POLICY.md) — what the app processes, and where
 
 ## License
 
-AGPL-3.0 — see [`../LICENSE`](../LICENSE) and [`../NOTICE`](../NOTICE). Rizx is a derived work of
-[nukeop/nuclear](https://github.com/nukeop/nuclear). Bundled fonts are SIL OFL 1.1.
+GPL-3.0 — see [`../LICENSE`](../LICENSE) and [`../NOTICE`](../NOTICE). Bundled fonts are SIL OFL 1.1.

@@ -126,6 +126,12 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     LaunchedEffect(pendingShareLink) {
         if (pendingShareLink != null) nav.navigateTabAt(Routes.library(LibraryTab.Playlists.name))
     }
+    // A widget's microphone: go to the recognition screen, which starts listening the moment it sees
+    // the request. Single top, so a second tap while it is open does not stack another copy.
+    val pendingRecognition by playerViewModel.pendingRecognition.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingRecognition) {
+        if (pendingRecognition != 0L) nav.navigate(Routes.RECOGNITION) { launchSingleTop = true }
+    }
     // One visual player for the whole activity. Home and Now Playing borrow it by placement; the
     // coordinator gives Now Playing priority during navigation and stops whenever neither is visible.
     val canvasViewModel: CanvasViewModel = hiltViewModel()

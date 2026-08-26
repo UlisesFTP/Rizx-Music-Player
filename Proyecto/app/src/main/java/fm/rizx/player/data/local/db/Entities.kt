@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * A favorited track/album/artist. Identity/dedup is `(type, provider, sourceId)` — the entity's
- * `ProviderRef` split into columns (NUCLEAR_UPSTREAM_STUDY.md §7.1); [json] holds the serialized
+ * `ProviderRef` split into columns (docs/ARCHITECTURE.md); [json] holds the serialized
  * domain entity. Re-adding the same key is an idempotent no-op (DAO inserts with `IGNORE`), so the
  * original [addedAtIso] is preserved.
  */

@@ -27,7 +27,7 @@ import javax.inject.Singleton
  *
  * Stored as one small JSON blob in `filesDir` (atomic temp-then-rename). Tracks are run through
  * [stripResolutionState] before encoding, so ephemeral resolved stream URLs are **never** written to
- * disk (AGENTS.md §7.3 / NUCLEAR_UPSTREAM_STUDY.md §7.3) — on restore each track is re-resolved
+ * disk (AGENTS.md §7.3) — on restore each track is re-resolved
  * just-in-time by the streaming resolver. Every operation is crash-safe (`runCatching`): a missing or
  * corrupt file simply yields `null`, and a failed write is swallowed so it can never break playback.
  */

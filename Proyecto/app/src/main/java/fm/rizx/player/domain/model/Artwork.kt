@@ -36,7 +36,7 @@ private fun targetAspect(purpose: ArtworkPurpose): Float = when (purpose) {
 
 /**
  * Selects the best [Artwork] for a [purpose] at a desired [targetPx], porting upstream
- * `pickArtwork` (NUCLEAR_UPSTREAM_STUDY.md §2). Returns `null` only for an empty/missing set.
+ * `pickArtwork` (docs/ARCHITECTURE.md). Returns `null` only for an empty/missing set.
  *
  * Candidate pool = items with **no** `purpose` (always eligible) **or** items whose `purpose`
  * matches *and* have a non-empty `url`. If the pool is empty, falls back to `items.first()`

@@ -1,0 +1,29 @@
+<resources>
+    <!-- Home screen widgets (widget/) -->
+    <string name="widget_card_label">Reproduciendo</string>
+    <string name="widget_card_description">Portada, controles, me gusta e identificación de canciones en una tarjeta estilo Nothing.</string>
+    <string name="widget_bar_label">Reproduciendo · compacto</string>
+    <string name="widget_bar_description">Una fila: portada, título, controles y me gusta.</string>
+    <string name="widget_nothing_playing">Nada suena</string>
+    <string name="widget_open_rizx">Abre Rizx para elegir una canción</string>
+    <string name="widget_artist_prefix">Artista: %1$s</string>
+    <string name="widget_play">Reproducir</string>
+    <string name="widget_pause">Pausar</string>
+    <string name="widget_unlike">Quitar de me gusta</string>
+    <string name="widget_open">Abrir Rizx</string>
+    <string name="widget_preview_artist">Artista: Rizx</string>
+    <string name="widget_seek">Ir a un punto de la canción</string>
+    <string name="widget_audio_label">Audio ID</string>
+    <string name="widget_audio_description">Identifica lo que suena a tu alrededor; la última coincidencia se queda aquí, lista para reproducir.</string>
+    <string name="widget_audio_idle_title">Audio ID</string>
+    <string name="widget_audio_idle_hint">Toca el micrófono para identificar lo que suena</string>
+    <string name="widget_audio_listening">Escuchando…</string>
+    <string name="widget_audio_identifying">Identificando…</string>
+    <string name="widget_audio_listening_hint">Rizx está escuchando en la app</string>
+    <string name="widget_audio_no_match">Sin coincidencia</string>
+    <string name="widget_audio_failed">No se pudo identificar</string>
+    <string name="widget_audio_retry_hint">Prueba otra vez, más cerca del altavoz</string>
+    <string name="widget_album_prefix">Álbum: %1$s</string>
+    <string name="widget_play_match">Reproducir la canción identificada</string>
+    <string name="widget_audio_idle_hint_short">Toca el micro</string>
+</resources>

@@ -9,12 +9,14 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import fm.rizx.player.data.local.db.SyncDao
 import fm.rizx.player.domain.account.AccountRepository
 import fm.rizx.player.domain.account.AccountState
 import fm.rizx.player.domain.sync.SyncApplied
 import fm.rizx.player.domain.sync.SyncCoordinator
+import fm.rizx.player.domain.sync.SyncReason
 import fm.rizx.player.domain.sync.SyncStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +33,7 @@ class WorkManagerSyncCoordinator @Inject constructor(
     syncDao: SyncDao,
     account: AccountRepository,
     events: SyncEvents,
+    private val runner: SyncRunner,
 ) : SyncCoordinator {
     private val work = WorkManager.getInstance(context)
     override val pendingCount = syncDao.observePendingCount()
@@ -53,12 +56,23 @@ class WorkManagerSyncCoordinator @Inject constructor(
      * it rather than dropped, so an edit made mid-run still goes up. (The scheduler's debounce is what
      * keeps the chain short.)
      */
-    override fun syncNow() {
+    override fun syncNow(reason: SyncReason) {
         val request = OneTimeWorkRequestBuilder<RizxSyncWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .setInputData(workDataOf(RizxSyncWorker.KEY_REASON to reason.name))
             .build()
         work.enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+    }
+
+    /**
+     * Straight to the runner, no WorkManager between: an invalidation from another device deserves an
+     * answer in seconds, not whenever the scheduler gets around to it. The runner's own gate serializes
+     * this with a worker that may already be running. A run that needs a retry is handed to
+     * WorkManager, which knows how to wait for a network and back off.
+     */
+    override suspend fun syncInline(reason: SyncReason) {
+        if (runner.run(reason) == SyncRunner.Outcome.RETRY) syncNow(reason)
     }
 
     /** The backstop for a phone that sat in a drawer: every six hours, on any connection. */
@@ -66,6 +80,7 @@ class WorkManagerSyncCoordinator @Inject constructor(
         val request = PeriodicWorkRequestBuilder<RizxSyncWorker>(PERIOD_HOURS, TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .setInputData(workDataOf(RizxSyncWorker.KEY_REASON to SyncReason.PERIODIC.name))
             .build()
         work.enqueueUniquePeriodicWork(PERIODIC_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
     }

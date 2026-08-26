@@ -34,13 +34,12 @@
     <string name="about_cd_back">Back</string>
     <string name="about_title">About</string>
     <string name="about_version_label">Version %1$s (%2$s)</string>
-    <string name="about_label_based_on">Based on</string>
-    <string name="about_body_based_on">Rizx re-implements the business logic of Nuclear, the open-source desktop music player by nukeop and contributors. Rizx is an independent fork and is not affiliated with or endorsed by the Nuclear project.</string>
-    <string name="about_label_source">Source (Corresponding Source, AGPL §6)</string>
-    <string name="about_body_source_intro">This app\'s full source — tagged to match this version — and the upstream project are public:</string>
-    <string name="about_body_source_nuclear">• Upstream Nuclear: github.com/nukeop/nuclear</string>
+    <string name="about_label_source">Source (Corresponding Source, GPL §6)</string>
+    <string name="about_body_source_intro">This app\'s full source — tagged to match this version — is public:</string>
     <string name="about_label_license">License</string>
-    <string name="about_body_license">Nuclear is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). As a derived work Rizx is also AGPL-3.0: its source and modifications are made available under the same terms and copyright notices are retained.</string>
+    <string name="about_body_license">Rizx Player is licensed under the GNU General Public License v3.0 (GPL-3.0). Its full source and modifications are available under the same terms, and copyright notices are retained.</string>
+    <string name="about_label_legal">Legal notice</string>
+    <string name="about_body_legal">This program comes with ABSOLUTELY NO WARRANTY. It is free software, and you are welcome to redistribute it under the terms of the GNU General Public License, version 3 or (at your option) any later version. The full licence text is available under Open-source licenses and at gnu.org/licenses/gpl-3.0.html.</string>
     <string name="about_cd_open_licenses">Open licenses</string>
     <string name="about_label_open_source_licenses">Open-source licenses</string>
     <string name="about_body_third_party">Third-party dependencies bundled in this app</string>
@@ -48,9 +47,10 @@
     <!-- LicensesScreen -->
     <string name="licenses_cd_back">Back</string>
     <string name="licenses_title">Open-source licenses</string>
-    <string name="licenses_intro">Rizx Player is licensed under AGPL-3.0. It bundles the open-source libraries below, each under its own license.</string>
+    <string name="licenses_intro">Rizx Player is licensed under GPL-3.0. It bundles the open-source libraries below, each under its own license.</string>
     <string name="licenses_section_bundled">Bundled in the app</string>
+    <string name="licenses_section_fonts">Bundled fonts</string>
     <string name="licenses_section_test_only">Test-only (not shipped)</string>
     <string name="licenses_section_license_texts">License texts</string>
-    <string name="licenses_agpl_this_app">AGPL-3.0 (this app) — gnu.org/licenses/agpl-3.0.html</string>
+    <string name="licenses_this_app">GPL-3.0 (this app) — gnu.org/licenses/gpl-3.0.html</string>
 </resources>

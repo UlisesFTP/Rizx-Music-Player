@@ -10,11 +10,11 @@ import fm.rizx.player.domain.account.AccountRepository
 import fm.rizx.player.domain.account.AccountState
 import fm.rizx.player.domain.sync.SyncApplied
 import fm.rizx.player.domain.sync.SyncCoordinator
+import fm.rizx.player.domain.sync.SyncReason
 import fm.rizx.player.domain.sync.SyncStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.json.JsonElement
 import okhttp3.MediaType.Companion.toMediaType
@@ -22,8 +22,8 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Response
 
 /**
- * An in-memory replica of `supabase/functions/sync/index.ts`: idempotent by operation id, records keyed
- * by `(entity_type, entity_id)` with one monotonic revision, ≤100 operations taken per request, ≤500
+ * An in-memory replica of the server's `rizx_sync` RPC: idempotent by operation id, records keyed by
+ * `(entity_type, entity_id)` with one monotonic revision, ≤100 operations taken per request, ≤500
  * changes returned per pull — and, like the real thing, blind to who wrote a record, so every push
  * comes straight back in the same response.
  */
@@ -38,6 +38,9 @@ class FakeSyncApi : SupabaseSyncApi {
     /** How many requests still answer HTTP 500 before the server recovers. */
     var failuresLeft = 0
 
+    /** Answer every request with this status — `403` is what a non-permanent session gets. */
+    var refuseWith: Int? = null
+
     /** Extra server-side rejection: an operation this returns false for is skipped and never acknowledged. */
     var accepts: (SyncOperationRequest) -> Boolean = { true }
 
@@ -49,6 +52,7 @@ class FakeSyncApi : SupabaseSyncApi {
 
     override suspend fun sync(authorization: String, request: SyncRequest): Response<SyncResponse> {
         requests += request
+        refuseWith?.let { return Response.error(it, "{}".toResponseBody("application/json".toMediaType())) }
         if (failuresLeft > 0) {
             failuresLeft--
             return Response.error(500, "{}".toResponseBody("application/json".toMediaType()))
@@ -114,12 +118,32 @@ class FakeJournal(var hasLibrary: Boolean = false, private val queues: suspend (
 
 class FakeSyncCoordinator(override val pendingCount: Flow<Int> = flowOf(0)) : SyncCoordinator {
     var syncNowCalls = 0
+    var inlineCalls = 0
     var periodicCalls = 0
     var stopCalls = 0
+    val reasons = mutableListOf<SyncReason>()
     val appliedEvents = MutableSharedFlow<SyncApplied>(extraBufferCapacity = 8)
     override val applied: Flow<SyncApplied> get() = appliedEvents
     override val status: Flow<SyncStatus> = flowOf(SyncStatus())
-    override fun syncNow() { syncNowCalls++ }
+    override fun syncNow(reason: SyncReason) { syncNowCalls++; reasons += reason }
+    override suspend fun syncInline(reason: SyncReason) { inlineCalls++; reasons += reason }
     override fun schedulePeriodic() { periodicCalls++ }
     override fun stop() { stopCalls++ }
+}
+
+/** The invalidation channel as a switch the test flips and a flow it feeds. */
+class FakeInvalidations : SyncInvalidations {
+    /** The user currently listened for, null when the channel is closed. */
+    var current: String? = null
+        private set
+    val connects = mutableListOf<String>()
+    private val flow = MutableSharedFlow<SyncInvalidation>(extraBufferCapacity = 8)
+    override val events: Flow<SyncInvalidation> = flow
+    override fun connect(userId: String) {
+        if (current == userId) return
+        current = userId
+        connects += userId
+    }
+    override fun disconnect() { current = null }
+    fun nudge(revision: Long, deviceId: String?) = flow.tryEmit(SyncInvalidation(revision, deviceId))
 }

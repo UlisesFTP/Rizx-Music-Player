@@ -26,8 +26,10 @@ Have Rizx and it didn't open? Try <a id="plain2" href="#">this link</a>, or past
 </main>
 <script>
 (function () {
-  // Where the documents live. The page only previews; the app always reads from here too.
-  var READ_ENDPOINT = "https://wbcwgbozqefeezzhxmsy.supabase.co/functions/v1/playlist-shares";
+  // Where the documents live: the backend's public `playlist-shares` function. Set it at deploy time
+  // to `<RIZX_SUPABASE_URL>/functions/v1/playlist-shares` — the same public coordinate the app is
+  // built with (see share-site/README.md). The page only previews; the app reads from there too.
+  var READ_ENDPOINT = "https://<project-ref>.supabase.co/functions/v1/playlist-shares";
   var RELEASES = "https://github.com/UlisesFTP/Rizx-Music-Player/releases";
   // Token from `/s/<token>` or `/s/?t=<token>` — both work on hosts without path rewrites (404.html).
   var last = location.pathname.replace(/\/+$/, "").split("/").pop();

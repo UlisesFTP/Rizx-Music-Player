@@ -1,0 +1,29 @@
+<resources>
+    <!-- Home screen widgets (widget/) -->
+    <string name="widget_card_label">Now playing</string>
+    <string name="widget_card_description">Cover, transport, like and song identification in a Nothing-style card.</string>
+    <string name="widget_bar_label">Now playing · compact</string>
+    <string name="widget_bar_description">One row: cover, title, transport and like.</string>
+    <string name="widget_nothing_playing">Nothing playing</string>
+    <string name="widget_open_rizx">Open Rizx to pick a song</string>
+    <string name="widget_artist_prefix">Artist: %1$s</string>
+    <string name="widget_play">Play</string>
+    <string name="widget_pause">Pause</string>
+    <string name="widget_unlike">Remove from liked</string>
+    <string name="widget_open">Open Rizx</string>
+    <string name="widget_preview_artist">Artist: Rizx</string>
+    <string name="widget_seek">Seek</string>
+    <string name="widget_audio_label">Audio ID</string>
+    <string name="widget_audio_description">Identify what is playing around you; the last match stays here, ready to play.</string>
+    <string name="widget_audio_idle_title">Audio ID</string>
+    <string name="widget_audio_idle_hint">Tap the microphone to identify what is playing</string>
+    <string name="widget_audio_listening">Listening…</string>
+    <string name="widget_audio_identifying">Identifying…</string>
+    <string name="widget_audio_listening_hint">Rizx is listening in the app</string>
+    <string name="widget_audio_no_match">No match</string>
+    <string name="widget_audio_failed">Couldn\'t identify</string>
+    <string name="widget_audio_retry_hint">Try again, closer to the speaker</string>
+    <string name="widget_album_prefix">Album: %1$s</string>
+    <string name="widget_play_match">Play the identified song</string>
+    <string name="widget_audio_idle_hint_short">Tap the mic</string>
+</resources>

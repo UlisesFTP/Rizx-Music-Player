@@ -38,7 +38,14 @@ interface SyncCoordinator {
 
     val status: Flow<SyncStatus> get() = flowOf(SyncStatus())
 
-    fun syncNow()
+    /** Queues a run through the scheduler's own machinery (survives the process, waits for a network). */
+    fun syncNow(reason: SyncReason = SyncReason.MANUAL)
+
+    /**
+     * Runs right now, in this process, for a signal that is worth answering within seconds — another
+     * device just wrote something. The default merely queues; implementations that can run inline do.
+     */
+    suspend fun syncInline(reason: SyncReason) = syncNow(reason)
 
     /** The periodic backstop. Idempotent: scheduling twice keeps the first. */
     fun schedulePeriodic() = Unit
@@ -50,6 +57,6 @@ interface SyncCoordinator {
 /** For construction sites that do not sync (tests, previews). */
 object NoSyncCoordinator : SyncCoordinator {
     override val pendingCount: Flow<Int> = flowOf(0)
-    override fun syncNow() = Unit
+    override fun syncNow(reason: SyncReason) = Unit
     override fun stop() = Unit
 }

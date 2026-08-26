@@ -1,0 +1,29 @@
+<resources>
+    <!-- Home screen widgets (widget/) -->
+    <string name="widget_card_label">Tocando agora</string>
+    <string name="widget_card_description">Capa, controles, curtir e identificação de músicas em um cartão estilo Nothing.</string>
+    <string name="widget_bar_label">Tocando agora · compacto</string>
+    <string name="widget_bar_description">Uma linha: capa, título, controles e curtir.</string>
+    <string name="widget_nothing_playing">Nada tocando</string>
+    <string name="widget_open_rizx">Abra o Rizx para escolher uma música</string>
+    <string name="widget_artist_prefix">Artista: %1$s</string>
+    <string name="widget_play">Tocar</string>
+    <string name="widget_pause">Pausar</string>
+    <string name="widget_unlike">Remover das curtidas</string>
+    <string name="widget_open">Abrir o Rizx</string>
+    <string name="widget_preview_artist">Artista: Rizx</string>
+    <string name="widget_seek">Ir a um ponto da música</string>
+    <string name="widget_audio_label">Audio ID</string>
+    <string name="widget_audio_description">Identifique o que está tocando ao seu redor; a última correspondência fica aqui, pronta para tocar.</string>
+    <string name="widget_audio_idle_title">Audio ID</string>
+    <string name="widget_audio_idle_hint">Toque no microfone para identificar o que está tocando</string>
+    <string name="widget_audio_listening">Ouvindo…</string>
+    <string name="widget_audio_identifying">Identificando…</string>
+    <string name="widget_audio_listening_hint">O Rizx está ouvindo no app</string>
+    <string name="widget_audio_no_match">Sem correspondência</string>
+    <string name="widget_audio_failed">Não foi possível identificar</string>
+    <string name="widget_audio_retry_hint">Tente de novo, mais perto do alto-falante</string>
+    <string name="widget_album_prefix">Álbum: %1$s</string>
+    <string name="widget_play_match">Tocar a música identificada</string>
+    <string name="widget_audio_idle_hint_short">Toque no micro</string>
+</resources>

@@ -11,7 +11,7 @@ import kotlinx.coroutines.CancellationException
 /**
  * The index, supplied by an installed plugin rather than by this app.
  *
- * **This is the whole reason the feature is shaped this way.** Rizx is a public, AGPL repository, and a
+ * **This is the whole reason the feature is shaped this way.** Rizx is a public, GPL-licensed repository, and a
  * hard-coded pointer to a third party's pile of commercial FLACs would make it a distributor of that
  * pile rather than a player that can read an index. So the repository ships everything that is generic
  * and verifiable — the matching, the header check, the playback, the fallback — and the list of URLs

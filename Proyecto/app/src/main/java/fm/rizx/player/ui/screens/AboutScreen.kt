@@ -37,8 +37,8 @@ import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.sg
 
 /**
- * About / license. Preserves the AGPL notice, upstream attribution, and source link required by
- * Nuclear's AGPL-3.0 license (see repo CLAUDE.md licensing section).
+ * About / license. Preserves the GPL-3.0 notice and the link to the Corresponding Source that §6
+ * requires, plus the third-party license list.
  */
 @Composable
 fun AboutScreen(onBack: () -> Unit, onOpenLicenses: () -> Unit) {
@@ -75,20 +75,22 @@ fun AboutScreen(onBack: () -> Unit, onOpenLicenses: () -> Unit) {
         )
 
         Card {
-            Label(stringResource(R.string.about_label_based_on))
-            Body(stringResource(R.string.about_body_based_on))
-        }
-
-        Card {
             Label(stringResource(R.string.about_label_source))
             Body(stringResource(R.string.about_body_source_intro))
-            Body("• Rizx Player: github.com/rizx-player/rizx-android")
-            Body(stringResource(R.string.about_body_source_nuclear))
+            Body("• github.com/UlisesFTP/Rizx-Music-Player")
         }
 
         Card {
             Label(stringResource(R.string.about_label_license))
             Body(stringResource(R.string.about_body_license))
+        }
+
+        // GPL-3.0 §5(d) "Appropriate Legal Notices": copyright, no warranty, free-software statement
+        // and where to read the licence. The copyright line is not localized on purpose.
+        Card {
+            Label(stringResource(R.string.about_label_legal))
+            Body("Copyright (C) 2026 UlisesFTP")
+            Body(stringResource(R.string.about_body_legal))
         }
 
         Row(

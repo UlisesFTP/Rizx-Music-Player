@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /**
  * DTOs for a Spotify playlist's **public embed page** (`open.spotify.com/embed/playlist/<id>`), whose
  * `__NEXT_DATA__` script carries the tracklist as JSON. This is the **keyless** path — no API key, no
- * token, no login (verified against the live page), unlike upstream Nuclear which embeds a rotating TOTP
+ * token, no login (verified against the live page), unlike clients that embed a rotating TOTP
  * secret to mint an anonymous bearer.
  *
  * Shape: `props.pageProps.state.data.entity` → `{ name, type:"playlist", subtitle, trackList[] }`.

@@ -35,7 +35,7 @@ data class FeaturedPlaylist(
 
 /**
  * A section's items **attributed** to the dashboard provider that produced them. Dashboard is a
- * multi-provider **fan-out** kind (NUCLEAR_UPSTREAM_STUDY.md §4/§5): each active provider contributes an
+ * multi-provider **fan-out** kind (docs/ARCHITECTURE.md): each active provider contributes an
  * [AttributedResult] per section, so the UI can group/label by source.
  *
  * Serializable so the whole feed can be cached to disk — the items it carries ([Track], [ArtistRef],

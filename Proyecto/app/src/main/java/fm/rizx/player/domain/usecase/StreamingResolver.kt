@@ -10,14 +10,14 @@ import kotlinx.coroutines.delay
 import java.time.Instant
 import javax.inject.Inject
 
-/** Outcome of phase-1 candidate discovery — a discriminated union (NUCLEAR_UPSTREAM_STUDY.md §5.1). */
+/** Outcome of phase-1 candidate discovery — a discriminated union (docs/ARCHITECTURE.md). */
 sealed interface CandidateResult {
     data class Success(val candidates: List<StreamCandidate>) : CandidateResult
     data class Failure(val error: String) : CandidateResult
 }
 
 /**
- * Two-phase, just-in-time stream resolution (NUCLEAR_UPSTREAM_STUDY.md §5). Pure orchestration over
+ * Two-phase, just-in-time stream resolution (docs/ARCHITECTURE.md). Pure orchestration over
  * a [StreamingRepository]; holds no state and touches no Android/Media3 APIs. The reactive driver
  * (observe the queue, dedup by resolution key, cancel the previous [kotlinx.coroutines.Job]) and the
  * `MediaItem`/`MediaSource` mapping are Phase 8 — this class is the testable core they build on.

@@ -24,8 +24,8 @@ import java.io.IOException
 
 /**
  * Native **full-length** YouTube streaming provider (ADR 0014) — the reliable "songs play in full" path,
- * and the native replacement for Nuclear's yt-dlp YouTube plugin (which cannot run in an Android JS
- * engine). Two-phase resolution (NUCLEAR_UPSTREAM_STUDY.md §5): phase 1 text-searches YouTube for song
+ * and the native alternative to a yt-dlp-based YouTube plugin (which cannot run in an Android JS
+ * engine). Two-phase resolution (docs/ARCHITECTURE.md): phase 1 text-searches YouTube for song
  * candidates; phase 2 extracts a just-in-time audio-only stream URL (a short-lived googlevideo host that
  * ExoPlayer plays directly). Works for tracks from any metadata provider (matches by artist/title).
  * Resolved URLs are never persisted. Sits at the top of the streaming fallback chain.

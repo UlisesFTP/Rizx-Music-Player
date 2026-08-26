@@ -5,7 +5,7 @@ enum class SearchCategory { ARTISTS, ALBUMS, TRACKS, PLAYLISTS }
 
 /**
  * What a metadata provider can search: specific categories, or [UNIFIED] (a single combined call
- * that returns several categories at once). See NUCLEAR_UPSTREAM_STUDY.md §4.
+ * that returns several categories at once). See docs/ARCHITECTURE.md
  */
 enum class SearchCapability { ARTISTS, ALBUMS, TRACKS, PLAYLISTS, UNIFIED }
 
@@ -22,7 +22,7 @@ data class SearchParams(
 /**
  * Grouped search results. Tracks are **full** [Track]s (immediately playable); artists, albums and
  * playlists are lightweight refs. Each list defaults to empty so a provider only fills what it
- * returns. See NUCLEAR_UPSTREAM_STUDY.md §2.
+ * returns. See docs/ARCHITECTURE.md
  */
 data class SearchResults(
     val artists: List<ArtistRef> = emptyList(),

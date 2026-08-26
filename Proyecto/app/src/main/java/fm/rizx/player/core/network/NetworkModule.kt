@@ -61,7 +61,7 @@ object NetworkModule {
     private const val AUDIUS_BASE_URL = "https://api.audius.co/"
     private const val DEEZER_BASE_URL = "https://api.deezer.com/"
     private const val WIKIPEDIA_BASE_URL = "https://en.wikipedia.org/"
-    private const val USER_AGENT = "RizxPlayer/0.1 (+https://github.com/nukeop/nuclear)"
+    private const val USER_AGENT = "RizxPlayer/1.0 (+https://github.com/UlisesFTP/Rizx-Music-Player)"
     private const val HTTP_CACHE_DIR = "http"
     private const val HTTP_CACHE_BYTES = 20L * 1024 * 1024
 

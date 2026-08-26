@@ -18,7 +18,7 @@ import java.io.IOException
 
 /**
  * First **real** streaming provider — iTunes 30-second previews. Two-phase resolution over the same
- * public API (NUCLEAR_UPSTREAM_STUDY.md §5): [searchForTrack] discovers candidates by "artist title"
+ * public API (docs/ARCHITECTURE.md): [searchForTrack] discovers candidates by "artist title"
  * text search (usually several imperfect matches); [getStreamUrl] resolves one candidate to its
  * ephemeral preview URL just before playback via an id lookup. Resolved URLs are never persisted.
  *

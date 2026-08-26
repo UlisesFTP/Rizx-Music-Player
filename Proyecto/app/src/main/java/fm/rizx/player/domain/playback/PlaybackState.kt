@@ -2,7 +2,7 @@ package fm.rizx.player.domain.playback
 
 /**
  * Coarse playback status. Android's `Player.STATE_*` is richer than hifi's 3-value status
- * (NUCLEAR_UPSTREAM_STUDY.md §6.1), so this is the source of truth mapped from ExoPlayer.
+ * (docs/ARCHITECTURE.md), so this is the source of truth mapped from ExoPlayer.
  */
 enum class PlaybackStatus { IDLE, BUFFERING, PLAYING, PAUSED, ENDED, ERROR }
 

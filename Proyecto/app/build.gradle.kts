@@ -48,8 +48,8 @@ android {
         applicationId = "fm.rizx.player"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -250,7 +250,7 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // Native full-length YouTube audio (ADR 0014): NewPipeExtractor extracts stream URLs with no API key.
-    // GPLv3 — compatible with this app's AGPL-3.0 (§13). Pulls jsoup + Rhino + nanojson transitively.
+    // GPL-3.0 — the same licence as this app. Pulls jsoup + Rhino + nanojson transitively.
     // v0.26.4 fixes "[YouTube] Fix fetching playlists continuations" (#1518) — the bug that made every
     // YouTube playlist longer than ~100 tracks import as only its first page.
     implementation("com.github.teamnewpipe:NewPipeExtractor:v0.26.4")

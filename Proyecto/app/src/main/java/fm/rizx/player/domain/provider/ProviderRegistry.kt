@@ -6,7 +6,7 @@ package fm.rizx.player.domain.provider
  * later registrations do not steal the active slot. Unregistering the active provider falls back to
  * another registered provider of that kind, or clears the selection if none remain.
  *
- * Mirrors the single-active dispatch of upstream's `ProvidersHost` (NUCLEAR_UPSTREAM_STUDY.md §4).
+ * Mirrors the single-active dispatch of upstream's `ProvidersHost` (docs/ARCHITECTURE.md).
  * All-active fan-out (dashboard) and url-matched dispatch (playlists) are out of scope for the MVP.
  */
 interface ProviderRegistry {

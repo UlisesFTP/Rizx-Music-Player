@@ -1,7 +1,7 @@
 package fm.rizx.player.domain.model
 
 /**
- * Tunables for [fm.rizx.player.domain.usecase.StreamingResolver] (NUCLEAR_UPSTREAM_STUDY.md §5.4).
+ * Tunables for [fm.rizx.player.domain.usecase.StreamingResolver] (docs/ARCHITECTURE.md).
  *
  * @param streamExpiryMs how long a resolved [Stream] URL stays valid before it must be re-resolved.
  *   Default **3 h** — chosen explicitly over the plugin docs' ~1 h (the study flags this as a

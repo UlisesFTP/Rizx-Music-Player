@@ -20,13 +20,13 @@ Thumbs.db
 /AGENTS.md
 /CLAUDE.md
 /ROADMAP.md
-/NUCLEAR_UPSTREAM_STUDY.md
-/PROJECT_CONTEXT_NUCLEAR_ANDROID.md
-/RAG_KNOWLEDGE_BASE_NUCLEAR_TO_ANDROID.md
-/SDD_CODEX_META_PLAN_NUCLEAR_ANDROID.md
-/SPEC_REVIEW_VS_UPSTREAM.md
+/*_STUDY.md
+/PROJECT_CONTEXT_*.md
+/RAG_KNOWLEDGE_BASE_*.md
+/SDD_*.md
+/SPEC_REVIEW_*.md
 /skills/
-/nuclear_android_docs_specs_package/
+/*_docs_specs_package/
 
 # Internal spec-driven-development docs. Public, user-facing docs live directly in
 # docs/*.md (tracked). The working specs / ADRs / plans / checklists below are the
@@ -46,17 +46,44 @@ build/
 *.hprof
 
 # ── Local machine config & signing secrets (NEVER commit) ────────────────────
+# The build reads RIZX_* values from Gradle properties or the environment. Keep them in
+# ~/.gradle/gradle.properties (outside this repository) — never in the tracked gradle.properties.
 local.properties
 keystore.properties
+signing.properties
+secrets.properties
 *.jks
 *.keystore
 *.p12
+*.pfx
+*.pem
+*.key
+*.p8
+*.der
+# Service-account and platform config that carries project identifiers or upload rights.
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+play-publisher*.json
+.env
+.env.*
 
 # ── Build artifacts ──────────────────────────────────────────────────────────
 *.apk
 *.aab
 *.ap_
 *.dex
+
+# ── Logs, dumps and editor leftovers ─────────────────────────────────────────
+# A saved logcat or heap dump can contain session tokens; a .orig from a merge can contain
+# whatever the merge was removing.
+*.log
+*.orig
+*.rej
+*.bak
+*~
+*.swp
+node_modules/
 
 # ── Bundled plugins ──────────────────────────────────────────────────────────
 # Plugin archives shipped inside the APK. Deliberately NOT published: a plugin's whole content is a

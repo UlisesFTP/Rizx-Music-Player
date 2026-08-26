@@ -24,12 +24,17 @@ import fm.rizx.player.domain.share.PlaylistShareRepository
 import fm.rizx.player.domain.share.ShareLinkInbox
 import fm.rizx.player.domain.sync.SyncCoordinator
 import android.util.Log
+import fm.rizx.player.core.network.CatalogueCacheControlInterceptor
 import fm.rizx.player.core.network.DataSaverState
+import fm.rizx.player.core.network.OfflineCacheFallbackInterceptor
 import fm.rizx.player.data.local.db.SyncDao
 import fm.rizx.player.data.local.store.SyncPrefsStore
 import fm.rizx.player.data.sync.LibraryJournal
+import fm.rizx.player.data.sync.NoInvalidations
 import fm.rizx.player.data.sync.PlaylistSyncEngine
 import fm.rizx.player.data.sync.SyncEvents
+import fm.rizx.player.data.sync.SyncInvalidationSocket
+import fm.rizx.player.data.sync.SyncInvalidations
 import fm.rizx.player.data.sync.SyncRunner
 import fm.rizx.player.data.sync.SyncScheduler
 import fm.rizx.player.data.sync.WorkManagerSyncCoordinator
@@ -149,6 +154,34 @@ object SupabaseModule {
         log = { Log.w("Sync", it) },
     )
 
+    /**
+     * The account's invalidation channel on the shared OkHttp, minus the two catalogue interceptors
+     * (a WebSocket has nothing to cache and must not be answered from the offline cache). The
+     * publishable key opens the socket; the user's JWT, sent on join, is what the channel's RLS judges.
+     */
+    @Provides
+    @Singleton
+    fun provideSyncInvalidations(
+        client: OkHttpClient,
+        account: AccountRepository,
+        @AccountScope scope: CoroutineScope,
+    ): SyncInvalidations {
+        val configured = BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_PUBLISHABLE_KEY.isNotBlank()
+        if (!configured) return NoInvalidations
+        val host = BuildConfig.SUPABASE_URL.trimEnd('/').removePrefix("https://").removePrefix("http://")
+        val socketClient = client.newBuilder().cache(null).apply {
+            interceptors().removeAll { it is OfflineCacheFallbackInterceptor }
+            networkInterceptors().removeAll { it is CatalogueCacheControlInterceptor }
+        }.build()
+        return SyncInvalidationSocket(
+            client = socketClient,
+            endpoint = "wss://$host/realtime/v1/websocket?apikey=${BuildConfig.SUPABASE_PUBLISHABLE_KEY}&vsn=1.0.0",
+            tokenProvider = { account.accessToken() },
+            scope = scope,
+            log = { Log.w("Sync", it) },
+        )
+    }
+
     @Provides
     @Singleton
     fun provideSyncScheduler(
@@ -157,7 +190,8 @@ object SupabaseModule {
         syncDao: SyncDao,
         prefs: SyncPrefsStore,
         journal: LibraryJournal,
-    ): SyncScheduler = SyncScheduler(account, sync, syncDao, prefs, journal)
+        invalidations: SyncInvalidations,
+    ): SyncScheduler = SyncScheduler(account, sync, syncDao, prefs, journal, invalidations)
 
     @Provides
     @Singleton

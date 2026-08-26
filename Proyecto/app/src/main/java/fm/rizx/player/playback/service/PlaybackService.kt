@@ -48,6 +48,8 @@ import fm.rizx.player.domain.model.RepeatMode
 import fm.rizx.player.domain.repository.FavoritesRepository
 import fm.rizx.player.playback.LogoBitmapLoader
 import fm.rizx.player.playback.toTimelineMediaItem
+import fm.rizx.player.widget.NowPlayingWidgetUpdater
+import fm.rizx.player.widget.WidgetSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -67,7 +69,7 @@ import javax.inject.Inject
 
 /**
  * The single owner of the real ExoPlayer, the [MediaSession], and the media notification (AGENTS.md
- * "final architecture"; NUCLEAR_UPSTREAM_STUDY.md §6.6). The player holds the **whole queue** as a
+ * "final architecture"; docs/ARCHITECTURE.md). The player holds the **whole queue** as a
  * timeline of placeholder MediaItems so notification / lock-screen / headset next-prev work natively;
  * [QueueStreamResolver] resolves each placeholder to its real stream just-in-time. Media3's
  * `MediaSessionService` provides the foreground notification, media-button, and lock-screen handling.
@@ -99,6 +101,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var audioCache: fm.rizx.player.playback.cache.AudioCache
     @Inject lateinit var cacheCompleter: fm.rizx.player.playback.cache.CacheCompleter
     @Inject lateinit var favorites: FavoritesRepository
+    @Inject lateinit var widgets: NowPlayingWidgetUpdater
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var player: ExoPlayer
@@ -312,6 +315,7 @@ class PlaybackService : MediaSessionService() {
                     currentFavorite = fav
                     currentRepeat = repeat
                     if (::session.isInitialized) session.setCustomLayout(buildCustomLayout())
+                    pushWidgets()
                 }
         }
     }
@@ -326,6 +330,11 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         persistNow() // read the final position while the player is still alive
+        // The widgets outlive this service: leave them showing the song at rest, not a stale pause glyph.
+        runCatching {
+            val track = queue.state.value.current?.track
+            widgets.push(WidgetSnapshot.of(track, isPlaying = false, liked = currentFavorite, positionMs = player.currentPosition, durationMs = null))
+        }
         stopSaveTicker()
         scope.cancel()
         streamResolver.release()
@@ -358,6 +367,17 @@ class PlaybackService : MediaSessionService() {
         if (pendingRestore != null) return // don't overwrite the saved spot before the restore applies
         val snapshot = currentSnapshot()
         scope.launch { runCatching { sessionStore.save(snapshot) } }
+    }
+
+    /**
+     * Hands the home screen widgets the moment as this service sees it. Cheap when none is placed, and
+     * conflated by the updater, so calling it from every playback event is fine.
+     */
+    private fun pushWidgets() {
+        if (!::player.isInitialized) return
+        val track = queue.state.value.current?.track
+        val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L }
+        widgets.push(WidgetSnapshot.of(track, player.isPlaying, currentFavorite, player.currentPosition, duration))
     }
 
     /** Persists synchronously — for teardown paths where a launched coroutine wouldn't survive. */
@@ -394,6 +414,7 @@ class PlaybackService : MediaSessionService() {
             while (true) {
                 delay(SAVE_INTERVAL_MS)
                 persist()
+                pushWidgets() // the dotted bar and the clock move at the same cadence as the saved spot
             }
         }
     }
@@ -634,6 +655,7 @@ class PlaybackService : MediaSessionService() {
             // Only while already playing: a transition also fires when the queue is restored paused, and
             // a song nobody has started is not a play. The buffering case is covered by onIsPlayingChanged.
             if (player.isPlaying) countPlay()
+            pushWidgets()
         }
 
         override fun onPositionDiscontinuity(
@@ -642,7 +664,10 @@ class PlaybackService : MediaSessionService() {
             reason: Int,
         ) {
             // A manual scrub shouldn't re-trigger a fade-in if the cursor lands back inside the fade window.
-            if (reason == Player.DISCONTINUITY_REASON_SEEK) fadeInArmed = false
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                fadeInArmed = false
+                pushWidgets() // a seek while paused is the one position change the ticker never sees
+            }
             // A track just ended — moved on, or came round again on repeat. This is the one moment that
             // knows *how* it ended; a scrub within the same song is not an ending at all.
             val auto = reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION
@@ -654,6 +679,7 @@ class PlaybackService : MediaSessionService() {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             // Keep the persisted position fresh: tick while playing, capture the exact spot on pause.
             if (isPlaying) startSaveTicker() else { stopSaveTicker(); persist() }
+            pushWidgets()
 
             // Record the actually-playing track as recently played (Phase 15). Firing on real playback
             // (not just a timeline change) is the accurate "you listened to this" signal; dedup by
@@ -823,7 +849,7 @@ class PlaybackService : MediaSessionService() {
          */
         const val THRIFTY_MAX_BUFFER_MS = 15_000
 
-        const val ACTION_TOGGLE_FAVORITE = "fm.rizx.player.action.TOGGLE_FAVORITE"
-        const val ACTION_CYCLE_REPEAT = "fm.rizx.player.action.CYCLE_REPEAT"
+        const val ACTION_TOGGLE_FAVORITE = PlaybackActions.TOGGLE_FAVORITE
+        const val ACTION_CYCLE_REPEAT = PlaybackActions.CYCLE_REPEAT
     }
 }

@@ -19,7 +19,7 @@ data class LocalFileInfo(
  * The central playable entity. Has **no `id`** — its identity *is* [source] (a [ProviderRef]).
  * Playable either via [localFile] or by resolving [streamCandidates] just-in-time.
  *
- * Notes that differ from naive assumptions (NUCLEAR_UPSTREAM_STUDY.md §2):
+ * Notes that differ from naive assumptions (docs/ARCHITECTURE.md):
  * - [artists] are full [ArtistCredit]s (with roles), not plain strings.
  * - [album] is a lightweight [AlbumRef], not a full album.
  * - [durationMs] is milliseconds; [disc] is a **String**.

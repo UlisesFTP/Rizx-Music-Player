@@ -13,6 +13,7 @@ import fm.rizx.player.data.remote.deezer.DeezerApi
 import fm.rizx.player.data.remote.itunes.ItunesApi
 import fm.rizx.player.data.repository.RecognitionRepositoryImpl
 import fm.rizx.player.domain.recognition.MicrophoneRecorder
+import fm.rizx.player.domain.recognition.RecognitionInbox
 import fm.rizx.player.domain.recognition.RecognitionProvider
 import fm.rizx.player.domain.recognition.RecognitionRepository
 import fm.rizx.player.domain.recognition.RecognitionTrackResolver
@@ -37,6 +38,11 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object RecognitionModule {
+
+    /** Where a widget's microphone tap waits for the recognition screen — one slot, like the share inbox. */
+    @Provides
+    @Singleton
+    fun provideRecognitionInbox(): RecognitionInbox = RecognitionInbox()
 
     @Provides
     @Singleton

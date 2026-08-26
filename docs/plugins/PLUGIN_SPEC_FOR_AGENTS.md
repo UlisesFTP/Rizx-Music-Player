@@ -1,6 +1,6 @@
 # Rizx plugin spec — for coding agents
 
-_Current host contract: Rizx 0.2.0 · plugin API v1 · reviewed 2026-08-14._
+_Current host contract: Rizx 1.0.0 · plugin API v1 · reviewed 2026-08-25._
 
 Machine-oriented restatement of [PLUGIN_GUIDE.md](PLUGIN_GUIDE.md). Same system, no prose. If you are
 generating or reviewing a Rizx plugin, follow this document literally.
