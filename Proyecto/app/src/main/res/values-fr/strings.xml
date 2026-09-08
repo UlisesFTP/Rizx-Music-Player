@@ -72,4 +72,22 @@
     <string name="settings_clear_cache_title">Vider le cache hors connexion ?</string>
     <string name="settings_clear_cache_body">Les titres gardés pour l\'écoute hors connexion sont supprimés. Vos téléchargements ne changent pas.</string>
     <string name="settings_clear_cache_confirm">Vider</string>
+
+    <!-- Settings: editorial layout (kicker, display title, section eyebrows, control captions) -->
+    <string name="settings_kicker">CONTRÔLE DE L’EXPÉRIENCE · RIZX</string>
+    <string name="settings_hero_title">Paramètres.</string>
+    <string name="settings_lede">Configurez le son, l’apparence et la synchronisation de votre musique.</string>
+    <string name="settings_account_eyebrow">COMPTE ET SYNCHRONISATION</string>
+    <string name="settings_account_card_caption">Playlists, favoris et préférences synchronisés</string>
+    <string name="settings_eyebrow_sound">AUDIO</string>
+    <string name="settings_eyebrow_playback">FLUX</string>
+    <string name="settings_eyebrow_appearance">INTERFACE</string>
+    <string name="settings_eyebrow_sources">CATALOGUE</string>
+    <string name="settings_eyebrow_recs">GOÛTS</string>
+    <string name="settings_eyebrow_downloads">OFFLINE</string>
+    <string name="settings_eyebrow_data">STOCKAGE</string>
+    <string name="settings_eyebrow_app">SYSTÈME</string>
+    <string name="settings_empty_hint">Essayez « son », « compte » ou « téléchargements ».</string>
+    <string name="pref_theme_caption">Contraste chaud éditorial</string>
+    <string name="pref_language_caption">Langue de l’interface</string>
 </resources>

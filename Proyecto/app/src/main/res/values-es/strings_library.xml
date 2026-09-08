@@ -104,4 +104,32 @@
     <string name="local_untitled_album">Álbum</string>
     <string name="local_untitled_artist">Artista</string>
     <string name="local_tracks_heading">CANCIONES</string>
+
+    <!-- Library: editorial layout (kicker, display headings, surfaces, tiles) -->
+    <string name="library_kicker">COLECCIÓN PERSONAL · %1$d CANCIONES</string>
+    <string name="library_hero_title">Tu biblioteca.</string>
+    <string name="library_hero_intro">Playlists, favoritos y descargas reunidos en un espacio hecho para explorar rápido.</string>
+    <string name="library_collections_eyebrow">%1$s COLECCIONES</string>
+    <string name="library_your_playlists">Tus playlists</string>
+    <string name="library_favorites_eyebrow">FAVORITOS</string>
+    <string name="library_songs_you_like">Canciones que te gustan</string>
+    <string name="library_see_all_count">Ver las %1$d</string>
+    <string name="library_count_artist_one">%1$d artista</string>
+    <string name="library_count_artist_other">%1$d artistas</string>
+    <string name="library_your_archive_eyebrow">TU ARCHIVO</string>
+    <string name="library_playlists_heading">Playlists</string>
+    <string name="library_playlists_summary">%1$d colecciones · %2$d canciones organizadas por ti</string>
+    <string name="library_search_playlists">Buscar playlists</string>
+    <string name="library_start_collection">Empieza una colección</string>
+    <string name="library_private">Privada</string>
+    <string name="library_imported">Importada</string>
+    <string name="library_saved_eyebrow">%1$d GUARDADAS</string>
+    <string name="library_search_liked">Buscar en canciones favoritas</string>
+    <string name="library_history_eyebrow">HISTORIAL</string>
+    <string name="library_recent_heading">Recientes</string>
+    <string name="library_search_recent">Buscar en tu historial</string>
+    <string name="library_offline_eyebrow">OFFLINE</string>
+    <string name="library_search_downloads">Buscar en tus descargas</string>
+    <string name="library_device_eyebrow">EN ESTE DISPOSITIVO</string>
+    <string name="library_play_liked_desc">Reproducir tus canciones favoritas</string>
 </resources>

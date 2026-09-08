@@ -217,6 +217,12 @@ data class SyncRecoveryEntity(
 )
 
 /** Lightweight list projection (§7.2 two-tier): playlist meta + item count, no items loaded. */
+/** One stored item, reduced to what a collage and a running time need. */
+data class PlaylistItemDigestRow(
+    val playlistId: String,
+    val trackJson: String,
+)
+
 data class PlaylistSummaryRow(
     val id: String,
     val name: String,

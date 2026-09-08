@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,12 +17,16 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -29,12 +34,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.AddLink
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.SaveAlt
-import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -53,11 +55,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -66,23 +66,35 @@ import fm.rizx.player.R
 import fm.rizx.player.data.download.formatBytes
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadedTrack
+import fm.rizx.player.domain.model.PlaylistDigest
 import fm.rizx.player.domain.model.PlaylistSummary
 import fm.rizx.player.domain.model.Track
-import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.ui.components.CodeLabel
-import fm.rizx.player.ui.components.tileUrl
+import fm.rizx.player.ui.components.CollageArt
 import fm.rizx.player.ui.components.CoverArt
+import fm.rizx.player.ui.components.DisplayTitle
 import fm.rizx.player.ui.components.DownloadButton
-import fm.rizx.player.ui.components.FilterEmpty
-import fm.rizx.player.ui.components.RizxActionButton
-import fm.rizx.player.ui.components.RizxChip
-import fm.rizx.player.ui.components.RizxFilterField
+import fm.rizx.player.ui.components.Editorial
+import fm.rizx.player.ui.components.EditorialButton
+import fm.rizx.player.ui.components.EditorialSearchField
+import fm.rizx.player.ui.components.EditorialSurface
+import fm.rizx.player.ui.components.EditorialTab
+import fm.rizx.player.ui.components.EmptyBlock
+import fm.rizx.player.ui.components.EqualRow
+import fm.rizx.player.ui.components.IndexTag
+import fm.rizx.player.ui.components.Kicker
+import fm.rizx.player.ui.components.Lede
 import fm.rizx.player.ui.components.RizxIconButton
-import fm.rizx.player.ui.components.SectionHeader
+import fm.rizx.player.ui.components.RowArrow
+import fm.rizx.player.ui.components.SignalEyebrow
+import fm.rizx.player.ui.components.SurfaceHeading
+import fm.rizx.player.ui.components.SurfaceTitle
+import fm.rizx.player.ui.components.bleed
+import fm.rizx.player.ui.components.bottomRule
 import fm.rizx.player.ui.components.clickableScale
+import fm.rizx.player.ui.components.tileUrl
 import fm.rizx.player.ui.components.tintFor
-import fm.rizx.player.ui.util.ListFilter
-import fm.rizx.player.ui.util.rememberSaveToPhonePermission
+import fm.rizx.player.ui.components.topRule
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.library.ConfirmDialog
 import fm.rizx.player.ui.library.CreatePlaylistDialog
@@ -90,9 +102,14 @@ import fm.rizx.player.ui.library.ImportPlaylistDialog
 import fm.rizx.player.ui.library.LibraryViewModel
 import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.RizxTheme
+import fm.rizx.player.ui.theme.isTablet
 import fm.rizx.player.ui.theme.mr
+import fm.rizx.player.ui.theme.pagePadding
 import fm.rizx.player.ui.theme.sg
 import fm.rizx.player.ui.theme.staggeredReveal
+import fm.rizx.player.ui.util.LibraryStats
+import fm.rizx.player.ui.util.ListFilter
+import fm.rizx.player.ui.util.rememberSaveToPhonePermission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -107,14 +124,18 @@ enum class LibraryTab(@StringRes val labelRes: Int) {
     Local(R.string.library_tab_local),
 }
 
-/** How many rows a section previews on the [LibraryTab.All] overview before "See all". */
-private const val PREVIEW_ROWS = 4
+/** How many playlist rows the overview shows before "See all". */
+private const val OVERVIEW_PLAYLISTS = 4
+
+/** How many song rows a song section previews on the overview. */
+private const val OVERVIEW_SONGS = 3
 
 /**
- * Your library, as four categories rather than one long scroll. Previously everything stacked in a single
- * column — up to 25 recents, then *every* liked song, and playlists last — so the content you come here for
- * was the hardest to reach. Now: tabs pick a category, **All** is a short overview (playlists first), and the
- * lists are virtualized, which also fixes the unbounded liked list composing every row at once.
+ * Your library, in the editorial layout of the feed design: a kicker and a giant title over two hero
+ * actions, a strip of tab pills, and then either the overview — framed surfaces for playlists, liked
+ * songs, downloads and history — or one category at full width with its own display heading, search
+ * field and numbered song list. Lists stay virtualized: the liked list composing every row at once was
+ * the Library's original performance bug, and a prettier row does not change that.
  */
 @Composable
 fun LibraryScreen(
@@ -123,9 +144,9 @@ fun LibraryScreen(
     initialTab: LibraryTab = LibraryTab.All,
     vm: LibraryViewModel = hiltViewModel(),
 ) {
-    val c = RizxTheme.colors
     val likedSongs by vm.favoriteTracks.collectAsStateWithLifecycle()
     val playlists by vm.playlistSummaries.collectAsStateWithLifecycle()
+    val digests by vm.playlistDigests.collectAsStateWithLifecycle()
     val recents by vm.recentTracks.collectAsStateWithLifecycle()
     val downloads by vm.downloadedTracks.collectAsStateWithLifecycle()
     val downloadStates by vm.downloadStates.collectAsStateWithLifecycle()
@@ -356,250 +377,214 @@ fun LibraryScreen(
     val visibleDownloads = remember(downloads, filter) { downloads.filter { ListFilter.matchesTrack(filter, it.track) } }
     val visibleRecents = remember(recents, filter) { recents.filter { ListFilter.matchesTrack(filter, it) } }
 
-    val playlistsSectionTitle = stringResource(R.string.library_section_playlists)
-    val likedSectionTitle = stringResource(R.string.library_section_liked)
-    val downloadsSectionTitle = stringResource(R.string.library_section_downloads)
-    val recentSectionTitle = stringResource(R.string.library_section_recent)
+    val margin = pagePadding()
+    val columns = if (isTablet()) 3 else 2
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize().statusBarsPadding(),
-            contentPadding = PaddingValues(horizontal = 22.dp),
+            contentPadding = PaddingValues(horizontal = margin),
         ) {
-            item {
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(stringResource(R.string.library_title), style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.weight(1f))
-                    // Labelled, not bare glyphs: "new" and "import" are not guessable from an icon, and the
-                    // old import icon was a download arrow — which this screen also uses for its Downloads
-                    // tab, so it read as "download" rather than "import".
-                    RizxActionButton(
-                        RizxIcons.Add, stringResource(R.string.library_new_playlist_label), onClick = { creating = true },
-                        contentDescription = stringResource(R.string.library_new_playlist), prominent = true,
-                    )
-                    RizxActionButton(
-                        Icons.Filled.AddLink, stringResource(R.string.action_import), onClick = { importing = true },
-                        contentDescription = stringResource(R.string.library_import_playlist_desc),
-                    )
-                }
+            item(key = "hero") {
+                LibraryHero(likedCount = likedSongs.size, onNew = { creating = true }, onImport = { importing = true })
             }
-
-            item {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(top = 6.dp, bottom = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    LibraryTab.entries.forEach { entry ->
-                        RizxChip(stringResource(entry.labelRes), active = tab == entry, onClick = { tab = entry; filter = "" })
-                    }
-                }
-            }
-
-            // One field per tab, filtering that tab's list and nothing else. Not on **All** — that tab is a
-            // four-section overview, so a single query over it would be filtering four lists at once — and
-            // not on **Local**, which is only a doorway to its own screen (which has its own field).
-            val source = when (tab) {
-                LibraryTab.Playlists -> playlists.size
-                LibraryTab.Liked -> likedSongs.size
-                LibraryTab.Downloads -> downloads.size
-                LibraryTab.Recent -> recents.size
-                LibraryTab.All, LibraryTab.Local -> 0
-            }
-            if (source > 0) {
-                item(key = "filter") { RizxFilterField(filter, { filter = it }, Modifier.padding(top = 10.dp)) }
+            item(key = "tabs") {
+                LibraryTabs(tab, margin) { tab = it; filter = "" }
             }
 
             when (tab) {
-                LibraryTab.All -> {
-                    // Playlists first: they're what you open the Library for.
-                    section(
-                        title = playlistsSectionTitle,
-                        count = playlists.size,
-                        onSeeAll = { tab = LibraryTab.Playlists },
-                    ) {
-                        playlistRows(playlists.take(PREVIEW_ROWS), onOpenPlaylist)
-                    }
-                    if (playlists.isEmpty()) item { PlaylistsEmpty { creating = true } }
-
-                    section(
-                        title = likedSectionTitle,
-                        count = likedSongs.size,
-                        onSeeAll = { tab = LibraryTab.Liked },
-                    ) {
-                        // A preview row plays the *whole* liked list, not the four shown: `take` keeps the
-                        // indices, and this is a peek at the tab rather than the tab itself.
-                        likedRows(likedSongs.take(PREVIEW_ROWS), downloadStates, vm, onUnfavorite) { vm.playLiked(it, likedSongs) }
-                    }
-                    if (likedSongs.isEmpty()) item { LikedEmpty() }
-
-                    if (downloads.isNotEmpty()) {
-                        section(
-                            title = downloadsSectionTitle,
-                            count = downloads.size,
-                            onSeeAll = { tab = LibraryTab.Downloads },
-                        ) {
-                            downloadRows(
-                                downloads.take(PREVIEW_ROWS), vm,
-                                onDelete = { confirmDeleteDownload = it }, onExport = exportDownload,
-                                onPlay = { vm.playDownloads(it, downloads.map { entry -> entry.track }) },
-                            )
-                        }
-                    }
-
-                    section(
-                        title = recentSectionTitle,
-                        count = recents.size,
-                        onSeeAll = { tab = LibraryTab.Recent },
-                    ) {
-                        recentRows(recents.take(PREVIEW_ROWS)) { vm.playRecent(it, recents) }
-                    }
-                    if (recents.isEmpty()) item { RecentEmpty() }
-                }
+                LibraryTab.All -> overview(
+                    playlists = playlists,
+                    digests = digests,
+                    liked = likedSongs,
+                    downloads = downloads,
+                    recents = recents,
+                    onOpenPlaylist = onOpenPlaylist,
+                    onNewPlaylist = { creating = true },
+                    onShow = { tab = it },
+                    onPlayLiked = { vm.playLiked(it, likedSongs) },
+                    onPlayDownload = { vm.playDownloads(it, downloads.map { entry -> entry.track }) },
+                    onPlayRecent = { vm.playRecent(it, recents) },
+                )
 
                 LibraryTab.Playlists -> {
-                    if (playlists.isEmpty()) {
-                        item { PlaylistsEmpty { creating = true } }
-                    } else if (visiblePlaylists.isEmpty()) {
-                        item { FilterEmpty(filter) }
+                    item(key = "hdr-playlists") {
+                        ViewHeader(
+                            eyebrow = stringResource(R.string.library_your_archive_eyebrow),
+                            title = stringResource(R.string.library_playlists_heading),
+                            summary = stringResource(R.string.library_playlists_summary, playlists.size, playlists.sumOf { it.itemCount }),
+                            search = if (playlists.isNotEmpty()) {
+                                { EditorialSearchField(filter, { filter = it }, stringResource(R.string.library_search_playlists)) }
+                            } else null,
+                        )
+                    }
+                    if (playlists.isNotEmpty() && visiblePlaylists.isEmpty()) {
+                        item(key = "empty") { NoMatches(filter) }
                     } else {
-                        item { TabCount(countLabel(visiblePlaylists.size, R.string.library_count_playlist_one, R.string.library_count_playlist_other)) }
-                        playlistRows(visiblePlaylists, onOpenPlaylist)
+                        // The trailing "new playlist" tile is part of the grid, exactly as on the web — so an
+                        // empty library is one inviting tile rather than a dead end.
+                        playlistGrid(visiblePlaylists, digests, columns, onOpenPlaylist, onNew = { creating = true })
                     }
                 }
 
                 LibraryTab.Liked -> {
-                    if (likedSongs.isEmpty()) {
-                        item { LikedEmpty() }
-                    } else if (visibleLiked.isEmpty()) {
-                        item { FilterEmpty(filter) }
-                    } else {
-                        item {
-                            Row(
-                                Modifier.fillMaxWidth().padding(top = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                TabCount(
-                                    countLabel(visibleLiked.size, R.string.library_count_song_one, R.string.library_count_song_other),
-                                    Modifier.weight(1f),
-                                )
-                                RizxActionButton(
-                                    Icons.AutoMirrored.Filled.PlaylistAdd,
-                                    stringResource(R.string.library_save_liked_label),
-                                    onClick = { savingLiked = true },
-                                    contentDescription = stringResource(R.string.library_save_liked_desc),
-                                )
-                            }
+                    item(key = "hdr-liked") {
+                        ViewHeader(
+                            eyebrow = stringResource(R.string.library_saved_eyebrow, likedSongs.size),
+                            title = stringResource(R.string.library_songs_you_like),
+                            summary = likedStats(likedSongs),
+                            action = if (likedSongs.isNotEmpty()) {
+                                {
+                                    EditorialButton(
+                                        stringResource(R.string.library_save_liked_label),
+                                        onClick = { savingLiked = true },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        icon = Icons.AutoMirrored.Filled.PlaylistAdd,
+                                        contentDescription = stringResource(R.string.library_save_liked_desc),
+                                    )
+                                }
+                            } else null,
+                            search = if (likedSongs.isNotEmpty()) {
+                                { EditorialSearchField(filter, { filter = it }, stringResource(R.string.library_search_liked)) }
+                            } else null,
+                        )
+                    }
+                    when {
+                        likedSongs.isEmpty() -> item(key = "empty") { LikedEmpty() }
+                        visibleLiked.isEmpty() -> item(key = "empty") { NoMatches(filter) }
+                        else -> {
+                            item(key = "list-top") { ListTop() }
+                            // What you see is what plays: a filtered list becomes the queue, so next/prev stay
+                            // inside the songs the filter left on screen.
+                            likedRows(visibleLiked, downloadStates, vm, onUnfavorite) { vm.playLiked(it, visibleLiked) }
                         }
-                        // What you see is what plays: a filtered list becomes the queue, so next/prev stay
-                        // inside the songs the filter left on screen.
-                        likedRows(visibleLiked, downloadStates, vm, onUnfavorite) { vm.playLiked(it, visibleLiked) }
                     }
                 }
 
                 LibraryTab.Downloads -> {
-                    if (downloads.isEmpty()) {
-                        item {
-                            DownloadsEmpty(
-                                onGoToLiked = if (likedSongs.isNotEmpty()) ({ tab = LibraryTab.Liked }) else null,
+                    val bytes = formatBytes(visibleDownloads.sumOf { it.sizeBytes })
+                    val onPhone = visibleDownloads.count { it.exportedUri != null }
+                    val pending = visibleDownloads.size - onPhone
+                    item(key = "hdr-downloads") {
+                        ViewHeader(
+                            eyebrow = stringResource(R.string.library_offline_eyebrow),
+                            title = stringResource(R.string.library_section_downloads),
+                            // Both halves of the readout describe the rows on screen — a filtered count over
+                            // the whole library's byte total would be two different lists in one line.
+                            summary = if (downloads.isEmpty()) null else buildString {
+                                append(countLabel(visibleDownloads.size, R.string.library_count_song_one, R.string.library_count_song_other))
+                                append(" · ").append(bytes)
+                                if (onPhone > 0) append(" · ").append(stringResource(R.string.library_on_phone_count, onPhone))
+                            },
+                            action = if (downloads.isEmpty()) null else {
+                                {
+                                    Column {
+                                        // The whole reason this feature was invisible: nothing ever said where
+                                        // a download lives, or that it could live anywhere else.
+                                        if (pending > 0) {
+                                            Text(
+                                                stringResource(R.string.library_downloads_explainer),
+                                                style = mr(12, FontWeight.Medium, lineHeight = 17),
+                                                color = RizxTheme.colors.muted,
+                                                modifier = Modifier.padding(bottom = 12.dp),
+                                            )
+                                        }
+                                        EqualRow {
+                                            if (pending > 0) {
+                                                EditorialButton(
+                                                    stringResource(R.string.library_save_all_to_phone, pending),
+                                                    onClick = { confirmSaveAll = visibleDownloads },
+                                                    modifier = Modifier.weight(1f),
+                                                    icon = Icons.Filled.SaveAlt,
+                                                    primary = true,
+                                                    dense = true,
+                                                )
+                                            }
+                                            EditorialButton(
+                                                stringResource(R.string.library_delete_all_downloads_confirm),
+                                                onClick = { confirmDeleteAllDownloads = true },
+                                                modifier = Modifier.weight(1f),
+                                                icon = Icons.Filled.DeleteOutline,
+                                                contentDescription = stringResource(R.string.library_delete_all_downloads_desc),
+                                                dense = true,
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            search = if (downloads.isNotEmpty()) {
+                                { EditorialSearchField(filter, { filter = it }, stringResource(R.string.library_search_downloads)) }
+                            } else null,
+                        )
+                    }
+                    when {
+                        downloads.isEmpty() -> item(key = "empty") {
+                            DownloadsEmpty(onGoToLiked = if (likedSongs.isNotEmpty()) ({ tab = LibraryTab.Liked }) else null)
+                        }
+                        visibleDownloads.isEmpty() -> item(key = "empty") { NoMatches(filter) }
+                        else -> {
+                            item(key = "list-top") { ListTop() }
+                            downloadRows(
+                                visibleDownloads, vm,
+                                onDelete = { confirmDeleteDownload = it }, onExport = exportDownload,
+                                onPlay = { vm.playDownloads(it, visibleDownloads.map { entry -> entry.track }) },
                             )
                         }
-                    } else if (visibleDownloads.isEmpty()) {
-                        item { FilterEmpty(filter) }
-                    } else {
-                        item {
-                            // Both halves of the readout describe the rows on screen — a filtered count
-                            // over the whole library's byte total would be two different lists in one line.
-                            val bytes = formatBytes(visibleDownloads.sumOf { it.sizeBytes })
-                            val onPhone = visibleDownloads.count { it.exportedUri != null }
-                            val pending = visibleDownloads.size - onPhone
-                            Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    TabCount(
-                                        buildString {
-                                            append(countLabel(visibleDownloads.size, R.string.library_count_song_one, R.string.library_count_song_other))
-                                            append(" · ").append(bytes)
-                                            if (onPhone > 0) append(" · ").append(stringResource(R.string.library_on_phone_count, onPhone))
-                                        },
-                                        Modifier.weight(1f),
-                                    )
-                                    RizxIconButton(
-                                        Icons.Filled.DeleteOutline,
-                                        stringResource(R.string.library_delete_all_downloads_desc),
-                                        onClick = { confirmDeleteAllDownloads = true },
-                                        iconSize = 20.dp,
-                                        tint = c.text2,
-                                    )
-                                }
-                                // The whole reason this feature was invisible: nothing ever said where a
-                                // download lives, or that it could live anywhere else. One line, and only
-                                // while there is still something to move.
-                                if (pending > 0) {
-                                    Text(
-                                        stringResource(R.string.library_downloads_explainer),
-                                        style = mr(11, FontWeight.Medium),
-                                        color = c.muted,
-                                        modifier = Modifier.padding(top = 6.dp),
-                                    )
-                                    RizxActionButton(
-                                        Icons.Filled.SaveAlt,
-                                        stringResource(R.string.library_save_all_to_phone, pending),
-                                        onClick = { confirmSaveAll = visibleDownloads },
-                                        modifier = Modifier.padding(top = 10.dp),
-                                    )
-                                }
-                            }
-                        }
-                        downloadRows(
-                            visibleDownloads, vm,
-                            onDelete = { confirmDeleteDownload = it }, onExport = exportDownload,
-                            onPlay = { vm.playDownloads(it, visibleDownloads.map { entry -> entry.track }) },
-                        )
                     }
                 }
 
                 LibraryTab.Recent -> {
-                    if (recents.isEmpty()) {
-                        item { RecentEmpty() }
-                    } else if (visibleRecents.isEmpty()) {
-                        item { FilterEmpty(filter) }
-                    } else {
-                        item {
-                            Row(
-                                Modifier.fillMaxWidth().padding(top = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                TabCount(countLabel(visibleRecents.size, R.string.library_count_song_one, R.string.library_count_song_other), Modifier.weight(1f))
-                                RizxIconButton(
-                                    Icons.Filled.DeleteOutline,
-                                    stringResource(R.string.library_clear_recent_desc),
-                                    onClick = { confirmClear = true },
-                                    iconSize = 20.dp,
-                                    tint = c.text2,
-                                )
-                            }
+                    item(key = "hdr-recent") {
+                        ViewHeader(
+                            eyebrow = stringResource(R.string.library_history_eyebrow),
+                            title = stringResource(R.string.library_recent_heading),
+                            summary = if (recents.isEmpty()) null else countLabel(visibleRecents.size, R.string.library_count_song_one, R.string.library_count_song_other),
+                            action = if (recents.isEmpty()) null else {
+                                {
+                                    EditorialButton(
+                                        stringResource(R.string.action_clear),
+                                        onClick = { confirmClear = true },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        icon = Icons.Filled.DeleteOutline,
+                                        contentDescription = stringResource(R.string.library_clear_recent_desc),
+                                    )
+                                }
+                            },
+                            search = if (recents.isNotEmpty()) {
+                                { EditorialSearchField(filter, { filter = it }, stringResource(R.string.library_search_recent)) }
+                            } else null,
+                        )
+                    }
+                    when {
+                        recents.isEmpty() -> item(key = "empty") { RecentEmpty() }
+                        visibleRecents.isEmpty() -> item(key = "empty") { NoMatches(filter) }
+                        else -> {
+                            item(key = "list-top") { ListTop() }
+                            recentRows(visibleRecents) { vm.playRecent(it, visibleRecents) }
                         }
-                        recentRows(visibleRecents) { vm.playRecent(it, visibleRecents) }
                     }
                 }
 
                 LibraryTab.Local -> {
                     // The on-device player (Songs / Albums / Artists + the audio permission) lives in its
                     // own screen; this tab is its entry point.
-                    item {
-                        LibraryEmpty(
-                            icon = Icons.Outlined.LibraryMusic,
-                            title = stringResource(R.string.library_local_entry_title),
-                            body = stringResource(R.string.library_local_entry_body),
-                            actionLabel = stringResource(R.string.library_open_local_music),
-                            onAction = onOpenLocal,
-                        )
+                    item(key = "local") {
+                        EditorialSurface {
+                            SignalEyebrow(stringResource(R.string.library_device_eyebrow))
+                            SurfaceTitle(stringResource(R.string.library_local_entry_title), Modifier.padding(top = 6.dp))
+                            Text(
+                                stringResource(R.string.library_local_entry_body),
+                                style = mr(13, FontWeight.Medium, lineHeight = 19),
+                                color = RizxTheme.colors.muted,
+                                modifier = Modifier.padding(top = 10.dp),
+                            )
+                            EditorialButton(
+                                stringResource(R.string.library_open_local_music),
+                                onClick = onOpenLocal,
+                                modifier = Modifier.padding(top = 18.dp).fillMaxWidth(),
+                                primary = true,
+                            )
+                        }
                     }
                 }
             }
@@ -616,40 +601,294 @@ fun LibraryScreen(
     }
 }
 
-// ---- section scaffolding -------------------------------------------------------------------------
+// ---- hero + tabs --------------------------------------------------------------------------------
 
-/** A titled section on the All overview: header (+ "See all" once there's more than the preview) then rows. */
-private fun LazyListScope.section(
-    title: String,
-    count: Int,
-    onSeeAll: () -> Unit,
-    rows: LazyListScope.() -> Unit,
-) {
-    item {
-        SectionHeader(
-            title,
-            Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 6.dp),
-            action = if (count > PREVIEW_ROWS) stringResource(R.string.action_see_all) else null,
-            onAction = if (count > PREVIEW_ROWS) onSeeAll else null,
-        )
-    }
-    rows()
-}
-
-/** Localized "N noun(s)" — resolves the right plural resource for [count] and formats it in. */
+/** Kicker, display title, a sentence, and the two hero actions side by side over a 2dp rule. */
 @Composable
-private fun countLabel(count: Int, @StringRes one: Int, @StringRes other: Int): String =
-    stringResource(if (count == 1) one else other, count)
-
-// Keys are prefixed per section: the same track can sit in both Liked and Recent on the All tab, and a
-// LazyColumn crashes on duplicate keys.
-private fun LazyListScope.playlistRows(items: List<PlaylistSummary>, onOpen: (String) -> Unit) {
-    itemsIndexed(items, key = { _, p -> "pl-${p.id}" }) { index, playlist ->
-        Box(Modifier.staggeredReveal(index)) {
-            PlaylistRow(playlist, onClick = { onOpen(playlist.id) })
+private fun LibraryHero(likedCount: Int, onNew: () -> Unit, onImport: () -> Unit) {
+    val c = RizxTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 14.dp)
+            .bottomRule(c.hardLine, Editorial.Frame)
+            .padding(bottom = 25.dp),
+    ) {
+        Kicker(stringResource(R.string.library_kicker, likedCount))
+        DisplayTitle(stringResource(R.string.library_hero_title), Modifier.padding(top = 9.dp))
+        Lede(stringResource(R.string.library_hero_intro), Modifier.padding(top = 16.dp))
+        EqualRow(Modifier.padding(top = 24.dp)) {
+            EditorialButton(
+                stringResource(R.string.library_new_playlist),
+                onClick = onNew,
+                modifier = Modifier.weight(1f),
+                icon = RizxIcons.Add,
+                primary = true,
+                dense = true,
+            )
+            EditorialButton(
+                stringResource(R.string.action_import),
+                onClick = onImport,
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.AddLink,
+                contentDescription = stringResource(R.string.library_import_playlist_desc),
+                dense = true,
+            )
         }
     }
 }
+
+/** The tab strip: outlined pills that bleed to the screen edge and scroll sideways. */
+@Composable
+private fun LibraryTabs(current: LibraryTab, margin: androidx.compose.ui.unit.Dp, onSelect: (LibraryTab) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .bleed(margin)
+            .horizontalScroll(rememberScrollState())
+            .padding(start = margin, end = margin, top = 24.dp, bottom = 30.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        LibraryTab.entries.forEach { entry ->
+            EditorialTab(stringResource(entry.labelRes), active = current == entry, onClick = { onSelect(entry) })
+        }
+    }
+}
+
+// ---- overview -----------------------------------------------------------------------------------
+
+/** The All tab: one framed surface per category, playlists first because they are what you come for. */
+private fun LazyListScope.overview(
+    playlists: List<PlaylistSummary>,
+    digests: Map<String, PlaylistDigest>,
+    liked: List<Track>,
+    downloads: List<DownloadedTrack>,
+    recents: List<Track>,
+    onOpenPlaylist: (String) -> Unit,
+    onNewPlaylist: () -> Unit,
+    onShow: (LibraryTab) -> Unit,
+    onPlayLiked: (Int) -> Unit,
+    onPlayDownload: (Int) -> Unit,
+    onPlayRecent: (Int) -> Unit,
+) {
+    item(key = "ov-playlists") {
+        EditorialSurface(Modifier.padding(bottom = 14.dp)) {
+            SurfaceHeading(
+                eyebrow = stringResource(R.string.library_collections_eyebrow, LibraryStats.padded(playlists.size)),
+                title = stringResource(R.string.library_your_playlists),
+                action = stringResource(R.string.action_see_all),
+                onAction = { onShow(LibraryTab.Playlists) },
+            )
+            Column(Modifier.padding(top = 20.dp).topRule(Editorial.rule)) {
+                playlists.take(OVERVIEW_PLAYLISTS).forEach { playlist ->
+                    PlaylistRow(playlist, digests[playlist.id], onClick = { onOpenPlaylist(playlist.id) })
+                }
+                if (playlists.isEmpty()) NewPlaylistRow(onNewPlaylist)
+            }
+        }
+    }
+
+    item(key = "ov-liked") {
+        EditorialSurface(Modifier.padding(bottom = 14.dp)) {
+            SurfaceHeading(
+                eyebrow = stringResource(R.string.library_favorites_eyebrow),
+                title = stringResource(R.string.library_songs_you_like),
+                action = stringResource(R.string.library_see_all_count, liked.size),
+                onAction = { onShow(LibraryTab.Liked) },
+            )
+            LikedHero(liked, Modifier.padding(top = 20.dp), onPlay = { onPlayLiked(0) })
+            Column(Modifier.padding(top = 18.dp).topRule(Editorial.rule)) {
+                liked.take(OVERVIEW_SONGS).forEachIndexed { index, track ->
+                    // A preview row plays the *whole* liked list, not the three shown: `take` keeps the
+                    // indices, and this is a peek at the tab rather than the tab itself.
+                    PreviewRow(track, onPlay = { onPlayLiked(index) })
+                }
+            }
+            if (liked.isEmpty()) {
+                Text(
+                    stringResource(R.string.library_no_liked_body),
+                    style = mr(12, FontWeight.Medium, lineHeight = 17),
+                    color = RizxTheme.colors.muted,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+        }
+    }
+
+    if (downloads.isNotEmpty()) {
+        item(key = "ov-downloads") {
+            EditorialSurface(Modifier.padding(bottom = 14.dp)) {
+                SurfaceHeading(
+                    eyebrow = stringResource(R.string.library_offline_eyebrow),
+                    title = stringResource(R.string.library_section_downloads),
+                    action = stringResource(R.string.library_see_all_count, downloads.size),
+                    onAction = { onShow(LibraryTab.Downloads) },
+                )
+                Column(Modifier.padding(top = 20.dp).topRule(Editorial.rule)) {
+                    downloads.take(OVERVIEW_SONGS).forEachIndexed { index, entry ->
+                        PreviewRow(entry.track, onPlay = { onPlayDownload(index) })
+                    }
+                }
+            }
+        }
+    }
+
+    item(key = "ov-recent") {
+        EditorialSurface(Modifier.padding(bottom = 14.dp)) {
+            SurfaceHeading(
+                eyebrow = stringResource(R.string.library_history_eyebrow),
+                title = stringResource(R.string.library_recent_heading),
+                action = if (recents.size > OVERVIEW_SONGS) stringResource(R.string.action_see_all) else null,
+                onAction = if (recents.size > OVERVIEW_SONGS) ({ onShow(LibraryTab.Recent) }) else null,
+            )
+            Column(Modifier.padding(top = 20.dp).topRule(Editorial.rule)) {
+                recents.take(OVERVIEW_SONGS).forEachIndexed { index, track ->
+                    PreviewRow(track, onPlay = { onPlayRecent(index) })
+                }
+            }
+            if (recents.isEmpty()) {
+                Text(
+                    stringResource(R.string.library_no_recent_body),
+                    style = mr(12, FontWeight.Medium, lineHeight = 17),
+                    color = RizxTheme.colors.muted,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The ink card that sums up the liked songs: a four-cover collage, the count in display type, the
+ * running time and artist count, a red play block — and the big translucent heart the design signs it
+ * with. Tapping it plays the list from the top.
+ */
+@Composable
+private fun LikedHero(tracks: List<Track>, modifier: Modifier = Modifier, onPlay: () -> Unit) {
+    val c = RizxTheme.colors
+    val covers = tracks.take(12).mapNotNull { it.artwork.tileUrl() }.take(4)
+    val playDesc = stringResource(R.string.library_play_liked_desc)
+    Box(
+        modifier
+            .fillMaxWidth()
+            .clip(RectangleShape)
+            .background(c.accent)
+            .border(Editorial.Frame, c.hardLine, RectangleShape)
+            .clickableScale(scale = 0.99f, enabled = tracks.isNotEmpty(), onClick = onPlay)
+            .padding(14.dp),
+    ) {
+        Text(
+            "♥",
+            style = sg(150, FontWeight.Medium, 0f),
+            color = c.redAccent.copy(alpha = 0.34f),
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = 44.dp, y = (-74).dp),
+        )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(92.dp).border(1.dp, c.onFill.copy(alpha = 0.4f), RectangleShape)) {
+                CollageArt(covers, seed = "liked", modifier = Modifier.fillMaxSize(), initial = "♥")
+            }
+            Column(Modifier.weight(1f).padding(bottom = 5.dp, end = 36.dp)) {
+                CodeLabel(stringResource(R.string.library_liked_archive), color = c.onFill.copy(alpha = 0.55f), size = 10)
+                Text(
+                    countLabel(tracks.size, R.string.library_count_song_one, R.string.library_count_song_other),
+                    style = sg(24, FontWeight.Medium, -0.04f, lineHeight = 26),
+                    color = c.onFill,
+                    modifier = Modifier.padding(top = 7.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    likedStats(tracks),
+                    style = mr(10, FontWeight.Normal),
+                    color = c.onFill.copy(alpha = 0.65f),
+                    modifier = Modifier.padding(top = 8.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = 4.dp, y = 4.dp)
+                .size(40.dp)
+                .background(c.redAccent),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(RizxIcons.Play, playDesc, tint = c.onRed, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/** `44 h 07 min · 135 artists` — the two numbers the design prints about a collection of songs. */
+@Composable
+private fun likedStats(tracks: List<Track>): String =
+    LibraryStats.formatLongDuration(LibraryStats.totalMs(tracks)) + " · " +
+        countLabel(LibraryStats.distinctArtists(tracks), R.string.library_count_artist_one, R.string.library_count_artist_other)
+
+// ---- category views -----------------------------------------------------------------------------
+
+/**
+ * The heading of one category at full width: eyebrow, display title, a summary line, then — stacked
+ * on a phone, as the design does below 768px — the tab's own action and its search field.
+ */
+@Composable
+private fun ViewHeader(
+    eyebrow: String,
+    title: String,
+    summary: String?,
+    action: (@Composable () -> Unit)? = null,
+    search: (@Composable () -> Unit)? = null,
+) {
+    val c = RizxTheme.colors
+    Column(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
+        Column(Modifier.fillMaxWidth().bottomRule(c.hardLine, Editorial.Frame).padding(bottom = 22.dp)) {
+            SignalEyebrow(eyebrow)
+            DisplayTitle(title, Modifier.padding(top = 5.dp), widthFraction = 0.153f, maxSp = 76)
+            if (summary != null) {
+                Text(summary, style = mr(13, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 13.dp))
+            }
+            if (action != null) Box(Modifier.padding(top = 20.dp)) { action() }
+        }
+        if (search != null) Box(Modifier.padding(top = 20.dp)) { search() }
+    }
+}
+
+/** The 2dp rule a song list starts with. */
+@Composable
+private fun ListTop() {
+    Box(Modifier.fillMaxWidth().height(Editorial.Frame).background(RizxTheme.colors.hardLine))
+}
+
+/** The playlist tiles, [columns] to a row, ending with the tile that starts a new one. */
+private fun LazyListScope.playlistGrid(
+    playlists: List<PlaylistSummary>,
+    digests: Map<String, PlaylistDigest>,
+    columns: Int,
+    onOpen: (String) -> Unit,
+    onNew: () -> Unit,
+) {
+    val cells: List<PlaylistSummary?> = playlists + listOf<PlaylistSummary?>(null)
+    val rows = cells.withIndex().chunked(columns)
+    itemsIndexed(rows, key = { _, row -> "grid-" + row.joinToString("|") { it.value?.id ?: "new" } }) { rowIndex, row ->
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 12.dp).staggeredReveal(rowIndex),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            row.forEach { (index, playlist) ->
+                if (playlist == null) {
+                    NewPlaylistTile(index + 1, Modifier.weight(1f), onNew)
+                } else {
+                    PlaylistTile(index + 1, playlist, digests[playlist.id], Modifier.weight(1f)) { onOpen(playlist.id) }
+                }
+            }
+            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+        }
+    }
+}
+
+// Keys are prefixed per section: the same track can sit in both Liked and Recent, and a LazyColumn
+// crashes on duplicate keys.
 
 /** [onPlay] takes the row's index; the caller decides which list that index counts into (full vs filtered). */
 private fun LazyListScope.likedRows(
@@ -661,7 +900,7 @@ private fun LazyListScope.likedRows(
 ) {
     itemsIndexed(items, key = { _, t -> "lk-${t.source.provider}:${t.source.id}" }) { index, track ->
         Box(Modifier.staggeredReveal(index)) {
-            TrackRow(track, onPlay = { onPlay(index) }) {
+            SongRow(index, track, onPlay = { onPlay(index) }) {
                 DownloadButton(
                     state = states[track.source.identityKey],
                     onDownload = { vm.downloadTrack(track) },
@@ -671,7 +910,8 @@ private fun LazyListScope.likedRows(
                     RizxIcons.Favorite,
                     stringResource(R.string.library_remove_from_liked_desc),
                     onClick = { onUnfavorite(track) },
-                    iconSize = 22.dp,
+                    size = 44.dp,
+                    iconSize = 21.dp,
                     tint = RizxTheme.colors.redAccent,
                 )
             }
@@ -693,46 +933,40 @@ private fun LazyListScope.downloadRows(
     itemsIndexed(items, key = { _, d -> "dl-${d.key}" }) { index, entry ->
         val onPhone = entry.exportedUri != null
         Box(Modifier.staggeredReveal(index)) {
-            TrackRow(
+            SongRow(
+                index,
                 entry.track,
                 onPlay = { onPlay(index) },
-                // What the file is and where it lives — in words, under the artist. It used to be the
-                // *tint of an icon*, which says nothing to anyone not already told what the icon meant.
-                // The action sits here too rather than in the trailing strip, where a label that long
-                // would have squeezed the song title down to a few characters.
+                // What the file is and where it lives — in words, under the artist. The action sits here
+                // too rather than in the trailing strip, where a label that long would have squeezed the
+                // song title down to a few characters.
                 meta = {
                     val format = "${entry.container.uppercase()} · ${formatBytes(entry.sizeBytes)}"
                     if (onPhone) {
-                        // Its own line, not appended: this column is narrow enough that one long line
-                        // would ellipsize away the very word the row exists to say.
                         CodeLabel(format, size = 10)
                         Spacer(Modifier.height(3.dp))
-                        CodeLabel(stringResource(R.string.library_on_phone), size = 10, color = RizxTheme.colors.accent)
+                        CodeLabel(stringResource(R.string.library_on_phone), size = 10, color = RizxTheme.colors.redAccent)
                     } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             CodeLabel(format, size = 10)
-                            // Labelled, not a bare glyph: "save this to the phone" is not something an
-                            // icon can say — which is exactly why nobody ever found this feature.
-                            RizxActionButton(
-                                Icons.Filled.SaveAlt,
-                                stringResource(R.string.library_save_to_phone),
-                                onClick = { onExport(entry) },
-                                contentDescription = stringResource(R.string.library_export_desc),
+                            Text(
+                                stringResource(R.string.library_save_to_phone).uppercase(),
+                                style = mr(10, FontWeight.SemiBold, 0.06f),
+                                color = RizxTheme.colors.redAccent,
+                                modifier = Modifier.clickableScale(scale = 0.94f, onClick = { onExport(entry) }).padding(vertical = 4.dp),
                             )
                         }
                     }
                 },
             ) {
-                // Already published: the row says so, so this is only the way back from having deleted
-                // the copy on the phone by hand — small, and never the loudest thing in the row.
+                // Already published: the row says so, so this is only the way back from having deleted the
+                // copy on the phone by hand — small, and never the loudest thing in the row.
                 if (onPhone) {
                     RizxIconButton(
                         Icons.Filled.DriveFileMove,
                         stringResource(R.string.library_export_again_desc),
                         onClick = { onExport(entry) },
+                        size = 44.dp,
                         iconSize = 20.dp,
                         tint = RizxTheme.colors.text2,
                     )
@@ -741,6 +975,7 @@ private fun LazyListScope.downloadRows(
                     Icons.Filled.DeleteOutline,
                     stringResource(R.string.library_delete_download_desc),
                     onClick = { onDelete(entry) },
+                    size = 44.dp,
                     iconSize = 20.dp,
                     tint = RizxTheme.colors.text2,
                 )
@@ -752,20 +987,21 @@ private fun LazyListScope.downloadRows(
 private fun LazyListScope.recentRows(items: List<Track>, onPlay: (Int) -> Unit) {
     itemsIndexed(items, key = { _, t -> "rc-${t.source.provider}:${t.source.id}" }) { index, track ->
         Box(Modifier.staggeredReveal(index)) {
-            TrackRow(track, onPlay = { onPlay(index) })
+            SongRow(index, track, onPlay = { onPlay(index) })
         }
     }
 }
 
-// ---- rows ---------------------------------------------------------------------------------------
+// ---- rows and tiles -----------------------------------------------------------------------------
 
 /**
- * The library's one track row. [trailing] is what differs (liked shows duration + heart, recents
- * nothing); [meta] is a third line under the artist, which downloads use to state what the file is and
- * where it lives — trailing space is for actions, not for a readout that has to be readable.
+ * The numbered song row of a category list: serial, 52dp cover in a hairline, title and artist, and
+ * the actions on the right. [meta] is a third line under the artist (downloads use it to say what the
+ * file is and where it lives).
  */
 @Composable
-private fun TrackRow(
+private fun SongRow(
+    index: Int,
     track: Track,
     onPlay: () -> Unit,
     meta: (@Composable () -> Unit)? = null,
@@ -776,19 +1012,26 @@ private fun TrackRow(
         Modifier
             .fillMaxWidth()
             .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onPlay)
-            .padding(vertical = 8.dp),
+            .bottomRule(Editorial.rule)
+            .heightIn(min = 72.dp)
+            .padding(vertical = 8.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(13.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        CoverArt(tintFor(track.source.id), initial = null, Modifier.size(46.dp), imageUrl = track.artwork.tileUrl())
-        Column(Modifier.weight(1f)) {
-            Text(track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(LibraryStats.padded(index + 1), style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.width(24.dp))
+        CoverArt(
+            tintFor(track.source.id), initial = null, Modifier.size(52.dp),
+            imageUrl = track.artwork.tileUrl(), borderColor = c.hardLine,
+        )
+        Column(Modifier.weight(1f).padding(start = 3.dp)) {
+            Text(track.title, style = mr(13, FontWeight.Medium), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.unknown_artist) },
-                style = mr(12, FontWeight.Medium),
+                style = mr(11, FontWeight.Medium),
                 color = c.muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 3.dp),
             )
             meta?.let {
                 Spacer(Modifier.height(3.dp))
@@ -799,125 +1042,202 @@ private fun TrackRow(
     }
 }
 
+/** A preview row inside an overview surface: 46dp cover, title, artist and the running time. */
 @Composable
-private fun PlaylistRow(playlist: PlaylistSummary, onClick: () -> Unit) {
+private fun PreviewRow(track: Track, onPlay: () -> Unit) {
+    val c = RizxTheme.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onPlay)
+            .bottomRule(Editorial.rule)
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        CoverArt(tintFor(track.source.id), initial = null, Modifier.size(46.dp), imageUrl = track.artwork.tileUrl())
+        Column(Modifier.weight(1f)) {
+            Text(track.title, style = mr(14, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                track.artists.joinToString { it.name }.ifEmpty { stringResource(R.string.unknown_artist) },
+                style = mr(11, FontWeight.Medium),
+                color = c.muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Text(LibraryStats.clock(track.durationMs), style = mr(11, FontWeight.Medium), color = c.muted)
+    }
+}
+
+/** A playlist in the overview stack: collage cover, name, `Private · 177 songs`, and an arrow. */
+@Composable
+private fun PlaylistRow(playlist: PlaylistSummary, digest: PlaylistDigest?, onClick: () -> Unit) {
     val c = RizxTheme.colors
     Row(
         Modifier
             .fillMaxWidth()
             .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onClick)
-            .padding(vertical = 9.dp),
+            .bottomRule(Editorial.rule)
+            .heightIn(min = 82.dp)
+            .padding(vertical = 10.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(13.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Imported playlists carry their real cover; anything without one falls back to the tinted tile
-        // with its initial, exactly as before (CoverArt already handles a null/failed image).
-        CoverArt(
-            tintFor(playlist.id),
-            initial = playlist.name.take(1).uppercase(),
-            Modifier.size(46.dp),
-            initialSize = 20,
-            imageUrl = playlist.artworkUrl,
-        )
+        Box(Modifier.size(58.dp).border(1.dp, c.hardLine, RectangleShape)) {
+            PlaylistArt(playlist, digest, Modifier.fillMaxSize())
+        }
         Column(Modifier.weight(1f)) {
-            Text(playlist.name, style = mr(15, FontWeight.SemiBold), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(playlist.name, style = mr(15, FontWeight.Medium), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                playlistSubtitle(
-                    playlist,
-                    countLabel(playlist.itemCount, R.string.library_count_track_one, R.string.library_count_track_other),
-                ),
+                playlistSubtitle(playlist),
                 style = mr(12, FontWeight.Medium),
                 color = c.muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
-        // A chevron, not a play button: tapping opens the playlist, it doesn't play it.
-        Icon(RizxIcons.ChevronRight, null, tint = c.muted, modifier = Modifier.size(22.dp))
+        RowArrow()
     }
 }
 
-private fun playlistSubtitle(playlist: PlaylistSummary, trackCountLabel: String): String = buildList {
-    add(trackCountLabel)
-    playlist.description?.takeIf { it.isNotBlank() }?.let { add(it) }
-}.joinToString(" · ")
+/** The overview's answer to an empty library: the "new playlist" row, in the stack's own shape. */
+@Composable
+private fun NewPlaylistRow(onClick: () -> Unit) {
+    val c = RizxTheme.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onClick)
+            .bottomRule(Editorial.rule)
+            .heightIn(min = 82.dp)
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            Modifier.size(58.dp).background(c.text.copy(alpha = 0.04f)).border(1.dp, c.hardLine, RectangleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(RizxIcons.Add, null, tint = c.muted, modifier = Modifier.size(28.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.library_new_playlist), style = mr(15, FontWeight.Medium), color = c.text, maxLines = 1)
+            Text(stringResource(R.string.library_start_collection), style = mr(12, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 4.dp))
+        }
+        RowArrow()
+    }
+}
 
-// ---- counts & empty states ----------------------------------------------------------------------
+/** A playlist tile: square art with its red serial, the name and `55 songs · 3 h 11 min`. */
+@Composable
+private fun PlaylistTile(
+    serial: Int,
+    playlist: PlaylistSummary,
+    digest: PlaylistDigest?,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val c = RizxTheme.colors
+    EditorialSurface(modifier, padding = PaddingValues(10.dp), onClick = onClick) {
+        Box {
+            Box(Modifier.fillMaxWidth().aspectRatio(1f).border(1.dp, c.hardLine, RectangleShape)) {
+                PlaylistArt(playlist, digest, Modifier.fillMaxSize())
+            }
+            IndexTag("P${LibraryStats.padded(serial)}", Modifier.padding(7.dp))
+        }
+        Text(playlist.name, style = mr(14, FontWeight.Medium), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 11.dp))
+        Text(
+            buildString {
+                append(countLabel(playlist.itemCount, R.string.library_count_song_one, R.string.library_count_song_other))
+                digest?.takeIf { it.durationMs > 0L }?.let { append(" · ").append(LibraryStats.formatLongDuration(it.durationMs)) }
+            },
+            style = mr(11, FontWeight.Medium),
+            color = c.muted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+/** The last tile of the grid: a `+` where the art would be, and the next serial. */
+@Composable
+private fun NewPlaylistTile(serial: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c = RizxTheme.colors
+    EditorialSurface(modifier, padding = PaddingValues(10.dp), onClick = onClick) {
+        Box {
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(1f).background(c.text.copy(alpha = 0.04f)).border(1.dp, c.hardLine, RectangleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(RizxIcons.Add, null, tint = c.muted, modifier = Modifier.size(58.dp))
+            }
+            IndexTag("P${LibraryStats.padded(serial)}", Modifier.padding(7.dp))
+        }
+        Text(stringResource(R.string.library_new_playlist), style = mr(14, FontWeight.Medium), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 11.dp))
+        Text(stringResource(R.string.library_start_collection), style = mr(11, FontWeight.Medium), color = c.muted, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/**
+ * A playlist's art, in the design's order: its own cover when it has one, else a collage of its songs'
+ * covers, else the tinted tile with its initial.
+ */
+@Composable
+private fun PlaylistArt(playlist: PlaylistSummary, digest: PlaylistDigest?, modifier: Modifier) {
+    val own = playlist.artworkUrl
+    if (own != null) {
+        CoverArt(tintFor(playlist.id), initial = null, modifier, imageUrl = own, borderWidth = 0.dp)
+        return
+    }
+    val covers = digest?.covers?.mapNotNull { it.tileUrl() }.orEmpty()
+    CollageArt(covers, seed = playlist.id, modifier = modifier, initial = playlist.name.take(1).uppercase(), initialSize = 22)
+}
+
+/** `Private · 177 songs`, or the description when the playlist has one. */
+@Composable
+private fun playlistSubtitle(playlist: PlaylistSummary): String {
+    val nature = playlist.description?.takeIf { it.isNotBlank() }
+        ?: stringResource(if (playlist.isImported) R.string.library_imported else R.string.library_private)
+    return nature + " · " + countLabel(playlist.itemCount, R.string.library_count_song_one, R.string.library_count_song_other)
+}
+
+/** Localized "N noun(s)" — resolves the right plural resource for [count] and formats it in. */
+@Composable
+private fun countLabel(count: Int, @StringRes one: Int, @StringRes other: Int): String =
+    stringResource(if (count == 1) one else other, count)
+
+// ---- empty states -------------------------------------------------------------------------------
 
 @Composable
-private fun TabCount(text: String, modifier: Modifier = Modifier) =
-    CodeLabel(text, modifier.padding(top = 14.dp, bottom = 4.dp), size = 11)
-
-@Composable
-private fun PlaylistsEmpty(onCreate: () -> Unit) = LibraryEmpty(
-    icon = RizxIcons.QueueMusic,
-    title = stringResource(R.string.library_no_playlists_title),
-    body = stringResource(R.string.library_no_playlists_body),
-    actionLabel = stringResource(R.string.library_new_playlist),
-    onAction = onCreate,
+private fun NoMatches(query: String) = EmptyBlock(
+    title = stringResource(R.string.filter_no_matches_title),
+    body = stringResource(R.string.filter_no_matches_body, query),
 )
 
 @Composable
-private fun LikedEmpty() = LibraryEmpty(
-    icon = RizxIcons.FavoriteBorder,
+private fun LikedEmpty() = EmptyBlock(
     title = stringResource(R.string.library_no_liked_title),
     body = stringResource(R.string.library_no_liked_body),
 )
 
 @Composable
-private fun RecentEmpty() = LibraryEmpty(
-    icon = Icons.Filled.History,
+private fun RecentEmpty() = EmptyBlock(
     title = stringResource(R.string.library_no_recent_title),
     body = stringResource(R.string.library_no_recent_body),
 )
 
 /** The CTA only appears when there's somewhere to send you — an empty Liked tab would be a dead end. */
 @Composable
-private fun DownloadsEmpty(onGoToLiked: (() -> Unit)?) = LibraryEmpty(
-    icon = Icons.Filled.DownloadForOffline,
+private fun DownloadsEmpty(onGoToLiked: (() -> Unit)?) = EmptyBlock(
     title = stringResource(R.string.library_no_downloads_title),
     body = stringResource(R.string.library_no_downloads_body),
     actionLabel = onGoToLiked?.let { stringResource(R.string.library_go_to_liked) },
     onAction = onGoToLiked,
 )
-
-/** Empty states earn their space: an icon, what's missing, and — where one exists — the way out. */
-@Composable
-private fun LibraryEmpty(
-    icon: ImageVector,
-    title: String,
-    body: String,
-    actionLabel: String? = null,
-    onAction: (() -> Unit)? = null,
-) {
-    val c = RizxTheme.colors
-    Column(
-        Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(icon, null, tint = c.muted, modifier = Modifier.size(46.dp))
-        Text(title, style = sg(17, FontWeight.Bold), color = c.text, modifier = Modifier.padding(top = 14.dp))
-        Text(
-            body,
-            style = mr(13, FontWeight.Medium),
-            color = c.muted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        if (actionLabel != null && onAction != null) {
-            Box(
-                Modifier
-                    .padding(top = 16.dp)
-                    .clip(RectangleShape)
-                    .background(c.fill)
-                    .clickableScale(scale = 0.94f, onClick = onAction)
-                    .padding(horizontal = 22.dp, vertical = 10.dp),
-            ) {
-                Text(actionLabel, style = sg(14, FontWeight.Bold), color = c.onFill)
-            }
-        }
-    }
-}
 
 /** The file name behind a SAF [uri], extension dropped — names imports whose format carries none (CSV). */
 private fun Context.displayNameOf(uri: Uri): String? = runCatching {

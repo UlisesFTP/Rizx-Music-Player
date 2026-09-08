@@ -3,6 +3,7 @@ package fm.rizx.player.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +19,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -59,9 +63,21 @@ import fm.rizx.player.ui.components.CaptionedOptionDialog
 import fm.rizx.player.domain.account.AccountState
 import fm.rizx.player.ui.account.AccountViewModel
 import fm.rizx.player.ui.components.AccountAvatar
-import fm.rizx.player.ui.components.RizxFilterField
+import fm.rizx.player.ui.components.CodeLabel
+import fm.rizx.player.ui.components.DisplayTitle
+import fm.rizx.player.ui.components.Editorial
+import fm.rizx.player.ui.components.EditorialSearchField
+import fm.rizx.player.ui.components.EditorialSelect
+import fm.rizx.player.ui.components.EditorialSurface
+import fm.rizx.player.ui.components.EmptyBlock
+import fm.rizx.player.ui.components.Kicker
+import fm.rizx.player.ui.components.Lede
 import fm.rizx.player.ui.components.RizxToggle
-import fm.rizx.player.ui.components.SectionHeader
+import fm.rizx.player.ui.components.RowArrow
+import fm.rizx.player.ui.components.SegmentedTabs
+import fm.rizx.player.ui.components.SignalEyebrow
+import fm.rizx.player.ui.components.SurfaceTitle
+import fm.rizx.player.ui.components.bottomRule
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.ui.library.ConfirmDialog
 import fm.rizx.player.ui.util.ListFilter
@@ -74,6 +90,8 @@ import fm.rizx.player.ui.settings.setAppLanguage
 import fm.rizx.player.ui.theme.LocalBottomInset
 import fm.rizx.player.ui.theme.ResponsiveContent
 import fm.rizx.player.ui.theme.RizxTheme
+import fm.rizx.player.ui.theme.brutalShadow
+import fm.rizx.player.ui.theme.isTablet
 import fm.rizx.player.ui.theme.pagePadding
 import fm.rizx.player.ui.theme.code
 import fm.rizx.player.ui.theme.mr
@@ -128,7 +146,6 @@ fun PreferencesScreen(
     val canvasDiagnostics by vm.canvasDiagnostics.collectAsStateWithLifecycle()
     val playerLayout by vm.playerLayout.collectAsStateWithLifecycle()
     var languageDialogOpen by remember { mutableStateOf(false) }
-    var themeDialogOpen by remember { mutableStateOf(false) }
     var playerLayoutDialogOpen by remember { mutableStateOf(false) }
     var radioDialogOpen by remember { mutableStateOf(false) }
     var lyricsQualityDialogOpen by remember { mutableStateOf(false) }
@@ -196,6 +213,9 @@ fun PreferencesScreen(
     val gaplessTitle = stringResource(R.string.pref_gapless)
     val themeTitle = stringResource(R.string.pref_theme)
     val themeValue = stringResource(themeModeLabel(themeMode))
+    val themeCaption = stringResource(R.string.pref_theme_caption)
+    // Resolved here because the segment labels are read inside a plain lambda, not a composable.
+    val themeLabels = ThemeMode.entries.associateWith { stringResource(themeModeLabel(it)) }
     val layoutTitle = stringResource(R.string.pref_player_layout)
     val layoutValue = stringResource(playerLayoutLabel(playerLayout))
     val layoutCaption = stringResource(playerLayoutCaption(playerLayout))
@@ -251,6 +271,9 @@ fun PreferencesScreen(
     val langTitle = stringResource(R.string.pref_language)
     val langSystem = stringResource(R.string.language_system)
     val langValue = if (currentLang == AppLanguage.SYSTEM) langSystem else currentLang.endonym
+    val langCaption = stringResource(R.string.pref_language_caption)
+    // The equalizer row reads what is in charge of the curve: the automatic equalizer, or the presets.
+    val eqValueShown = if (autoEq) stringResource(R.string.eq_auto_badge) else eqValue
     val aboutTitle = stringResource(R.string.pref_about)
     val aboutValue = stringResource(R.string.pref_about_v)
     val accountTitle = stringResource(R.string.pref_account_sync)
@@ -264,7 +287,7 @@ fun PreferencesScreen(
     // it writes to sat under Data.
     val groups: List<Pair<String, List<SettingsEntry>>> = listOf(
         stringResource(R.string.settings_sound) to buildList {
-            add(entry(eqTitle, eqValue) { SettingRow(eqTitle, eqValue, onClick = onOpenEqualizer) })
+            add(entry(eqTitle, eqValue) { SettingRow(eqTitle, eqValueShown, onClick = onOpenEqualizer) })
             // Sits right under the equalizer row it takes over, and carries a caption because
             // "automatic equalizer" doesn't say *what* it automates — the genre, then the song.
             add(
@@ -307,7 +330,12 @@ fun PreferencesScreen(
             entry(gaplessTitle) { ToggleRow(gaplessTitle, gapless) { vm.setGapless(!gapless) } },
         ),
         stringResource(R.string.settings_appearance) to listOf(
-            entry(themeTitle, themeValue) { SettingRow(themeTitle, themeValue) { themeDialogOpen = true } },
+            // Three segments in the row itself, as on the web: the choice is small enough to be seen whole.
+            entry(themeTitle, themeValue, themeCaption) {
+                ControlRow(themeTitle, themeCaption, stackOnPhone = true) {
+                    SegmentedTabs(ThemeMode.entries, themeMode, label = { themeLabels.getValue(it) }, onSelect = onSetThemeMode)
+                }
+            },
             entry(layoutTitle, layoutValue, layoutCaption) {
                 SettingRow(layoutTitle, layoutValue, layoutCaption) { playerLayoutDialogOpen = true }
             },
@@ -376,7 +404,9 @@ fun PreferencesScreen(
             },
             // Tapping opens a picker; the OS owns the per-app locale, so the choice persists and also
             // shows under Android's own per-app Language page.
-            entry(langTitle, langValue) { SettingRow(langTitle, langValue) { languageDialogOpen = true } },
+            entry(langTitle, langValue, langCaption) {
+                ControlRow(langTitle, langCaption) { EditorialSelect(langValue) { languageDialogOpen = true } }
+            },
             entry(aboutTitle, aboutValue) { SettingRow(aboutTitle, aboutValue, onClick = onOpenAbout) },
         ),
     )
@@ -388,67 +418,91 @@ fun PreferencesScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = pagePadding()),
     ) {
-        Text(stringResource(R.string.settings_title), style = sg(28, FontWeight.Bold, -0.02f), color = c.text, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
-        // Twenty-three rows over roughly three screens: without this, finding one means remembering
-        // which of eight groups it lives in. Same field and same matcher as the Library's filter.
-        RizxFilterField(
-            query = query,
-            onQueryChange = { query = it },
-            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-            hint = stringResource(R.string.settings_search_hint),
-        )
+        // The design's page head: kicker, the display title, one sentence, and the search field — over
+        // a 2dp rule. Twenty-three rows over roughly three screens: without the field, finding one
+        // means remembering which of eight groups it lives in. Same matcher as the Library's filter.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 14.dp)
+                .bottomRule(c.hardLine, Editorial.Frame)
+                .padding(bottom = 25.dp),
+        ) {
+            Kicker(stringResource(R.string.settings_kicker))
+            DisplayTitle(stringResource(R.string.settings_hero_title), Modifier.padding(top = 8.dp))
+            Lede(stringResource(R.string.settings_lede), Modifier.padding(top = 16.dp))
+            EditorialSearchField(
+                query = query,
+                onQueryChange = { query = it },
+                hint = stringResource(R.string.settings_search_hint),
+                modifier = Modifier.padding(top = 24.dp),
+            )
+        }
 
         // The account, first — it was a plain row at the bottom of the eighth group, which in
-        // practice meant nobody found where to sign in. Face + state + one tap into the flow; the
-        // searchable row in "App" stays so filtering for it still works.
+        // practice meant nobody found where to sign in. The design's ink card: face, state and one tap
+        // into the flow. It answers the search too, so filtering for "account" keeps it on screen.
         val accountState by accountVm.accountState.collectAsStateWithLifecycle()
-        if (accountState != AccountState.Disabled) {
+        val accountMatches = ListFilter.matches(query, accountTitle, accountCaption, accountValue)
+        if (accountState != AccountState.Disabled && accountMatches) {
             val accountProfile = (accountState as? AccountState.SignedIn)?.profile
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-                    .background(c.elev)
-                    .border(1.5.dp, c.hardLine)
-                    .clickableScale(onClick = onOpenAccount)
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                AccountAvatar(accountState, size = 46.dp, iconSize = 22.dp)
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        when (accountState) {
-                            is AccountState.SignedIn -> accountProfile?.displayName ?: accountProfile?.email
-                                ?: stringResource(R.string.account_connected)
-                            is AccountState.Guest -> stringResource(R.string.account_guest)
-                            else -> stringResource(R.string.account_sign_in)
-                        },
-                        style = sg(16, FontWeight.Bold, -0.01f),
-                        color = c.text,
-                    )
-                    Text(
-                        when (accountState) {
-                            is AccountState.SignedIn -> stringResource(R.string.account_connected_caption)
-                            is AccountState.Guest -> stringResource(R.string.account_guest_caption)
-                            else -> stringResource(R.string.pref_account_caption)
-                        },
-                        style = mr(12, FontWeight.Medium),
-                        color = c.muted,
-                        modifier = Modifier.padding(top = 3.dp),
-                    )
+            Box(Modifier.fillMaxWidth().padding(top = 28.dp, end = 7.dp, bottom = 7.dp)) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .brutalShadow(c.redAccent.copy(alpha = 0.28f), offset = 7.dp)
+                        .background(c.accent)
+                        .border(Editorial.Frame, c.hardLine)
+                        .clickableScale(scale = 0.99f, onClick = onOpenAccount)
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Box(Modifier.size(64.dp).border(1.dp, c.onFill.copy(alpha = 0.65f))) {
+                        AccountAvatar(accountState, size = 64.dp, iconSize = 26.dp, bare = true)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        CodeLabel(stringResource(R.string.settings_account_eyebrow), color = c.redAccent, size = 9)
+                        Text(
+                            when (accountState) {
+                                is AccountState.SignedIn -> accountProfile?.displayName ?: accountProfile?.email
+                                    ?: stringResource(R.string.account_connected)
+                                is AccountState.Guest -> stringResource(R.string.account_guest)
+                                else -> stringResource(R.string.account_sign_in)
+                            },
+                            style = sg(19, FontWeight.Medium, -0.02f),
+                            color = c.onFill,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                        Text(
+                            when (accountState) {
+                                is AccountState.SignedIn -> stringResource(R.string.settings_account_card_caption)
+                                is AccountState.Guest -> stringResource(R.string.account_guest_caption)
+                                else -> stringResource(R.string.pref_account_caption)
+                            },
+                            style = mr(11, FontWeight.Medium),
+                            color = c.onFill.copy(alpha = 0.63f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 3.dp),
+                        )
+                    }
+                    RowArrow(color = c.onFill)
                 }
-                Icon(RizxIcons.ChevronRight, null, tint = c.muted, modifier = Modifier.size(18.dp))
             }
         }
 
-        groups.forEach { (title, rows) -> SettingsGroup(title, query, rows) }
-        if (groups.none { (_, rows) -> rows.any { it.matches(query) } }) {
-            Text(
-                stringResource(R.string.settings_no_matches),
-                style = mr(13, FontWeight.Medium),
-                color = c.muted,
-                modifier = Modifier.padding(top = 28.dp),
+        Spacer(Modifier.height(20.dp))
+        groups.forEachIndexed { index, (title, rows) ->
+            SettingsGroup(SECTION_META.getOrElse(index) { SECTION_META.last() }, title, query, rows)
+        }
+        if (!accountMatches && groups.none { (_, rows) -> rows.any { it.matches(query) } }) {
+            EmptyBlock(
+                title = stringResource(R.string.settings_no_matches),
+                body = stringResource(R.string.settings_empty_hint),
+                modifier = Modifier.padding(top = 12.dp),
             )
         }
 
@@ -471,13 +525,6 @@ fun PreferencesScreen(
             current = currentLang,
             onSelect = { lang -> setAppLanguage(context, lang); languageDialogOpen = false },
             onDismiss = { languageDialogOpen = false },
-        )
-    }
-    if (themeDialogOpen) {
-        ThemeDialog(
-            current = themeMode,
-            onSelect = { mode -> onSetThemeMode(mode); themeDialogOpen = false },
-            onDismiss = { themeDialogOpen = false },
         )
     }
     if (playerLayoutDialogOpen) {
@@ -1013,44 +1060,6 @@ private fun themeModeLabel(mode: ThemeMode): Int = when (mode) {
     ThemeMode.DARK -> R.string.theme_dark
 }
 
-/** Theme picker: System (follows the device) · Light · Dark. Mirrors [LanguageDialog]'s brutalist style. */
-@Composable
-private fun ThemeDialog(
-    current: ThemeMode,
-    onSelect: (ThemeMode) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val c = RizxTheme.colors
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(c.elev)
-                .border(1.5.dp, c.hardLine)
-                .padding(bottom = 8.dp),
-        ) {
-            Text(
-                stringResource(R.string.pref_theme),
-                style = sg(20, FontWeight.Bold, -0.01f),
-                color = c.text,
-                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp),
-            )
-            ThemeMode.entries.forEach { mode ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = { onSelect(mode) })
-                        .padding(horizontal = 20.dp, vertical = 13.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(stringResource(themeModeLabel(mode)), style = mr(15, FontWeight.SemiBold), color = c.text, modifier = Modifier.weight(1f))
-                    if (mode == current) Icon(RizxIcons.Check, "Selected", tint = c.redAccent, modifier = Modifier.size(20.dp))
-                }
-            }
-        }
-    }
-}
-
 /**
  * The language picker: System default (follows the device) + the four shipped languages, each shown in its
  * own name (endonym). Selecting one applies it immediately via the OS per-app locale, which recreates the
@@ -1115,33 +1124,66 @@ internal fun visibleEntries(query: String, rows: List<SettingsEntry>): List<Sett
     rows.filter { it.matches(query) }
 
 /**
- * A themed group of settings: the app's own [SectionHeader] and whichever of its rows survive the
- * filter. Draws nothing at all when none of them do — an empty heading is worse than a missing one.
- *
- * The header is deliberately the *shared* one (red marker + 19sp bold) that Home, Library, Artist,
- * Genre and Recognition already use. This screen used to head its sections with 11sp muted uppercase
- * — the faintest text on the page carrying the only structure it had, which is why a list this long
- * read as one undifferentiated wall.
+ * The eyebrow and serial of a section (`■ AUDIO … S01`), by position in the groups list. The titles
+ * stay where they are built; only the design's two decorations live here.
+ */
+private data class SectionMeta(@StringRes val eyebrow: Int, val code: String)
+
+private val SECTION_META = listOf(
+    SectionMeta(R.string.settings_eyebrow_sound, "S01"),
+    SectionMeta(R.string.settings_eyebrow_playback, "P02"),
+    SectionMeta(R.string.settings_eyebrow_appearance, "V03"),
+    SectionMeta(R.string.settings_eyebrow_sources, "C04"),
+    SectionMeta(R.string.settings_eyebrow_recs, "R05"),
+    SectionMeta(R.string.settings_eyebrow_downloads, "D06"),
+    SectionMeta(R.string.settings_eyebrow_data, "M07"),
+    SectionMeta(R.string.settings_eyebrow_app, "A08"),
+)
+
+/** True on a section's last visible row, which draws no rule under it — the card's frame is the closing line. */
+private val LocalLastRow = compositionLocalOf { false }
+
+/**
+ * A themed group of settings as the design's framed section card: eyebrow, title and serial over a
+ * 2dp rule, then whichever of its rows survive the filter. Draws nothing at all when none of them do —
+ * an empty card is worse than a missing one.
  */
 @Composable
-private fun SettingsGroup(title: String, query: String, rows: List<SettingsEntry>) {
+private fun SettingsGroup(meta: SectionMeta, title: String, query: String, rows: List<SettingsEntry>) {
     val visible = visibleEntries(query, rows)
     if (visible.isEmpty()) return
-    SectionHeader(title, Modifier.padding(top = SECTION_TOP, bottom = SECTION_BOTTOM))
-    visible.forEach { row -> key(row.key) { row.content() } }
+    val c = RizxTheme.colors
+    EditorialSurface(Modifier.padding(bottom = 14.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 62.dp)
+                .bottomRule(c.hardLine, Editorial.Frame)
+                .padding(bottom = 18.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                SignalEyebrow(stringResource(meta.eyebrow))
+                SurfaceTitle(title, Modifier.padding(top = 6.dp))
+            }
+            Text(meta.code, style = mr(11, FontWeight.Medium), color = c.muted)
+        }
+        visible.forEachIndexed { index, row ->
+            key(row.key) {
+                CompositionLocalProvider(LocalLastRow provides (index == visible.lastIndex)) { row.content() }
+            }
+        }
+    }
 }
-
-/** More space between groups than within one — the whole reason the groups read as groups. */
-private val SECTION_TOP = 26.dp
-private val SECTION_BOTTOM = 6.dp
 
 /**
  * A tappable settings row: title (with optional explanatory [caption]) on the left, short [value] on the
- * right, chevron last.
+ * right, the design's `→` last.
  *
  * **The value has to be width-bounded.** Compose measures unweighted children first against the *whole*
- * row, so an unbounded value took everything and left the title and the chevron zero width — the
- * "Offline cache" row rendered as a floating sentence with no title and no chevron at all. Capping it at
+ * row, so an unbounded value took everything and left the title and the arrow zero width — the
+ * "Offline cache" row rendered as a floating sentence with no title and no arrow at all. Capping it at
  * a fraction of the screen lets a short value take only what it needs while the weighted title keeps the
  * rest; a weight on the value instead would hand it a fixed half whether it needed it or not, and split
  * "Offline cache" across two lines for nothing.
@@ -1155,39 +1197,94 @@ private fun SettingRow(
     caption: String? = null,
     /**
      * False for rows that do not navigate. "Offline cache" cycles its own value in place and "Clear
-     * cache" performs an action — a chevron on either promises a screen that never arrives.
+     * cache" performs an action — an arrow on either promises a screen that never arrives.
      */
     chevron: Boolean = true,
     onClick: () -> Unit = {},
 ) {
     val c = RizxTheme.colors
-    val valueMax = (LocalConfiguration.current.screenWidthDp * 0.4f).dp
+    val valueMax = (LocalConfiguration.current.screenWidthDp * 0.34f).dp
     Row(
         Modifier.fillMaxWidth()
             .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onClick)
-            .heightIn(min = ROW_MIN_HEIGHT)
-            .padding(vertical = ROW_PADDING),
+            .settingRowFrame(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = mr(14, FontWeight.SemiBold), color = c.text)
-            if (!caption.isNullOrBlank()) {
-                Text(caption, style = mr(11, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 3.dp))
-            }
-        }
+        RowText(title, caption, Modifier.weight(1f))
         if (value != null) {
             Text(
                 value,
-                style = mr(13, FontWeight.Medium),
+                style = mr(11, FontWeight.Medium),
                 color = c.muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = valueMax),
             )
         }
-        if (chevron) Icon(RizxIcons.ChevronRight, null, tint = c.muted, modifier = Modifier.size(22.dp))
+        if (chevron) RowArrow(size = 19)
     }
+}
+
+/**
+ * A row whose right side is a control of its own — the theme segments, the language select.
+ *
+ * [stackOnPhone] puts a wide control on its own line under the text at phone widths: three segments
+ * beside "Theme" left the caption a column of single words, which the design's wrapping flex row
+ * avoids by dropping the segments down.
+ */
+@Composable
+private fun ControlRow(
+    title: String,
+    caption: String?,
+    stackOnPhone: Boolean = false,
+    control: @Composable () -> Unit,
+) {
+    if (stackOnPhone && !isTablet()) {
+        Column(Modifier.fillMaxWidth().settingRowFrame()) {
+            RowText(title, caption)
+            Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.CenterEnd) { control() }
+        }
+        return
+    }
+    Row(
+        Modifier.fillMaxWidth().settingRowFrame(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        RowText(title, caption, Modifier.weight(1f))
+        control()
+    }
+}
+
+/** The title and caption of a row, in the design's sizes: mono 14 over 11 muted, the caption capped at ~38 characters. */
+@Composable
+private fun RowText(title: String, caption: String?, modifier: Modifier = Modifier) {
+    val c = RizxTheme.colors
+    Column(modifier) {
+        Text(title, style = mr(14, FontWeight.Medium), color = c.text)
+        if (!caption.isNullOrBlank()) {
+            Text(
+                caption,
+                style = mr(11, FontWeight.Medium, lineHeight = 15),
+                color = c.muted,
+                modifier = Modifier.padding(top = 4.dp).widthIn(max = 280.dp),
+            )
+        }
+    }
+}
+
+/**
+ * What every row shares: the minimum height, the padding, and the rule under it — except on a
+ * section's last row, where the card's own frame closes the list, as on the web.
+ */
+@Composable
+private fun Modifier.settingRowFrame(): Modifier {
+    val last = LocalLastRow.current
+    return this
+        .then(if (last) Modifier else Modifier.bottomRule(Editorial.rule))
+        .heightIn(min = ROW_MIN_HEIGHT)
+        .padding(vertical = ROW_PADDING, horizontal = 2.dp)
 }
 
 /**
@@ -1208,12 +1305,11 @@ internal fun ToggleRow(title: String, checked: Boolean, onToggle: () -> Unit) {
             // precisely the bug this was meant to fix. Verified against a uiautomator dump.
             .switchSemantics(checked, spokenName, onToggle)
             .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onToggle)
-            .heightIn(min = ROW_MIN_HEIGHT)
-            .padding(vertical = ROW_PADDING),
+            .settingRowFrame(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(title, style = mr(14, FontWeight.SemiBold), color = c.text, modifier = Modifier.weight(1f))
+        Text(title, style = mr(14, FontWeight.Medium), color = c.text, modifier = Modifier.weight(1f))
         RizxToggle(checked = checked, onToggle = onToggle, decorative = true)
     }
 }
@@ -1237,11 +1333,11 @@ private fun Modifier.switchSemantics(checked: Boolean, name: String, onToggle: (
         onClick { onToggle(); true }
     }
 
-/** One padding for every row type — the old 13/11 split made adjacent rows of different kinds drift. */
-private val ROW_PADDING = 12.dp
+/** The design's row padding (`14px 2px`). */
+private val ROW_PADDING = 14.dp
 
-/** Android's minimum touch target. A caption-less row measured ~45dp before this floor existed. */
-private val ROW_MIN_HEIGHT = 48.dp
+/** The design's phone row height; also comfortably above Android's 48dp touch minimum. */
+private val ROW_MIN_HEIGHT = 78.dp
 
 /** A [ToggleRow] with a muted caption line under the title — used to carry the Hi-Res explainer + the
  *  device's DAC capability, without a second (misleading) chevron row. */
@@ -1259,19 +1355,13 @@ internal fun ToggleRowDetail(title: String, caption: String, checked: Boolean, o
             // precisely the bug this was meant to fix. Verified against a uiautomator dump.
             .switchSemantics(checked, spokenName, onToggle)
             .clickableScale(scale = 0.99f, pressColor = c.rowHover, onClick = onToggle)
-            .heightIn(min = ROW_MIN_HEIGHT)
-            .padding(vertical = ROW_PADDING),
+            .settingRowFrame(),
         // Top, not centre: the switch belongs to the *title*. Centred against a multi-line caption it
         // floated in the middle of a paragraph, reading as if it belonged to the explanation.
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = mr(14, FontWeight.SemiBold), color = c.text)
-            if (caption.isNotEmpty()) {
-                Text(caption, style = mr(11, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 3.dp))
-            }
-        }
+        RowText(title, caption, Modifier.weight(1f))
         RizxToggle(checked = checked, onToggle = onToggle, decorative = true)
     }
 }

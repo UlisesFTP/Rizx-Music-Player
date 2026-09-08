@@ -150,7 +150,9 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.DATA_SAVER] = enabled }
     }
 
-    override val crossfade: Flow<Boolean> = pref { it[Keys.CROSSFADE] ?: false }
+    // On by default since 2026-09-08, the owner's call: the phone should sound like the web out of the
+    // box, and the web ships with the 2-second transition on.
+    override val crossfade: Flow<Boolean> = pref { it[Keys.CROSSFADE] ?: true }
 
     override suspend fun setCrossfade(enabled: Boolean) {
         dataStore.edit { it[Keys.CROSSFADE] = enabled }
@@ -174,7 +176,12 @@ class SettingsRepositoryImpl(
     override val audioQualityMode: Flow<AudioQualityMode> = pref { prefs ->
         prefs[Keys.AUDIO_QUALITY_MODE]
             ?.let { name -> AudioQualityMode.entries.firstOrNull { it.name == name } }
-            ?: if (prefs[Keys.HI_RES_OUTPUT] == true) AudioQualityMode.BEST_AVAILABLE else AudioQualityMode.STANDARD
+            // No explicit mode: the legacy hi-res flag still decides when it was ever set; a fresh install
+            // starts at the best compressed quality (the owner's default since 2026-09-08).
+            ?: when (prefs[Keys.HI_RES_OUTPUT]) {
+                false -> AudioQualityMode.STANDARD
+                else -> AudioQualityMode.BEST_AVAILABLE
+            }
     }
 
     override suspend fun setAudioQualityMode(mode: AudioQualityMode) {
@@ -214,19 +221,20 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.SHOW_TECHNICAL_FORMAT] = enabled }
     }
 
-    // Off by default: a canvas pulls a video stream on top of the audio one, so it has to be asked for.
-    override val canvasEnabled: Flow<Boolean> = pref { it[Keys.CANVAS] ?: false }
+    // On by default since 2026-09-08 (the owner's call, matching the web): a canvas pulls a video
+    // stream on top of the audio one, so the data saver and the battery rule still gate it.
+    override val canvasEnabled: Flow<Boolean> = pref { it[Keys.CANVAS] ?: true }
 
     override suspend fun setCanvasEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.CANVAS] = enabled }
     }
 
-    // Wi-Fi only by default. Stored by name like the other enums, so an unknown value falls back rather
-    // than crashing the flow.
+    // Wi-Fi and mobile data by default (the owner's call, 2026-09-08); the data saver still pauses it.
+    // Stored by name like the other enums, so an unknown value falls back rather than crashing the flow.
     override val canvasNetworkPolicy: Flow<CanvasNetworkPolicy> = pref { prefs ->
         prefs[Keys.CANVAS_NETWORK]
             ?.let { name -> CanvasNetworkPolicy.entries.firstOrNull { it.name == name } }
-            ?: CanvasNetworkPolicy.UNMETERED_ONLY
+            ?: CanvasNetworkPolicy.ANY
     }
 
     override suspend fun setCanvasNetworkPolicy(policy: CanvasNetworkPolicy) {
@@ -250,7 +258,8 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.CANVAS_QUALITY] = quality.name }
     }
 
-    // All sources on by default — the canvas switch above is the one that costs data.
+    // Apple and TIDAL on by default; they either have this album's loop or they don't. YouTube is a
+    // search, and a search is the one that can be wrong, so it stays opt-in (the owner's call).
     override val canvasAppleEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_APPLE] ?: true }
 
     override suspend fun setCanvasAppleEnabled(enabled: Boolean) {
@@ -263,7 +272,7 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.CANVAS_TIDAL] = enabled }
     }
 
-    override val canvasYoutubeEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_YOUTUBE] ?: true }
+    override val canvasYoutubeEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_YOUTUBE] ?: false }
 
     override suspend fun setCanvasYoutubeEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.CANVAS_YOUTUBE] = enabled }
@@ -400,11 +409,11 @@ class SettingsRepositoryImpl(
         const val FEED_PROVIDER_ALL = "all"
 
         /**
-         * Deezer alone by default. It is the only source with all four sections (tracks, artists,
-         * albums, editorial playlists), so a fresh install gets a complete Home; the blend and the
-         * single-platform feeds are both one tap away in Settings.
+         * The blend by default (the owner's call, 2026-09-08, matching the web's "Combined"): Deezer
+         * still anchors every section it alone fills, and Spotify, Apple Music and YouTube Music add
+         * their charts and editorial rows on top. A single-platform feed is one tap away in Settings.
          */
-        const val DEFAULT_FEED_PROVIDER = "deezer-dashboard"
+        const val DEFAULT_FEED_PROVIDER = FEED_PROVIDER_ALL
 
         private val DEFAULTS = PlaybackResolverSettings()
 

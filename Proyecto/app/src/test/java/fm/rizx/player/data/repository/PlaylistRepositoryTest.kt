@@ -3,10 +3,14 @@ package fm.rizx.player.data.repository
 import fm.rizx.player.data.local.db.PlaylistDao
 import fm.rizx.player.data.local.db.PlaylistEntity
 import fm.rizx.player.data.local.db.PlaylistItemEntity
+import fm.rizx.player.data.local.db.PlaylistItemDigestRow
 import fm.rizx.player.data.local.db.PlaylistSummaryRow
 import fm.rizx.player.data.local.db.SyncOutboxEntity
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.data.provider.DefaultProviderRegistry
+import fm.rizx.player.domain.model.Artwork
+import fm.rizx.player.domain.model.ArtworkPurpose
+import fm.rizx.player.domain.model.ArtworkSet
 import fm.rizx.player.domain.model.PlaylistPreview
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Stream
@@ -65,6 +69,8 @@ class PlaylistRepositoryTest {
                     )
                 }
             }
+        override fun observeItemDigests(): Flow<List<PlaylistItemDigestRow>> =
+            items.map { list -> list.sortedWith(compareBy({ it.playlistId }, { it.sortOrder })).map { PlaylistItemDigestRow(it.playlistId, it.trackJson) } }
         override suspend fun setArtworkUrl(id: String, url: String?) {
             playlists.value[id]?.let { playlists.value = playlists.value + (id to it.copy(artworkUrl = url)) }
         }
@@ -103,6 +109,36 @@ class PlaylistRepositoryTest {
         assertEquals(2, items.size)
         assertNotEquals(items[0].id, items[1].id)
         assertEquals(items[0].track.source, items[1].track.source)
+    }
+
+    @Test
+    fun `digests carry four covers at most and the running time of every item`() = runTest {
+        val dao = FakePlaylistDao()
+        val repo = repo(dao)
+        val id = repo.createPlaylist("Mix")
+        val art = { n: Int -> ArtworkSet(listOf(Artwork("https://img/$n.jpg", 500, 500, ArtworkPurpose.COVER))) }
+        repo.addTracks(
+            id,
+            listOf(
+                track("A").copy(durationMs = 60_000L, artwork = art(1)),
+                track("B").copy(durationMs = 30_000L), // no cover: skipped by the collage, counted in the total
+                track("C").copy(durationMs = null, artwork = art(3)),
+                track("D").copy(durationMs = 15_000L, artwork = art(4)),
+                track("E").copy(durationMs = 15_000L, artwork = art(5)),
+                track("F").copy(durationMs = 1_000L, artwork = art(6)),
+            ),
+        )
+
+        val digest = repo.playlistDigests().first().getValue(id)
+
+        assertEquals(
+            listOf("https://img/1.jpg", "https://img/3.jpg", "https://img/4.jpg", "https://img/5.jpg"),
+            digest.covers.map { it.items.single().url },
+        )
+        assertEquals(121_000L, digest.durationMs)
+        // A playlist with no items has no digest at all, rather than an empty one the UI must special-case.
+        val empty = repo.createPlaylist("Empty")
+        assertEquals(null, repo.playlistDigests().first()[empty])
     }
 
     @Test

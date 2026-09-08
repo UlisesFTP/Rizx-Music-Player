@@ -60,12 +60,12 @@ class PreferencesViewModelTest {
     }
 
     @Test
-    fun `feed provider defaults to Deezer and persists a pick`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
+    fun `feed provider defaults to the blend and persists a pick`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
         val vm = vm()
         vm.feedProvider.test {
-            assertEquals(SettingsRepositoryImpl.DEFAULT_FEED_PROVIDER, awaitItem())
-            vm.setFeedProvider(SettingsRepositoryImpl.FEED_PROVIDER_ALL)
             assertEquals(SettingsRepositoryImpl.FEED_PROVIDER_ALL, awaitItem())
+            vm.setFeedProvider("deezer-dashboard")
+            assertEquals("deezer-dashboard", awaitItem())
         }
     }
 

@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.domain.model.DownloadState
 import fm.rizx.player.domain.model.DownloadStatus
 import fm.rizx.player.domain.model.DownloadedTrack
+import fm.rizx.player.domain.model.PlaylistDigest
 import fm.rizx.player.domain.model.PlaylistSummary
 import fm.rizx.player.domain.model.QueueContext
 import fm.rizx.player.domain.model.QueueSourceKind
@@ -78,6 +79,10 @@ class LibraryViewModel @Inject constructor(
 
     val playlistSummaries: StateFlow<List<PlaylistSummary>> =
         playlists.playlists().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Collage covers and running time per playlist id — what the tiles and the overview rows print. */
+    val playlistDigests: StateFlow<Map<String, PlaylistDigest>> =
+        playlists.playlistDigests().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     fun createPlaylist(name: String) {
         val trimmed = name.trim()

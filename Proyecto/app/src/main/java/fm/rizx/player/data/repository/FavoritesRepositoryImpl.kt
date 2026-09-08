@@ -27,14 +27,16 @@ class FavoritesRepositoryImpl(
     private val json: Json = Json { encodeDefaults = true },
 ) : FavoritesRepository {
 
+    // `mapNotNull`, not `map`: these rows can come from another device, and a row this build
+    // cannot read must cost that row rather than the screen (TrackJson.decodeTrackOrNull).
     override fun favoriteTracks(): Flow<List<Track>> =
-        dao.observeByType(TRACK).map { rows -> rows.map { TrackJson.decodeTrack(it.json) } }
+        dao.observeByType(TRACK).map { rows -> rows.mapNotNull { TrackJson.decodeTrackOrNull(it.json) } }
 
     override fun favoriteAlbums(): Flow<List<AlbumRef>> =
-        dao.observeByType(ALBUM).map { rows -> rows.map { TrackJson.decodeAlbum(it.json) } }
+        dao.observeByType(ALBUM).map { rows -> rows.mapNotNull { TrackJson.decodeAlbumOrNull(it.json) } }
 
     override fun favoriteArtists(): Flow<List<ArtistRef>> =
-        dao.observeByType(ARTIST).map { rows -> rows.map { TrackJson.decodeArtist(it.json) } }
+        dao.observeByType(ARTIST).map { rows -> rows.mapNotNull { TrackJson.decodeArtistOrNull(it.json) } }
 
     override fun isFavoriteTrack(source: ProviderRef): Flow<Boolean> =
         dao.observeExists(TRACK, source.provider, source.id)

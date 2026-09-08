@@ -131,6 +131,10 @@ interface PlaylistDao {
     )
     fun observeSummaries(): Flow<List<PlaylistSummaryRow>>
 
+    /** Every item of every playlist, in playlist order — the input of the Library's collages and totals. */
+    @Query("SELECT playlistId, trackJson FROM playlist_items ORDER BY playlistId, sortOrder ASC")
+    fun observeItemDigests(): Flow<List<PlaylistItemDigestRow>>
+
     /** Sets the cover without touching lastModifiedIso — artwork is a cache, not a user edit. */
     @Query("UPDATE playlists SET artworkUrl = :url WHERE id = :id")
     suspend fun setArtworkUrl(id: String, url: String?)

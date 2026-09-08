@@ -272,16 +272,20 @@ class AudioEffects @Inject constructor(
         } else {
             runCatching {
                 val range = eq.bandLevelRange
+                val bands = (0 until eq.numberOfBands).map { b ->
+                    EqBand(b, eq.getCenterFreq(b.toShort()) / 1000, eq.getBandLevel(b.toShort()).toInt())
+                }
                 EqualizerState(
                     available = true,
                     enabled = eq.enabled,
                     minLevelMillibel = range[0].toInt(),
                     maxLevelMillibel = range[1].toInt(),
-                    bands = (0 until eq.numberOfBands).map { b ->
-                        EqBand(b, eq.getCenterFreq(b.toShort()) / 1000, eq.getBandLevel(b.toShort()).toInt())
-                    },
+                    bands = bands,
                     auto = autoActive,
                     autoLabel = autoLabel,
+                    // Which chip lights up. Seventeen small interpolations per publish; cheaper than a
+                    // remembered name that would be stale after a restart or a manual nudge.
+                    preset = EqPresets.matching(bands.map { it.levelMillibel }, bandRanges(), range[0].toInt(), range[1].toInt()),
                 )
             }.getOrDefault(EqualizerState.Unavailable)
         }

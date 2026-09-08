@@ -24,6 +24,12 @@ data class EqualizerState(
     val auto: Boolean = false,
     /** The catalogue's own genre wording for the current song ("Música Mexicana"), when it found one. */
     val autoLabel: String? = null,
+    /**
+     * The preset whose curve the bands currently equal, or null for a hand-made curve. Derived, not
+     * remembered: it is recomputed from the levels on every change, so it is right after a restart and
+     * goes back to null the moment one band is dragged off the preset.
+     */
+    val preset: EqPreset? = null,
 ) {
     companion object {
         val Unavailable = EqualizerState()
@@ -76,6 +82,20 @@ object EqPresets {
         val excess = (centered.maxOrNull() ?: 0f) - MAX_BOOST_DB
         val safe = if (excess > 0f) centered.map { it - excess } else centered
         return safe.map { (it * 100f).roundToInt().coerceIn(minMillibel, maxMillibel) }
+    }
+
+    /**
+     * The preset that produces exactly [levels] on this device, or null. The comparison is exact on the
+     * rounded millibels because that is what [levels] wrote and what the effect reads back.
+     */
+    fun matching(
+        levels: List<Int>,
+        bands: List<EqBandRange>,
+        minMillibel: Int,
+        maxMillibel: Int,
+    ): EqPreset? {
+        if (levels.isEmpty() || bands.size != levels.size) return null
+        return EqPreset.entries.firstOrNull { levels(it, bands, minMillibel, maxMillibel) == levels }
     }
 
     /** Compatibility helper for callers that only know a count; real playback uses device ranges above. */

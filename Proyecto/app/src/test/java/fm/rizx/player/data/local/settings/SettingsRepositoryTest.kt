@@ -7,6 +7,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import fm.rizx.player.domain.model.AudioQualityMode
+import fm.rizx.player.domain.model.CanvasNetworkPolicy
+import fm.rizx.player.domain.model.CanvasQuality
+import fm.rizx.player.domain.model.LyricsVisualQuality
 import fm.rizx.player.domain.model.DownloadFormat
 import fm.rizx.player.domain.model.PlayerLayout
 import fm.rizx.player.domain.model.RadioMode
@@ -111,25 +114,45 @@ class SettingsRepositoryTest {
     fun `audio and data toggles use their defaults then persist`() = runTest {
         val repo = SettingsRepositoryImpl(backgroundScope.newStore())
 
-        // Defaults: quality is max (data saver off), gapless on, crossfade + normalize off, audio
-        // quality standard.
+        // Defaults (the owner's, 2026-09-08): data saver off, crossfade + gapless on, normalize off,
+        // audio quality at the best available.
         assertEquals(false, repo.dataSaver.first())
-        assertEquals(false, repo.crossfade.first())
+        assertEquals(true, repo.crossfade.first())
         assertEquals(true, repo.gapless.first())
         assertEquals(false, repo.normalizeVolume.first())
-        assertEquals(AudioQualityMode.STANDARD, repo.audioQualityMode.first())
+        assertEquals(AudioQualityMode.BEST_AVAILABLE, repo.audioQualityMode.first())
 
         repo.setDataSaver(true)
-        repo.setCrossfade(true)
+        repo.setCrossfade(false)
         repo.setGapless(false)
         repo.setNormalizeVolume(true)
-        repo.setAudioQualityMode(AudioQualityMode.BEST_AVAILABLE)
+        repo.setAudioQualityMode(AudioQualityMode.STANDARD)
 
         assertEquals(true, repo.dataSaver.first())
-        assertEquals(true, repo.crossfade.first())
+        assertEquals(false, repo.crossfade.first())
         assertEquals(false, repo.gapless.first())
         assertEquals(true, repo.normalizeVolume.first())
-        assertEquals(AudioQualityMode.BEST_AVAILABLE, repo.audioQualityMode.first())
+        assertEquals(AudioQualityMode.STANDARD, repo.audioQualityMode.first())
+    }
+
+    @Test
+    fun `animated covers default to on, over any network, from Apple and TIDAL but not YouTube`() = runTest {
+        val repo = SettingsRepositoryImpl(backgroundScope.newStore())
+
+        assertEquals(true, repo.canvasEnabled.first())
+        assertEquals(CanvasQuality.AUTO, repo.canvasQuality.first())
+        assertEquals(CanvasNetworkPolicy.ANY, repo.canvasNetworkPolicy.first())
+        assertEquals(true, repo.canvasAppleEnabled.first())
+        assertEquals(true, repo.canvasTidalEnabled.first())
+        assertEquals(false, repo.canvasYoutubeEnabled.first())
+        assertEquals(LyricsVisualQuality.AUTOMATIC, repo.lyricsVisualQuality.first())
+        // The Home feed blends every source by default, as the web does.
+        assertEquals(SettingsRepositoryImpl.FEED_PROVIDER_ALL, repo.feedProvider.first())
+
+        repo.setCanvasYoutubeEnabled(true)
+        repo.setCanvasNetworkPolicy(CanvasNetworkPolicy.UNMETERED_ONLY)
+        assertEquals(true, repo.canvasYoutubeEnabled.first())
+        assertEquals(CanvasNetworkPolicy.UNMETERED_ONLY, repo.canvasNetworkPolicy.first())
     }
 
     @Test
@@ -177,6 +200,11 @@ class SettingsRepositoryTest {
         assertEquals(AudioQualityMode.LOSSLESS_PREFERRED, SettingsRepositoryImpl(store).audioQualityMode.first())
         repo.setAudioQualityMode(AudioQualityMode.STANDARD)
         assertEquals(AudioQualityMode.STANDARD, SettingsRepositoryImpl(store).audioQualityMode.first())
+        // And a legacy flag that was explicitly off still means Standard, even though a fresh install
+        // now starts at Best available.
+        val legacyOff = backgroundScope.newStore()
+        legacyOff.edit { it[booleanPreferencesKey("core.audio.hiResOutput")] = false }
+        assertEquals(AudioQualityMode.STANDARD, SettingsRepositoryImpl(legacyOff).audioQualityMode.first())
     }
 
     @Test

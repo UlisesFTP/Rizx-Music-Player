@@ -53,4 +53,21 @@
     <string name="licenses_section_test_only">Test-only (not shipped)</string>
     <string name="licenses_section_license_texts">License texts</string>
     <string name="licenses_this_app">GPL-3.0 (this app) — gnu.org/licenses/gpl-3.0.html</string>
+
+    <!-- Equalizer: editorial layout (readout, radar, manual control) -->
+    <string name="eq_eyebrow">AUDIO LAB · LIVE PROFILE</string>
+    <string name="eq_readout_eyebrow">PROFILE READOUT</string>
+    <string name="eq_readout_title">Shape of the sound</string>
+    <string name="eq_control_eyebrow">MANUAL CONTROL</string>
+    <string name="eq_bands_title">Bands</string>
+    <string name="eq_description">Each vertex answers to one band. A wider shape means more presence in that part of the sound.</string>
+    <string name="eq_footnote">The curve applies in real time</string>
+    <string name="eq_band_sub">SUB</string>
+    <string name="eq_band_low">LOW</string>
+    <string name="eq_band_mid">MID</string>
+    <string name="eq_band_presence">PRES.</string>
+    <string name="eq_band_air">AIR</string>
+    <string name="eq_reset">Reset</string>
+    <string name="eq_bands_readout">%1$d BANDS · ±%2$d DB</string>
+    <string name="eq_band_desc">%1$s band</string>
 </resources>

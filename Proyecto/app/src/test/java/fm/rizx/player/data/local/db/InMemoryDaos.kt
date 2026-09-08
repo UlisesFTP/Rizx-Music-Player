@@ -157,6 +157,8 @@ class InMemoryPlaylistDao(val outbox: InMemoryOutbox = InMemoryOutbox()) : Playl
     override suspend fun deleteItems(playlistId: String) { items.value = items.value.filterNot { it.playlistId == playlistId } }
     override fun observeItems(playlistId: String): Flow<List<PlaylistItemEntity>> =
         items.map { list -> list.filter { it.playlistId == playlistId }.sortedBy { it.sortOrder } }
+    override fun observeItemDigests(): Flow<List<PlaylistItemDigestRow>> =
+        items.map { list -> list.sortedWith(compareBy({ it.playlistId }, { it.sortOrder })).map { PlaylistItemDigestRow(it.playlistId, it.trackJson) } }
     override suspend fun getItems(playlistId: String): List<PlaylistItemEntity> =
         items.value.filter { it.playlistId == playlistId }.sortedBy { it.sortOrder }
     override suspend fun updateItemTrack(itemId: String, trackJson: String) {

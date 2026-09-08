@@ -226,4 +226,29 @@ class RecentlyPlayedRepositoryTest {
         assertEquals(listOf("B"), r.recent(10).first().map { it.title })
     }
 
+    /**
+     * The regression this guards: the web wrote a taste row whose album carried `"source": null`
+     * (`AlbumRef.source` is not nullable here), the row synced in, and decoding it threw from
+     * inside this flow — which feeds Home, so the app died on launch until the row was repaired
+     * in the cloud. One unreadable row now costs that row, not the screen.
+     */
+    @Test
+    fun `a row this build cannot decode is skipped, not thrown`() = runTest {
+        val dao = FakeDao()
+        val contributions = InMemoryTasteContributionDao()
+        val r = repo(dao, contributions)
+        r.record(track("A"))
+        val poisoned = """{"title":"Bad","source":{"provider":"youtube","id":"x"},""" +
+            """"album":{"title":"Nope","artists":[],"artwork":null,"source":null,"year":null,"kind":"UNKNOWN"}}"""
+        contributions.upsert(
+            TasteContributionEntity("dev-B", "youtube", "x", poisoned, "t9", playCount = 1),
+        )
+        contributions.upsert(
+            TasteContributionEntity("dev-B", "itunes", "id-B", TrackJson.encodeTrack(track("B")), "t8", playCount = 1),
+        )
+
+        assertEquals(listOf("B", "A"), r.recent(10).first().map { it.title })
+        assertEquals(listOf("B", "A"), r.stats(10).first().map { it.track.title })
+    }
+
 }

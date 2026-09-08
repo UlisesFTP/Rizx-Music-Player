@@ -44,11 +44,13 @@ class RecentlyPlayedRepositoryImpl(
     private val json: Json = Json { encodeDefaults = true },
 ) : RecentlyPlayedRepository {
 
+    // Another device's rows are merged in here, so an unreadable one is skipped rather than
+    // thrown: this flow feeds Home, and throwing took the whole app down (TrackJson.decodeTrackOrNull).
     override fun recent(limit: Int): Flow<List<Track>> =
-        merged(limit).map { rows -> rows.map { TrackJson.decodeTrack(it.trackJson) } }
+        merged(limit).map { rows -> rows.mapNotNull { TrackJson.decodeTrackOrNull(it.trackJson) } }
 
     override fun stats(limit: Int): Flow<List<PlayStat>> =
-        merged(limit).map { rows -> rows.map { it.toPlayStat() } }
+        merged(limit).map { rows -> rows.mapNotNull { it.toPlayStat() } }
 
     /** This device's rows plus every other device's, one per track, newest first. */
     private fun merged(limit: Int): Flow<List<RecentlyPlayedEntity>> =
@@ -162,16 +164,19 @@ class RecentlyPlayedRepositoryImpl(
         Daypart.EVENING -> copy(partEvening = partEvening + delta)
     }
 
-    private fun RecentlyPlayedEntity.toPlayStat() = PlayStat(
-        track = TrackJson.decodeTrack(trackJson),
-        plays = playCount.coerceAtLeast(1),
-        completions = completedCount,
-        skips = skipCount,
-        msListened = msListened,
-        firstPlayedAtIso = firstPlayedAtIso,
-        lastPlayedAtIso = playedAtIso,
-        dayparts = listOf(partNight, partMorning, partAfternoon, partEvening),
-    )
+    private fun RecentlyPlayedEntity.toPlayStat(): PlayStat? {
+        val track = TrackJson.decodeTrackOrNull(trackJson) ?: return null
+        return PlayStat(
+            track = track,
+            plays = playCount.coerceAtLeast(1),
+            completions = completedCount,
+            skips = skipCount,
+            msListened = msListened,
+            firstPlayedAtIso = firstPlayedAtIso,
+            lastPlayedAtIso = playedAtIso,
+            dayparts = listOf(partNight, partMorning, partAfternoon, partEvening),
+        )
+    }
 
     /** The part of the day [iso] falls in, in the device's own zone — 8 a.m. means 8 a.m. here. */
     private fun daypartOf(iso: String): Daypart =

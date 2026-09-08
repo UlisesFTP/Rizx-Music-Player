@@ -104,4 +104,33 @@
     <string name="local_untitled_album">Album</string>
     <string name="local_untitled_artist">Artist</string>
     <string name="local_tracks_heading">TRACKS</string>
+
+    <!-- Library: editorial layout (kicker, display headings, surfaces, tiles) -->
+    <string name="library_kicker">PERSONAL COLLECTION · %1$d SONGS</string>
+    <string name="library_hero_title">Your library.</string>
+    <string name="library_hero_intro">Playlists, favorites and downloads gathered in one place made for browsing fast.</string>
+    <string name="library_collections_eyebrow">%1$s COLLECTIONS</string>
+    <string name="library_your_playlists">Your playlists</string>
+    <string name="library_favorites_eyebrow">FAVORITES</string>
+    <string name="library_songs_you_like">Songs you like</string>
+    <string name="library_see_all_count">See all %1$d</string>
+    <string name="library_count_artist_one">%1$d artist</string>
+    <string name="library_count_artist_other">%1$d artists</string>
+    <string name="library_your_archive_eyebrow">YOUR ARCHIVE</string>
+    <string name="library_playlists_heading">Playlists</string>
+    <string name="library_playlists_summary">%1$d collections · %2$d songs organized by you</string>
+    <string name="library_search_playlists">Search playlists</string>
+    <string name="library_start_collection">Start a collection</string>
+    <string name="library_private">Private</string>
+    <string name="library_imported">Imported</string>
+    <string name="library_saved_eyebrow">%1$d SAVED</string>
+    <string name="library_search_liked">Search in your favorite songs</string>
+    <string name="library_history_eyebrow">HISTORY</string>
+    <string name="library_recent_heading">Recent</string>
+    <string name="library_search_recent">Search in your history</string>
+    <string name="library_offline_eyebrow">OFFLINE</string>
+    <string name="library_search_downloads">Search in your downloads</string>
+    <string name="library_device_eyebrow">ON THIS DEVICE</string>
+    <string name="library_play_liked_desc">Play your liked songs</string>
+    <string name="library_liked_archive" translatable="false">RIZX LIKED ARCHIVE</string>
 </resources>

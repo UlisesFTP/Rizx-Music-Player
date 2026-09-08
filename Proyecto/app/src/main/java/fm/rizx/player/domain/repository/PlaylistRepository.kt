@@ -1,10 +1,12 @@
 package fm.rizx.player.domain.repository
 
 import fm.rizx.player.domain.model.Playlist
+import fm.rizx.player.domain.model.PlaylistDigest
 import fm.rizx.player.domain.model.PlaylistSummary
 import fm.rizx.player.domain.model.ProviderRef
 import fm.rizx.player.domain.model.Track
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * User playlists (§7.2). Each `PlaylistItem.id` is distinct from track identity, so the same track
@@ -14,6 +16,13 @@ import kotlinx.coroutines.flow.Flow
 interface PlaylistRepository {
 
     fun playlists(): Flow<List<PlaylistSummary>>
+
+    /**
+     * Per-playlist collage covers and running time, keyed by playlist id — see [PlaylistDigest]. Costs a
+     * decode of every stored item, so only a screen that shows the numbers should collect it. Empty by
+     * default for implementations that have no items to read.
+     */
+    fun playlistDigests(): Flow<Map<String, PlaylistDigest>> = flowOf(emptyMap())
     fun playlist(id: String): Flow<Playlist?>
 
     /** Creates an empty playlist and returns its new id. */

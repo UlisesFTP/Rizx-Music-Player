@@ -53,4 +53,21 @@
     <string name="licenses_section_test_only">Tests uniquement (non inclus)</string>
     <string name="licenses_section_license_texts">Textes des licences</string>
     <string name="licenses_this_app">GPL-3.0 (cette app) — gnu.org/licenses/gpl-3.0.html</string>
+
+    <!-- Equalizer: editorial layout (readout, radar, manual control) -->
+    <string name="eq_eyebrow">AUDIO LAB · PROFIL EN DIRECT</string>
+    <string name="eq_readout_eyebrow">LECTURE DU PROFIL</string>
+    <string name="eq_readout_title">Forme du son</string>
+    <string name="eq_control_eyebrow">CONTRÔLE MANUEL</string>
+    <string name="eq_bands_title">Bandes</string>
+    <string name="eq_description">Chaque sommet répond à une bande. Une figure plus large indique plus de présence dans cette zone du son.</string>
+    <string name="eq_footnote">La courbe s’applique en temps réel</string>
+    <string name="eq_band_sub">SUB</string>
+    <string name="eq_band_low">GRAVE</string>
+    <string name="eq_band_mid">MÉDIUM</string>
+    <string name="eq_band_presence">PRÉS.</string>
+    <string name="eq_band_air">AIR</string>
+    <string name="eq_reset">Réinitialiser</string>
+    <string name="eq_bands_readout">%1$d BANDES · ±%2$d DB</string>
+    <string name="eq_band_desc">Bande %1$s</string>
 </resources>

@@ -50,6 +50,11 @@ fun AccountAvatar(
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
     iconSize: Dp = 22.dp,
+    /**
+     * Edge to edge, without the paper square around the photo: for a host that already frames it,
+     * like the ink account card in Settings, where the inset paper read as a stray tile.
+     */
+    bare: Boolean = false,
 ) {
     val c = RizxTheme.colors
     val profile = state.profileOrNull()
@@ -58,8 +63,7 @@ fun AccountAvatar(
         modifier
             .size(size)
             .clip(RectangleShape)
-            .background(c.elev)
-            .border(1.dp, c.line, RectangleShape)
+            .then(if (bare) Modifier else Modifier.background(c.elev).border(1.dp, c.line, RectangleShape))
             .then(if (onClick != null) Modifier.clickableScale(onClick = onClick) else Modifier)
             .semantics { contentDescription = cd },
         contentAlignment = Alignment.Center,
@@ -75,7 +79,7 @@ fun AccountAvatar(
                 model = avatar,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().padding(size / 8),
+                modifier = Modifier.fillMaxSize().then(if (bare) Modifier else Modifier.padding(size / 8)),
             )
             initial != null -> Text(initial, style = sg(size.value.toInt() * 4 / 10, FontWeight.Bold), color = c.text)
             else -> Icon(RizxIcons.Person, null, tint = c.text, modifier = Modifier.size(iconSize))

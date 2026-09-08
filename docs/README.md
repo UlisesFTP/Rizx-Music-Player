@@ -1,6 +1,6 @@
 # Documentation map and current status
 
-_Reviewed against the repository on 2026-08-25 · Rizx Player 1.0.0 (version code 3)_
+_Reviewed against the repository on 2026-09-08 · Rizx Player 1.0.0 (version code 3)_
 
 This is the entry point for Rizx documentation. The Android Studio project is in `Proyecto/`; product
 documentation is in this directory. Specifications and ADRs are retained as the history of individual
@@ -18,8 +18,8 @@ documents below are authoritative.
 | Java | Java 21 recommended to run Gradle; Java 17 bytecode target; Gradle JVM must be 17–23 |
 | Shape | One Android application module plus the `:baselineprofile` test module |
 | Persistence | Room schema v7 (exported schemas 4–7) · DataStore · filesystem playback snapshot · sync outbox |
-| Automated verification | 1,651 JVM tests in 186 suites, all passing; `lintReleaseTest` and `assembleReleaseTest` pass |
-| Source size | 476 main Kotlin files · 195 JVM test files · 4 instrumented-test files |
+| Automated verification | 1,666 JVM tests in 189 suites, all passing; `lintDebug` reports 0 errors; `lintReleaseTest` and `assembleReleaseTest` pass |
+| Source size | 480 main Kotlin files · 198 JVM test files · 4 instrumented-test files |
 
 The automated results above are a verified repository snapshot, not a promise that every provider is
 online or that device-only flows have passed on every Android release. See the manual checklist before a

@@ -101,6 +101,7 @@ Proyecto/app/src/main/assets/plugins/
 skills-lock.json
 RIZX_SHAZAM_RECOGNITION_IMPLEMENTATION.md
 docs/AGENT_CONTEXT.md
+docs/AGENT_CONTEXT_ARCHIVE.md
 
 # Supabase backend (migrations + Edge Functions) is deployment state, applied via MCP/CLI; not published.
 supabase/

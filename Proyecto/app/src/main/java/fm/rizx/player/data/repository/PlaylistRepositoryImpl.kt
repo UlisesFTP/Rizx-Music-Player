@@ -13,6 +13,7 @@ import fm.rizx.player.domain.model.ArtworkPurpose
 import fm.rizx.player.domain.model.ArtworkSet
 import fm.rizx.player.domain.model.coverUrl
 import fm.rizx.player.domain.model.Playlist
+import fm.rizx.player.domain.model.PlaylistDigest
 import fm.rizx.player.domain.model.PlaylistItem
 import fm.rizx.player.domain.model.PlaylistSummary
 import fm.rizx.player.domain.model.ProviderRef
@@ -23,14 +24,19 @@ import fm.rizx.player.domain.provider.ProviderKind
 import fm.rizx.player.domain.provider.ProviderRegistry
 import fm.rizx.player.domain.repository.PlaylistRepository
 import fm.rizx.player.domain.repository.ReadOnlyPlaylistException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.util.UUID
 
 /** Hard cap on tracks persisted from a single import — a hostile/huge file otherwise bloats the DB. */
 private const val MAX_IMPORT_TRACKS = 10_000
+
+/** A 2×2 collage needs four covers; carrying more would only be decoded artwork nobody draws. */
+private const val COLLAGE_COVERS = 4
 
 /**
  * Room-backed [PlaylistRepository]. Each added track becomes a [PlaylistItem] with a fresh id (via
@@ -57,9 +63,27 @@ class PlaylistRepositoryImpl(
             }
         }
 
+    /**
+     * Decodes every item once per change and reduces it to covers and a total. Off the main thread
+     * because a library of a few hundred songs is a few hundred JSON decodes, and this recomputes on
+     * every playlist edit. A row this build cannot decode is skipped, never thrown (see [TrackJson]).
+     */
+    override fun playlistDigests(): Flow<Map<String, PlaylistDigest>> =
+        dao.observeItemDigests()
+            .map { rows ->
+                rows.groupBy { it.playlistId }.mapValues { (_, items) ->
+                    val tracks = items.mapNotNull { TrackJson.decodeTrackOrNull(it.trackJson) }
+                    PlaylistDigest(
+                        covers = tracks.mapNotNull { track -> track.artwork?.takeIf { it.items.isNotEmpty() } }.take(COLLAGE_COVERS),
+                        durationMs = tracks.sumOf { it.durationMs ?: 0L },
+                    )
+                }
+            }
+            .flowOn(Dispatchers.Default)
+
     override fun playlist(id: String): Flow<Playlist?> =
         combine(dao.observePlaylist(id), dao.observeItems(id)) { entity, items ->
-            entity?.toDomain(items.map { it.toDomain() })
+            entity?.toDomain(items.mapNotNull { it.toDomain() })
         }
 
     override suspend fun createPlaylist(name: String, description: String?): String {
@@ -140,7 +164,7 @@ class PlaylistRepositoryImpl(
 
     override suspend fun exportPlaylist(id: String): String? {
         val entity = dao.getPlaylist(id) ?: return null
-        val tracks = dao.getItems(id).map { TrackJson.decodeTrack(it.trackJson) }
+        val tracks = dao.getItems(id).mapNotNull { TrackJson.decodeTrackOrNull(it.trackJson) }
         return PlaylistTransfer.encode(entity.name, entity.description, tracks, nowIso())
     }
 
@@ -173,7 +197,9 @@ class PlaylistRepositoryImpl(
         val items = dao.getItems(id)
         if (items.isEmpty()) return
 
-        val decoded = items.map { it to TrackJson.decodeTrack(it.trackJson) }
+        val decoded = items.mapNotNull { item ->
+            TrackJson.decodeTrackOrNull(item.trackJson)?.let { item to it }
+        }
         // Deliberately no early-out on "everything already has a cover": a playlist saved by the old
         // unverified resolver has covers on every row, and some of them are the wrong record's. Those
         // are re-checked (and withdrawn if they no longer verify) — the artwork cache makes the pass
@@ -266,7 +292,9 @@ class PlaylistRepositoryImpl(
         isReadOnly = isReadOnly, parentId = parentId, items = items,
     )
 
-    private fun PlaylistItemEntity.toDomain() = PlaylistItem(
-        id = id, track = TrackJson.decodeTrack(trackJson), note = note, addedAtIso = addedAtIso,
-    )
+    /** Null for a row this build cannot read; the playlist opens without it (TrackJson.decodeTrackOrNull). */
+    private fun PlaylistItemEntity.toDomain(): PlaylistItem? {
+        val track = TrackJson.decodeTrackOrNull(trackJson) ?: return null
+        return PlaylistItem(id = id, track = track, note = note, addedAtIso = addedAtIso)
+    }
 }

@@ -104,4 +104,32 @@
     <string name="local_untitled_album">Album</string>
     <string name="local_untitled_artist">Artiste</string>
     <string name="local_tracks_heading">TITRES</string>
+
+    <!-- Library: editorial layout (kicker, display headings, surfaces, tiles) -->
+    <string name="library_kicker">COLLECTION PERSONNELLE · %1$d TITRES</string>
+    <string name="library_hero_title">Votre bibliothèque.</string>
+    <string name="library_hero_intro">Playlists, favoris et téléchargements réunis dans un espace fait pour explorer vite.</string>
+    <string name="library_collections_eyebrow">%1$s COLLECTIONS</string>
+    <string name="library_your_playlists">Vos playlists</string>
+    <string name="library_favorites_eyebrow">FAVORIS</string>
+    <string name="library_songs_you_like">Titres que vous aimez</string>
+    <string name="library_see_all_count">Voir les %1$d</string>
+    <string name="library_count_artist_one">%1$d artiste</string>
+    <string name="library_count_artist_other">%1$d artistes</string>
+    <string name="library_your_archive_eyebrow">VOS ARCHIVES</string>
+    <string name="library_playlists_heading">Playlists</string>
+    <string name="library_playlists_summary">%1$d collections · %2$d titres organisés par vous</string>
+    <string name="library_search_playlists">Rechercher des playlists</string>
+    <string name="library_start_collection">Commencez une collection</string>
+    <string name="library_private">Privée</string>
+    <string name="library_imported">Importée</string>
+    <string name="library_saved_eyebrow">%1$d ENREGISTRÉS</string>
+    <string name="library_search_liked">Rechercher dans vos titres favoris</string>
+    <string name="library_history_eyebrow">HISTORIQUE</string>
+    <string name="library_recent_heading">Récents</string>
+    <string name="library_search_recent">Rechercher dans votre historique</string>
+    <string name="library_offline_eyebrow">OFFLINE</string>
+    <string name="library_search_downloads">Rechercher dans vos téléchargements</string>
+    <string name="library_device_eyebrow">SUR CET APPAREIL</string>
+    <string name="library_play_liked_desc">Lire vos titres favoris</string>
 </resources>

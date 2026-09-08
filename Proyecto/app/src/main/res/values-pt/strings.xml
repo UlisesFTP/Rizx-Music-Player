@@ -72,4 +72,22 @@
     <string name="settings_clear_cache_title">Limpar a cache sem ligação?</string>
     <string name="settings_clear_cache_body">As músicas guardadas para ouvir sem ligação são apagadas. As tuas transferências não são afetadas.</string>
     <string name="settings_clear_cache_confirm">Limpar</string>
+
+    <!-- Settings: editorial layout (kicker, display title, section eyebrows, control captions) -->
+    <string name="settings_kicker">CONTROLE DE EXPERIÊNCIA · RIZX</string>
+    <string name="settings_hero_title">Configurações.</string>
+    <string name="settings_lede">Configure como sua música soa, aparece e sincroniza.</string>
+    <string name="settings_account_eyebrow">CONTA E SINCRONIZAÇÃO</string>
+    <string name="settings_account_card_caption">Playlists, favoritos e preferências sincronizados</string>
+    <string name="settings_eyebrow_sound">ÁUDIO</string>
+    <string name="settings_eyebrow_playback">FLUXO</string>
+    <string name="settings_eyebrow_appearance">INTERFACE</string>
+    <string name="settings_eyebrow_sources">CATÁLOGO</string>
+    <string name="settings_eyebrow_recs">GOSTOS</string>
+    <string name="settings_eyebrow_downloads">OFFLINE</string>
+    <string name="settings_eyebrow_data">ARMAZENAMENTO</string>
+    <string name="settings_eyebrow_app">SISTEMA</string>
+    <string name="settings_empty_hint">Tente “som”, “conta” ou “transferências”.</string>
+    <string name="pref_theme_caption">Contraste quente editorial</string>
+    <string name="pref_language_caption">Idioma da interface</string>
 </resources>

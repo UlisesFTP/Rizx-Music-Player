@@ -139,4 +139,22 @@
     <string name="home_account_cd">Cuenta</string>
     <string name="account_sign_in">Iniciar sesión</string>
     <string name="account_switch_account">Iniciar sesión con otra cuenta</string>
+
+    <!-- Settings: editorial layout (kicker, display title, section eyebrows, control captions) -->
+    <string name="settings_kicker">CONTROL DE EXPERIENCIA · RIZX</string>
+    <string name="settings_hero_title">Ajustes.</string>
+    <string name="settings_lede">Configura cómo suena, se ve y se sincroniza tu música.</string>
+    <string name="settings_account_eyebrow">CUENTA Y SINCRONIZACIÓN</string>
+    <string name="settings_account_card_caption">Playlists, favoritos y preferencias sincronizadas</string>
+    <string name="settings_eyebrow_sound">AUDIO</string>
+    <string name="settings_eyebrow_playback">FLUJO</string>
+    <string name="settings_eyebrow_appearance">INTERFAZ</string>
+    <string name="settings_eyebrow_sources">CATÁLOGO</string>
+    <string name="settings_eyebrow_recs">GUSTOS</string>
+    <string name="settings_eyebrow_downloads">OFFLINE</string>
+    <string name="settings_eyebrow_data">ALMACENAMIENTO</string>
+    <string name="settings_eyebrow_app">SISTEMA</string>
+    <string name="settings_empty_hint">Prueba con “sonido”, “cuenta” o “descargas”.</string>
+    <string name="pref_theme_caption">Contraste cálido editorial</string>
+    <string name="pref_language_caption">Idioma de la interfaz</string>
 </resources>

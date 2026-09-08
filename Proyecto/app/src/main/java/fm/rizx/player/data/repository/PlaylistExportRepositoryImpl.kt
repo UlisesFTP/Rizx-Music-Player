@@ -17,8 +17,12 @@ class PlaylistExportRepositoryImpl(
 ) : PlaylistExportRepository {
     override suspend fun export(playlistId: String, format: PlaylistExportFormat): PlaylistExportArtifact? {
         val entity = dao.getPlaylist(playlistId) ?: return null
-        val items = dao.getItems(playlistId).map {
-            PlaylistItem(it.id, TrackJson.decodeTrack(it.trackJson), it.note, it.addedAtIso)
+        // A row this build cannot read is left out of the export rather than failing it, so one
+        // bad item never blocks sharing or backing up a playlist (TrackJson.decodeTrackOrNull).
+        val items = dao.getItems(playlistId).mapNotNull { item ->
+            TrackJson.decodeTrackOrNull(item.trackJson)?.let {
+                PlaylistItem(item.id, it, item.note, item.addedAtIso)
+            }
         }
         val playlist = Playlist(
             id = entity.id,
