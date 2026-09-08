@@ -14,8 +14,6 @@ import fm.rizx.player.data.remote.soundcloud.SoundcloudIds
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,11 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.verticalScroll
@@ -58,11 +52,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,6 +69,7 @@ import fm.rizx.player.domain.model.SearchResults
 import fm.rizx.player.domain.model.Track
 import fm.rizx.player.ui.components.CoverArt
 import fm.rizx.player.ui.components.DotMatrixSpinner
+import fm.rizx.player.ui.components.EditorialSearchField
 import fm.rizx.player.ui.components.LocalLosslessCodecs
 import fm.rizx.player.ui.components.LosslessTag
 import fm.rizx.player.ui.components.PhotoTile
@@ -153,10 +146,11 @@ fun SearchScreen(
         // which is what lifts the suggestions over the tab chips that follow.
         Box(Modifier.zIndex(1f)) {
             Box(Modifier.onSizeChanged { fieldHeightPx = it.height }) {
-                SearchField(
+                EditorialSearchField(
                     query = query,
                     onQueryChange = vm::onQueryChange,
-                    onClear = vm::clear,
+                    hint = stringResource(R.string.search_hint),
+                    modifier = Modifier.padding(top = 14.dp),
                     onSubmit = vm::submit,
                 )
             }
@@ -232,61 +226,6 @@ private fun QueueChip(count: Int, onClick: () -> Unit) {
     ) {
         Icon(RizxIcons.QueueMusic, stringResource(R.string.search_open_queue), tint = c.onFill, modifier = Modifier.size(17.dp))
         Text("$count", style = sg(13, FontWeight.Bold), color = c.onFill)
-    }
-}
-
-@Composable
-private fun SearchField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onClear: () -> Unit,
-    onSubmit: () -> Unit,
-) {
-    val keyboard = LocalSoftwareKeyboardController.current
-    val c = RizxTheme.colors
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    val active = focused || query.isNotEmpty()
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = 14.dp)
-            .clip(RectangleShape)
-            .background(c.inset)
-            .border(1.dp, if (active) c.redAccent else c.line, RectangleShape)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
-    ) {
-        Icon(RizxIcons.Search, null, tint = if (active) c.redAccent else c.muted, modifier = Modifier.size(22.dp))
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.weight(1f).padding(vertical = 16.dp),
-            singleLine = true,
-            textStyle = mr(15, FontWeight.Medium).copy(color = c.text),
-            cursorBrush = SolidColor(c.redAccent),
-            interactionSource = interaction,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            // The field asked for a Search key but never did anything with it.
-            keyboardActions = KeyboardActions(onSearch = { onSubmit(); keyboard?.hide() }),
-            decorationBox = { inner ->
-                Box(contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) {
-                        Text(stringResource(R.string.search_hint), style = mr(15, FontWeight.Medium), color = c.muted, maxLines = 1)
-                    }
-                    inner()
-                }
-            },
-        )
-        if (query.isNotEmpty()) {
-            Icon(
-                RizxIcons.Close,
-                stringResource(R.string.action_clear),
-                tint = c.text2,
-                modifier = Modifier.size(20.dp).clickableScale(scale = 0.9f, onClick = onClear),
-            )
-        }
     }
 }
 

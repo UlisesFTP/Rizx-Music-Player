@@ -221,7 +221,7 @@ fun EditorialSurface(
 }
 
 /**
- * The heading of a surface: eyebrow over a title, with an optional text action on the right
+ * The compact heading of a surface: eyebrow over a title, with an optional text action on the right
  * (`SEE ALL →`). Bottom-aligned like the design's `align-items: flex-end`.
  */
 @Composable
@@ -231,13 +231,20 @@ fun SurfaceHeading(
     modifier: Modifier = Modifier,
     action: String? = null,
     onAction: (() -> Unit)? = null,
-    titleSize: Int = 26,
+    titleSize: Int = 19,
 ) {
     val c = RizxTheme.colors
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(1f)) {
             SignalEyebrow(eyebrow)
-            SurfaceTitle(title, Modifier.padding(top = 6.dp), size = titleSize)
+            Text(
+                title,
+                style = sg(titleSize, FontWeight.Bold, -0.01f, lineHeight = titleSize),
+                color = c.text,
+                modifier = Modifier.padding(top = 6.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         if (action != null && onAction != null) {
             Text(
@@ -266,6 +273,7 @@ fun EditorialSearchField(
     hint: String,
     modifier: Modifier = Modifier,
     minHeight: Dp = 54.dp,
+    onSubmit: (() -> Unit)? = null,
 ) {
     val c = RizxTheme.colors
     val keyboard = LocalSoftwareKeyboardController.current
@@ -295,7 +303,10 @@ fun EditorialSearchField(
                 cursorBrush = SolidColor(c.redAccent),
                 interactionSource = interaction,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                keyboardActions = KeyboardActions(onSearch = {
+                    onSubmit?.invoke()
+                    keyboard?.hide()
+                }),
                 decorationBox = { inner ->
                     Box(contentAlignment = Alignment.CenterStart) {
                         if (query.isEmpty()) {
@@ -359,25 +370,6 @@ fun EditorialButton(
     }
 }
 
-/** The library's tab pill: outlined, min-width 112dp; the active one is a red block. */
-@Composable
-fun EditorialTab(label: String, active: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val c = RizxTheme.colors
-    Box(
-        modifier
-            .widthIn(min = 112.dp)
-            .heightIn(min = 48.dp)
-            .clip(RectangleShape)
-            .background(if (active) c.redAccent else Color.Transparent)
-            .border(Editorial.Frame, if (active) c.redAccent else c.hardLine, RectangleShape)
-            .clickableScale(scale = 0.96f, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label.uppercase(), style = code(12, FontWeight.Medium, 0.12f), color = if (active) c.onRed else c.text, maxLines = 1)
-    }
-}
-
 /**
  * A row of segments where exactly one is chosen (`SYSTEM · LIGHT · DARK`). The chosen one is an ink
  * block; the others are outlined.
@@ -416,6 +408,10 @@ fun EditorialSelect(value: String, modifier: Modifier = Modifier, onClick: () ->
     val c = RizxTheme.colors
     Row(
         modifier
+            // Language names can be much wider than the setting title. The selector is used in a
+            // stacked phone row, so bound it to the available reading column instead of letting its
+            // intrinsic text width squeeze the title out of a side-by-side layout.
+            .widthIn(max = 280.dp)
             .heightIn(min = 44.dp)
             .clip(RectangleShape)
             .background(c.elev)
@@ -425,7 +421,14 @@ fun EditorialSelect(value: String, modifier: Modifier = Modifier, onClick: () ->
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(value, style = mr(12, FontWeight.Medium), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Text(
+            value,
+            style = mr(12, FontWeight.Medium),
+            color = c.text,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
         Icon(RizxIcons.ChevronDown, null, tint = c.text, modifier = Modifier.size(16.dp))
     }
 }

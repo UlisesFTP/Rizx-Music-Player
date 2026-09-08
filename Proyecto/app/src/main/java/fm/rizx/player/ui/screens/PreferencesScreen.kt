@@ -64,14 +64,12 @@ import fm.rizx.player.domain.account.AccountState
 import fm.rizx.player.ui.account.AccountViewModel
 import fm.rizx.player.ui.components.AccountAvatar
 import fm.rizx.player.ui.components.CodeLabel
-import fm.rizx.player.ui.components.DisplayTitle
 import fm.rizx.player.ui.components.Editorial
 import fm.rizx.player.ui.components.EditorialSearchField
 import fm.rizx.player.ui.components.EditorialSelect
 import fm.rizx.player.ui.components.EditorialSurface
 import fm.rizx.player.ui.components.EmptyBlock
 import fm.rizx.player.ui.components.Kicker
-import fm.rizx.player.ui.components.Lede
 import fm.rizx.player.ui.components.RizxToggle
 import fm.rizx.player.ui.components.RowArrow
 import fm.rizx.player.ui.components.SegmentedTabs
@@ -405,7 +403,9 @@ fun PreferencesScreen(
             // Tapping opens a picker; the OS owns the per-app locale, so the choice persists and also
             // shows under Android's own per-app Language page.
             entry(langTitle, langValue, langCaption) {
-                ControlRow(langTitle, langCaption) { EditorialSelect(langValue) { languageDialogOpen = true } }
+                ControlRow(langTitle, langCaption, stackOnPhone = true) {
+                    EditorialSelect(langValue) { languageDialogOpen = true }
+                }
             },
             entry(aboutTitle, aboutValue) { SettingRow(aboutTitle, aboutValue, onClick = onOpenAbout) },
         ),
@@ -429,8 +429,18 @@ fun PreferencesScreen(
                 .padding(bottom = 25.dp),
         ) {
             Kicker(stringResource(R.string.settings_kicker))
-            DisplayTitle(stringResource(R.string.settings_hero_title), Modifier.padding(top = 8.dp))
-            Lede(stringResource(R.string.settings_lede), Modifier.padding(top = 16.dp))
+            Text(
+                stringResource(R.string.settings_hero_title),
+                style = sg(28, FontWeight.Bold, -0.02f),
+                color = c.text,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                stringResource(R.string.settings_lede),
+                style = mr(14, FontWeight.Medium, lineHeight = 21),
+                color = c.text2,
+                modifier = Modifier.padding(top = 16.dp),
+            )
             EditorialSearchField(
                 query = query,
                 onQueryChange = { query = it },
@@ -1234,7 +1244,7 @@ private fun SettingRow(
  * avoids by dropping the segments down.
  */
 @Composable
-private fun ControlRow(
+internal fun ControlRow(
     title: String,
     caption: String?,
     stackOnPhone: Boolean = false,

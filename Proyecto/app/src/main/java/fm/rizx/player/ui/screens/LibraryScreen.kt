@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
@@ -72,23 +74,20 @@ import fm.rizx.player.domain.model.Track
 import fm.rizx.player.ui.components.CodeLabel
 import fm.rizx.player.ui.components.CollageArt
 import fm.rizx.player.ui.components.CoverArt
-import fm.rizx.player.ui.components.DisplayTitle
 import fm.rizx.player.ui.components.DownloadButton
 import fm.rizx.player.ui.components.Editorial
 import fm.rizx.player.ui.components.EditorialButton
 import fm.rizx.player.ui.components.EditorialSearchField
 import fm.rizx.player.ui.components.EditorialSurface
-import fm.rizx.player.ui.components.EditorialTab
 import fm.rizx.player.ui.components.EmptyBlock
 import fm.rizx.player.ui.components.EqualRow
 import fm.rizx.player.ui.components.IndexTag
 import fm.rizx.player.ui.components.Kicker
-import fm.rizx.player.ui.components.Lede
+import fm.rizx.player.ui.components.RizxChip
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.RowArrow
 import fm.rizx.player.ui.components.SignalEyebrow
 import fm.rizx.player.ui.components.SurfaceHeading
-import fm.rizx.player.ui.components.SurfaceTitle
 import fm.rizx.player.ui.components.bleed
 import fm.rizx.player.ui.components.bottomRule
 import fm.rizx.player.ui.components.clickableScale
@@ -131,12 +130,13 @@ private const val OVERVIEW_PLAYLISTS = 4
 private const val OVERVIEW_SONGS = 3
 
 /**
- * Your library, in the editorial layout of the feed design: a kicker and a giant title over two hero
- * actions, a strip of tab pills, and then either the overview — framed surfaces for playlists, liked
+ * Your library, in the compact hierarchy of the feed design: a kicker and a regular title over two hero
+ * actions, a persistent strip of tab pills, and then either the overview — framed surfaces for playlists, liked
  * songs, downloads and history — or one category at full width with its own display heading, search
  * field and numbered song list. Lists stay virtualized: the liked list composing every row at once was
  * the Library's original performance bug, and a prettier row does not change that.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryScreen(
     onOpenPlaylist: (String) -> Unit,
@@ -155,6 +155,16 @@ fun LibraryScreen(
     // The filter belongs to the tab it was typed on: switching tabs clears it instead of carrying a query
     // over to a list where it would silently hide almost everything.
     var filter by rememberSaveable { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    val selectTab: (LibraryTab) -> Unit = { target ->
+        if (target != tab) {
+            tab = target
+            filter = ""
+        }
+    }
+    // Each category starts at its own heading. Keeping the previous scroll position after selecting a
+    // tab made the change look like it had failed when the user was still deep in another list.
+    LaunchedEffect(tab) { listState.scrollToItem(0) }
     var creating by remember { mutableStateOf(false) }
     var savingLiked by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
@@ -202,7 +212,7 @@ fun LibraryScreen(
     LaunchedEffect(pendingShare) {
         val url = pendingShare ?: return@LaunchedEffect
         if (vm.consumeShareLink() == null) return@LaunchedEffect
-        tab = LibraryTab.Playlists
+        selectTab(LibraryTab.Playlists)
         vm.importFromUrl(url) { result ->
             result.fold(
                 onSuccess = { id ->
@@ -383,13 +393,14 @@ fun LibraryScreen(
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize().statusBarsPadding(),
+            state = listState,
             contentPadding = PaddingValues(horizontal = margin),
         ) {
             item(key = "hero") {
                 LibraryHero(likedCount = likedSongs.size, onNew = { creating = true }, onImport = { importing = true })
             }
-            item(key = "tabs") {
-                LibraryTabs(tab, margin) { tab = it; filter = "" }
+            stickyHeader(key = "tabs") {
+                LibraryTabs(tab, margin, selectTab)
             }
 
             when (tab) {
@@ -401,7 +412,7 @@ fun LibraryScreen(
                     recents = recents,
                     onOpenPlaylist = onOpenPlaylist,
                     onNewPlaylist = { creating = true },
-                    onShow = { tab = it },
+                    onShow = selectTab,
                     onPlayLiked = { vm.playLiked(it, likedSongs) },
                     onPlayDownload = { vm.playDownloads(it, downloads.map { entry -> entry.track }) },
                     onPlayRecent = { vm.playRecent(it, recents) },
@@ -519,7 +530,7 @@ fun LibraryScreen(
                     }
                     when {
                         downloads.isEmpty() -> item(key = "empty") {
-                            DownloadsEmpty(onGoToLiked = if (likedSongs.isNotEmpty()) ({ tab = LibraryTab.Liked }) else null)
+                            DownloadsEmpty(onGoToLiked = if (likedSongs.isNotEmpty()) ({ selectTab(LibraryTab.Liked) }) else null)
                         }
                         visibleDownloads.isEmpty() -> item(key = "empty") { NoMatches(filter) }
                         else -> {
@@ -571,10 +582,15 @@ fun LibraryScreen(
                     item(key = "local") {
                         EditorialSurface {
                             SignalEyebrow(stringResource(R.string.library_device_eyebrow))
-                            SurfaceTitle(stringResource(R.string.library_local_entry_title), Modifier.padding(top = 6.dp))
+                            Text(
+                                stringResource(R.string.library_local_entry_title),
+                                style = sg(19, FontWeight.Bold, -0.01f),
+                                color = RizxTheme.colors.text,
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
                             Text(
                                 stringResource(R.string.library_local_entry_body),
-                                style = mr(13, FontWeight.Medium, lineHeight = 19),
+                                style = mr(12, FontWeight.Medium, lineHeight = 18),
                                 color = RizxTheme.colors.muted,
                                 modifier = Modifier.padding(top = 10.dp),
                             )
@@ -603,7 +619,7 @@ fun LibraryScreen(
 
 // ---- hero + tabs --------------------------------------------------------------------------------
 
-/** Kicker, display title, a sentence, and the two hero actions side by side over a 2dp rule. */
+/** Kicker, compact title, a sentence, and the two hero actions side by side over a 2dp rule. */
 @Composable
 private fun LibraryHero(likedCount: Int, onNew: () -> Unit, onImport: () -> Unit) {
     val c = RizxTheme.colors
@@ -615,8 +631,18 @@ private fun LibraryHero(likedCount: Int, onNew: () -> Unit, onImport: () -> Unit
             .padding(bottom = 25.dp),
     ) {
         Kicker(stringResource(R.string.library_kicker, likedCount))
-        DisplayTitle(stringResource(R.string.library_hero_title), Modifier.padding(top = 9.dp))
-        Lede(stringResource(R.string.library_hero_intro), Modifier.padding(top = 16.dp))
+        Text(
+            stringResource(R.string.library_hero_title),
+            style = sg(28, FontWeight.Bold, -0.02f),
+            color = c.text,
+            modifier = Modifier.padding(top = 9.dp),
+        )
+        Text(
+            stringResource(R.string.library_hero_intro),
+            style = mr(12, FontWeight.Medium, lineHeight = 18),
+            color = c.muted,
+            modifier = Modifier.padding(top = 8.dp),
+        )
         EqualRow(Modifier.padding(top = 24.dp)) {
             EditorialButton(
                 stringResource(R.string.library_new_playlist),
@@ -638,19 +664,21 @@ private fun LibraryHero(likedCount: Int, onNew: () -> Unit, onImport: () -> Unit
     }
 }
 
-/** The tab strip: outlined pills that bleed to the screen edge and scroll sideways. */
+/** The Home-sized tab strip: pills bleed to the screen edge and scroll sideways when needed. */
 @Composable
 private fun LibraryTabs(current: LibraryTab, margin: androidx.compose.ui.unit.Dp, onSelect: (LibraryTab) -> Unit) {
+    val c = RizxTheme.colors
     Row(
         Modifier
             .fillMaxWidth()
             .bleed(margin)
+            .background(c.bg)
             .horizontalScroll(rememberScrollState())
             .padding(start = margin, end = margin, top = 24.dp, bottom = 30.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         LibraryTab.entries.forEach { entry ->
-            EditorialTab(stringResource(entry.labelRes), active = current == entry, onClick = { onSelect(entry) })
+            RizxChip(stringResource(entry.labelRes), active = current == entry, onClick = { onSelect(entry) })
         }
     }
 }
@@ -678,6 +706,7 @@ private fun LazyListScope.overview(
                 title = stringResource(R.string.library_your_playlists),
                 action = stringResource(R.string.action_see_all),
                 onAction = { onShow(LibraryTab.Playlists) },
+                titleSize = 19,
             )
             Column(Modifier.padding(top = 20.dp).topRule(Editorial.rule)) {
                 playlists.take(OVERVIEW_PLAYLISTS).forEach { playlist ->
@@ -695,6 +724,7 @@ private fun LazyListScope.overview(
                 title = stringResource(R.string.library_songs_you_like),
                 action = stringResource(R.string.library_see_all_count, liked.size),
                 onAction = { onShow(LibraryTab.Liked) },
+                titleSize = 19,
             )
             LikedHero(liked, Modifier.padding(top = 20.dp), onPlay = { onPlayLiked(0) })
             Column(Modifier.padding(top = 18.dp).topRule(Editorial.rule)) {
@@ -723,6 +753,7 @@ private fun LazyListScope.overview(
                     title = stringResource(R.string.library_section_downloads),
                     action = stringResource(R.string.library_see_all_count, downloads.size),
                     onAction = { onShow(LibraryTab.Downloads) },
+                    titleSize = 19,
                 )
                 Column(Modifier.padding(top = 20.dp).topRule(Editorial.rule)) {
                     downloads.take(OVERVIEW_SONGS).forEachIndexed { index, entry ->
@@ -740,6 +771,7 @@ private fun LazyListScope.overview(
                 title = stringResource(R.string.library_recent_heading),
                 action = if (recents.size > OVERVIEW_SONGS) stringResource(R.string.action_see_all) else null,
                 onAction = if (recents.size > OVERVIEW_SONGS) ({ onShow(LibraryTab.Recent) }) else null,
+                titleSize = 19,
             )
             Column(Modifier.padding(top = 20.dp).topRule(Editorial.rule)) {
                 recents.take(OVERVIEW_SONGS).forEachIndexed { index, track ->
@@ -829,7 +861,7 @@ private fun likedStats(tracks: List<Track>): String =
 // ---- category views -----------------------------------------------------------------------------
 
 /**
- * The heading of one category at full width: eyebrow, display title, a summary line, then — stacked
+ * The heading of one category at full width: eyebrow, compact title, a summary line, then — stacked
  * on a phone, as the design does below 768px — the tab's own action and its search field.
  */
 @Composable
@@ -844,9 +876,14 @@ private fun ViewHeader(
     Column(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
         Column(Modifier.fillMaxWidth().bottomRule(c.hardLine, Editorial.Frame).padding(bottom = 22.dp)) {
             SignalEyebrow(eyebrow)
-            DisplayTitle(title, Modifier.padding(top = 5.dp), widthFraction = 0.153f, maxSp = 76)
+            Text(
+                title,
+                style = sg(19, FontWeight.Bold, -0.01f),
+                color = c.text,
+                modifier = Modifier.padding(top = 5.dp),
+            )
             if (summary != null) {
-                Text(summary, style = mr(13, FontWeight.Medium), color = c.muted, modifier = Modifier.padding(top = 13.dp))
+                Text(summary, style = mr(12, FontWeight.Medium, lineHeight = 18), color = c.muted, modifier = Modifier.padding(top = 8.dp))
             }
             if (action != null) Box(Modifier.padding(top = 20.dp)) { action() }
         }
