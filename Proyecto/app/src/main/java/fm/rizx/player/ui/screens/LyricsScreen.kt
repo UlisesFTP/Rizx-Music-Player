@@ -22,11 +22,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -49,6 +51,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fm.rizx.player.R
@@ -103,7 +106,8 @@ fun LyricsScreen(
     val state by vm.state.collectAsStateWithLifecycle()
 
     Box(Modifier.fillMaxSize().background(c.bg)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        val panel = if (c.isDark) c.elev.copy(alpha = 0.72f) else c.elev2.copy(alpha = 0.72f)
+        Column(Modifier.fillMaxSize().statusBarsPadding().background(panel)) {
             LyricsHeader(
                 state = state,
                 onBack = onBack,
@@ -232,7 +236,17 @@ private fun LyricsHeader(
     val ready = state.content as? LyricsContent.Ready
     val hasTimings = ready?.lyrics?.isSynced == true
     Row(
-        Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 8.dp),
+        Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                drawLine(
+                    color = c.line2,
+                    start = Offset(0f, size.height),
+                    end = Offset(size.width, size.height),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
+            .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -308,15 +322,28 @@ private fun sourceLine(
 @Composable
 private fun PlainLyrics(text: String) {
     val c = RizxTheme.colors
-    Column(
+    val lines = remember(text) { text.lines() }
+    val widthDp = LocalConfiguration.current.screenWidthDp
+    val lyricSize = when {
+        widthDp <= 360 -> 26
+        widthDp < 600 -> 28
+        else -> 30
+    }
+    val lineHeight = when (lyricSize) { 26 -> 32; 28 -> 34; else -> 37 }
+    LazyColumn(
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp),
+        contentPadding = PaddingValues(top = 34.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        Spacer(Modifier.height(16.dp))
-        Text(text, style = mr(15, FontWeight.Medium, lineHeight = 26), color = c.text2)
-        Spacer(Modifier.height(120.dp))
+        items(lines) { line ->
+            Text(
+                text = line.ifBlank { "\u00A0" },
+                style = sg(lyricSize, FontWeight.Medium, -0.03f, lineHeight),
+                color = c.text.copy(alpha = 0.46f),
+            )
+        }
     }
 }
 

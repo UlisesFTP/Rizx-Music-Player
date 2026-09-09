@@ -17,14 +17,14 @@ data class LyricsRenderProfile(
     val hz: Int,
     /** Sweep continuously across letters, or step in whole words like the pre-karaoke renderer. */
     val sweep: Boolean,
-    /** Blurred halo behind the sung part. The one genuinely expensive effect here. */
-    val glow: Boolean,
-    /** Grow the active line slightly. */
-    val scale: Boolean,
+    /** Use the full-width red bloom at the moving edge; constrained devices keep a narrower edge. */
+    val bloom: Boolean,
+    /** Animate the active-line emphasis (the short horizontal shift from the web design). */
+    val activeLineMotion: Boolean,
 ) {
     companion object {
         /** Used before the preference has loaded, and by previews. */
-        val Default = LyricsRenderProfile(hz = 60, sweep = true, glow = true, scale = true)
+        val Default = LyricsRenderProfile(hz = 60, sweep = true, bloom = true, activeLineMotion = true)
     }
 }
 
@@ -43,10 +43,10 @@ fun rememberLyricsRenderProfile(quality: LyricsVisualQuality): LyricsRenderProfi
 
 private fun profileFor(quality: LyricsVisualQuality, context: Context): LyricsRenderProfile =
     when (quality) {
-        LyricsVisualQuality.HIGH -> LyricsRenderProfile(hz = 60, sweep = true, glow = true, scale = true)
+        LyricsVisualQuality.HIGH -> LyricsRenderProfile(hz = 60, sweep = true, bloom = true, activeLineMotion = true)
 
         LyricsVisualQuality.BATTERY_SAVER ->
-            LyricsRenderProfile(hz = 8, sweep = false, glow = false, scale = false)
+            LyricsRenderProfile(hz = 8, sweep = false, bloom = false, activeLineMotion = false)
 
         LyricsVisualQuality.AUTOMATIC -> {
             val saving = context.getSystemService<PowerManager>()?.isPowerSaveMode == true
@@ -54,8 +54,8 @@ private fun profileFor(quality: LyricsVisualQuality, context: Context): LyricsRe
             LyricsRenderProfile(
                 hz = if (saving) 30 else 60,
                 sweep = true,
-                glow = !saving && !lowRam,
-                scale = true,
+                bloom = !saving && !lowRam,
+                activeLineMotion = true,
             )
         }
     }

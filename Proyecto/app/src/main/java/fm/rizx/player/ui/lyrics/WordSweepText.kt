@@ -9,22 +9,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.ResolvedTextDirection
-import androidx.compose.ui.unit.dp
 import fm.rizx.player.domain.lyrics.LyricsSweep
-
-/** How far the halo bleeds past the sung letters. Blur radius, not an offset — the glow is centred. */
-private val GLOW_RADIUS = 7.dp
 
 /**
  * One lyric line that fills in as it is sung, letter by letter.
@@ -33,9 +28,8 @@ private val GLOW_RADIUS = 7.dp
  *
  *  1. `Text` itself draws the whole line in [inactiveColor] — no manual measuring, no `BoxWithConstraints`
  *     subcomposition, and line breaking stays whatever Compose would have done anyway.
- *  2. The sung region is drawn again in [activeColor], clipped to a rectangle whose right edge is the
- *     sweep position. Optionally with a shadow, which is what the halo is: one extra *cached* layout, not
- *     an extra layer per frame.
+ *  2. The sung region is drawn again with a horizontal brush: full [activeColor] behind the edge,
+ *     [bloomColor] at the edge and transparent ahead so the dim base remains visible.
  *
  * The edge is computed with `getHorizontalPosition`, never by adding up character widths. That is the
  * whole trick behind RTL and complex scripts working: the line is laid out once, as a line, and the sweep
@@ -53,22 +47,16 @@ fun WordSweepText(
     style: TextStyle,
     inactiveColor: Color,
     activeColor: Color,
-    glow: Boolean,
-    glowColor: Color,
+    bloom: Boolean,
+    bloomColor: Color,
     sweep: () -> LyricsSweep,
     modifier: Modifier = Modifier,
 ) {
     val measurer = rememberTextMeasurer()
     var base by remember(text, style) { mutableStateOf<TextLayoutResult?>(null) }
 
-    val glowRadiusPx = with(LocalDensity.current) { GLOW_RADIUS.toPx() }
-    val sungStyle = remember(style, activeColor, glow, glowColor, glowRadiusPx) {
-        style.copy(
-            color = activeColor,
-            // A text shadow *is* a blur on Android, so the halo costs one more cached layout rather than
-            // a `saveLayer` + `BlurMaskFilter` round trip every frame.
-            shadow = if (glow) Shadow(color = glowColor, blurRadius = glowRadiusPx) else null,
-        )
+    val sungStyle = remember(style, activeColor) {
+        style.copy(color = activeColor, shadow = null)
     }
 
     // Measured from the base layout's own constraints, so the two passes break lines identically.
@@ -98,7 +86,7 @@ fun WordSweepText(
                 drawContent()
                 val layout = base ?: return@drawWithContent
                 val sungLayout = sung ?: return@drawWithContent
-                drawSweep(layout, sungLayout, lineIndex, sweep())
+                drawSweep(layout, sungLayout, lineIndex, sweep(), activeColor, bloomColor, bloom)
             },
     )
 }
@@ -109,6 +97,9 @@ private fun DrawScope.drawSweep(
     sungLayout: TextLayoutResult,
     lineIndex: Int,
     sweep: LyricsSweep,
+    activeColor: Color,
+    bloomColor: Color,
+    bloom: Boolean,
 ) {
     // The active index is settled during composition while the clock keeps moving, so by draw time the
     // sweep can already belong to a neighbouring line. Both cases are a whole line, not a glitch.
@@ -123,26 +114,43 @@ private fun DrawScope.drawSweep(
     val rtl = layout.getParagraphDirection(sweep.fromChar) == ResolvedTextDirection.Rtl
     val edgeX = edgeXOf(layout, sweep, edgeLine, rtl)
 
-    for (i in 0..edgeLine) {
+    for (i in 0 until edgeLine) {
         val top = layout.getLineTop(i)
         val bottom = layout.getLineBottom(i)
-        val left: Float
-        val right: Float
-        if (i < edgeLine) {
-            // Wrapped lines above the edge are sung in full.
-            left = 0f
-            right = size.width
-        } else if (rtl) {
-            left = edgeX
-            right = layout.getLineRight(i)
-        } else {
-            left = 0f
-            right = edgeX
-        }
-        if (right <= left) continue
-        clipRect(left = left, top = top, right = right, bottom = bottom) {
+        clipRect(left = 0f, top = top, right = size.width, bottom = bottom) {
             drawText(sungLayout)
         }
+    }
+
+    // The web gradient is ink behind the timestamp, red at it and dim text seven percent ahead.
+    // Transparent is deliberate: the base Text already painted the pending lyric at the correct theme
+    // opacity. Keeping the edge inside this one brush preserves the renderer's one-overlay-draw budget.
+    val edge = (edgeX / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
+    val spread = if (bloom) 0.07f else 0.025f
+    val stops = if (rtl) {
+        arrayOf(
+            0f to Color.Transparent,
+            (edge - spread).coerceAtLeast(0f) to Color.Transparent,
+            edge to bloomColor,
+            edge to activeColor,
+            1f to activeColor,
+        )
+    } else {
+        arrayOf(
+            0f to activeColor,
+            edge to activeColor,
+            edge to bloomColor,
+            (edge + spread).coerceAtMost(1f) to Color.Transparent,
+            1f to Color.Transparent,
+        )
+    }
+    clipRect(
+        left = 0f,
+        top = layout.getLineTop(edgeLine),
+        right = size.width,
+        bottom = layout.getLineBottom(edgeLine),
+    ) {
+        drawText(sungLayout, brush = Brush.horizontalGradient(*stops, endX = size.width))
     }
 }
 

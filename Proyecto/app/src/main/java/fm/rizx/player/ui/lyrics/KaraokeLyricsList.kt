@@ -110,7 +110,7 @@ fun KaraokeLyricsList(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 120.dp),
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 34.dp, bottom = 120.dp),
         ) {
             itemsIndexed(lines, key = { index, line -> "$index:${line.timeMs}" }) { index, line ->
                 KaraokeLyricsLine(
