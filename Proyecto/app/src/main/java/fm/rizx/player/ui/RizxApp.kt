@@ -455,6 +455,10 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     isPlaying = playbackState.isPlaying,
                     progress = npProgress,
                     durationSec = (npDurationMs / 1000L).toInt(),
+                    playbackPositionMs = playbackState.positionMs,
+                    playbackDurationMs = npDurationMs,
+                    sampledAtElapsedMs = playbackState.sampledAtElapsedMs,
+                    playbackSpeed = playbackState.speed,
                     liked = isFavorite,
                     onBack = { nav.popBackStack() },
                     onTogglePlay = playbackViewModel::toggle,
@@ -640,6 +644,8 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                         liked = isFavorite,
                         positionMs = playbackState.positionMs,
                         durationMs = miniDurationMs,
+                        sampledAtElapsedMs = playbackState.sampledAtElapsedMs,
+                        playbackSpeed = playbackState.speed,
                         onSeek = playbackViewModel::seekToFraction,
                         // Read from the same map the rows use, not from the format readout, so the bar and
                         // a list agree — and so the tag survives the setting that hides the spec line.

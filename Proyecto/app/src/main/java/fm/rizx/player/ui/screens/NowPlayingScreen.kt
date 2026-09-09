@@ -88,6 +88,7 @@ import fm.rizx.player.R
 import fm.rizx.player.core.formatClock
 import fm.rizx.player.ui.components.CodeLabel
 import fm.rizx.player.ui.components.PlayerDotTrail
+import fm.rizx.player.ui.components.rememberSmoothPlaybackProgress
 import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.TransportButton
 import fm.rizx.player.ui.components.TransportMarker
@@ -183,6 +184,10 @@ fun NowPlayingScreen(
      * Defaulted so every existing call site (and preview) keeps the original stack.
      */
     layout: PlayerLayout = PlayerLayout.CLASSIC,
+    playbackPositionMs: Long = (progress * durationSec * 1_000f).toLong(),
+    playbackDurationMs: Long = durationSec * 1_000L,
+    sampledAtElapsedMs: Long = 0L,
+    playbackSpeed: Float = 1f,
 ) {
     val c = RizxTheme.colors
     val haptics = rememberRizxHaptics()
@@ -209,6 +214,17 @@ fun NowPlayingScreen(
     // One-shot "rise" of the waveform on entry (bars grow up from the baseline).
     val waveGrow = remember { Animatable(0f) }
     LaunchedEffect(Unit) { waveGrow.animateTo(1f, animationSpec = tween(520, easing = FastOutSlowInEasing)) }
+
+    // Extrapolate the engine sample on every display frame. The State is read only by the Canvas below,
+    // so the playhead stays fluid without forcing the rest of this screen to recompose at 60 Hz.
+    val smoothProgress = rememberSmoothPlaybackProgress(
+        sampledProgress = progress,
+        positionMs = playbackPositionMs,
+        durationMs = playbackDurationMs,
+        sampledAtElapsedMs = sampledAtElapsedMs,
+        isAdvancing = isPlaying && !loading,
+        speed = playbackSpeed,
+    )
 
     val heroBtnBg = if (c.isDark) Color(0xFF0A0A0B).copy(alpha = 0.5f) else Color(0xFFF3F0E9).copy(alpha = 0.58f)
     val heroBtnLine = if (c.isDark) Color.White.copy(alpha = 0.14f) else Color(0xFF221F1A).copy(alpha = 0.18f)
@@ -567,7 +583,8 @@ fun NowPlayingScreen(
                             val n = if (reactive) live.size else barHeights.size
                             val gap = 2.dp.toPx()
                             val barW = ((size.width - gap * (n - 1)) / n).coerceAtLeast(1f)
-                            val playedX = size.width * (drag ?: progress).coerceIn(0f, 1f)
+                            // Animation state is read inside Canvas: only the waveform redraws per frame.
+                            val playedX = size.width * (drag ?: smoothProgress.value).coerceIn(0f, 1f)
                             for (i in 0 until n) {
                                 val raw = if (reactive) live[i] else barHeights[i]
                                 val h = raw.coerceIn(0.04f, 1f) * size.height

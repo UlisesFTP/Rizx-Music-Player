@@ -54,6 +54,8 @@ fun MiniPlayer(
     liked: Boolean = false,
     positionMs: Long = 0L,
     durationMs: Long = 0L,
+    sampledAtElapsedMs: Long = 0L,
+    playbackSpeed: Float = 1f,
     onSeek: (Float) -> Unit = {},
     /** Codec name when this song is playing losslessly (`FLAC`), null otherwise — see [LosslessTag]. */
     losslessLabel: String? = null,
@@ -152,6 +154,11 @@ fun MiniPlayer(
         // Interactive scrubber pinned to the bottom edge — tap or drag to seek (rewind/fast-forward).
         MiniSeekBar(
             progress = progress,
+            smooth = isPlaying && !loading,
+            positionMs = positionMs,
+            durationMs = durationMs,
+            sampledAtElapsedMs = sampledAtElapsedMs,
+            playbackSpeed = playbackSpeed,
             onSeek = onSeek,
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
         )
@@ -166,9 +173,26 @@ fun MiniPlayer(
  * round-trips back through the player.
  */
 @Composable
-private fun MiniSeekBar(progress: Float, onSeek: (Float) -> Unit, modifier: Modifier = Modifier) {
+private fun MiniSeekBar(
+    progress: Float,
+    smooth: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    sampledAtElapsedMs: Long,
+    playbackSpeed: Float,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val c = RizxTheme.colors
     var drag by remember { mutableStateOf<Float?>(null) }
+    val smoothProgress = rememberSmoothPlaybackProgress(
+        sampledProgress = progress,
+        positionMs = positionMs,
+        durationMs = durationMs,
+        sampledAtElapsedMs = sampledAtElapsedMs,
+        isAdvancing = smooth,
+        speed = playbackSpeed,
+    )
     Box(
         modifier
             .height(18.dp)
@@ -187,10 +211,10 @@ private fun MiniSeekBar(progress: Float, onSeek: (Float) -> Unit, modifier: Modi
             },
         contentAlignment = Alignment.BottomCenter,
     ) {
-        val shown = (drag ?: progress).coerceIn(0f, 1f)
         Canvas(Modifier.fillMaxWidth().height(13.dp)) {
             drawSeekLine(
-                progress = shown,
+                // Reading animation state here invalidates only this draw node, not the mini-player.
+                progress = (drag ?: smoothProgress.value).coerceIn(0f, 1f),
                 trackColor = c.hardLine,
                 fillColor = c.redAccent,
                 markerBorderColor = c.hardLine,

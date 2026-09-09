@@ -874,20 +874,34 @@ private fun ViewHeader(
 ) {
     val c = RizxTheme.colors
     Column(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
-        Column(Modifier.fillMaxWidth().bottomRule(c.hardLine, Editorial.Frame).padding(bottom = 22.dp)) {
+        Column(Modifier.fillMaxWidth().bottomRule(c.hardLine, Editorial.Frame).padding(bottom = 18.dp)) {
             SignalEyebrow(eyebrow)
             Text(
                 title,
-                style = sg(19, FontWeight.Bold, -0.01f),
+                // One step below the 28sp Library page title and above every row title.
+                style = sg(22, FontWeight.Bold, -0.02f, lineHeight = 23),
                 color = c.text,
-                modifier = Modifier.padding(top = 5.dp),
+                modifier = Modifier.padding(top = 6.dp),
             )
             if (summary != null) {
-                Text(summary, style = mr(12, FontWeight.Medium, lineHeight = 18), color = c.muted, modifier = Modifier.padding(top = 8.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.width(3.dp).height(28.dp).background(c.redAccent))
+                    Text(
+                        summary,
+                        style = mr(12, FontWeight.Medium, lineHeight = 18),
+                        color = c.muted,
+                        modifier = Modifier.padding(start = 10.dp).weight(1f),
+                    )
+                }
             }
-            if (action != null) Box(Modifier.padding(top = 20.dp)) { action() }
         }
-        if (search != null) Box(Modifier.padding(top = 20.dp)) { search() }
+        // Filtering is the primary task in a populated sublist, so it appears before collection-level
+        // actions such as saving favorites or clearing history.
+        if (search != null) Box(Modifier.padding(top = 16.dp)) { search() }
+        if (action != null) Box(Modifier.padding(top = if (search == null) 16.dp else 12.dp)) { action() }
     }
 }
 
