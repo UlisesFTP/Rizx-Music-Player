@@ -113,6 +113,7 @@ import fm.rizx.player.domain.usecase.LinkedArtist
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.brutalShadow
 import fm.rizx.player.ui.theme.code
+import fm.rizx.player.ui.theme.cornerBrackets
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.dot
 import fm.rizx.player.ui.theme.dotGrid
@@ -311,6 +312,23 @@ fun NowPlayingScreen(
           // and threading all of that through a parameter list would be a far larger change than the
           // layout it buys.
           val stage: @Composable (Modifier) -> Unit = { stageModifier ->
+            if (layout == PlayerLayout.CLASSIC) {
+                ClassicArtworkStage(
+                    modifier = stageModifier,
+                    artworkUrl = artworkUrl,
+                    liked = liked,
+                    trackIndex = trackIndex,
+                    trackCount = trackCount,
+                    canvasVideo = canvasVideo,
+                    canvasPlaying = canvasPlaying,
+                    onBack = onBack,
+                    onNext = onNext,
+                    onPrevious = onPrevious,
+                    onToggleLike = onToggleLike,
+                    onOpenLyrics = onOpenLyrics,
+                    menu = menu,
+                )
+            } else {
             // ---- Stage: the web's ink panel — toolbar, framed cover, caption band, record line ----
             Column(stageModifier.background(StageBg)) {
                 StageToolbar(
@@ -488,6 +506,7 @@ fun NowPlayingScreen(
                     }
                 }
                 }
+            }
             }
           }
           val controlsZone: @Composable (Modifier) -> Unit = { zoneModifier ->
@@ -903,6 +922,127 @@ fun NowPlayingScreen(
  * Names carry `weight(fill = false)`: they shrink to fit and ellipsize individually, so a long billing
  * can never push the row past the screen or move the controls below it.
  */
+/** Restored upper stage for the Classic phone layout. */
+@Composable
+private fun ClassicArtworkStage(
+    modifier: Modifier,
+    artworkUrl: String?,
+    liked: Boolean,
+    trackIndex: Int,
+    trackCount: Int,
+    canvasVideo: ((TextureView) -> Unit)?,
+    canvasPlaying: Boolean,
+    onBack: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onToggleLike: () -> Unit,
+    onOpenLyrics: () -> Unit,
+    menu: @Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit,
+) {
+    val c = RizxTheme.colors
+    val haptics = rememberRizxHaptics()
+    val scope = rememberCoroutineScope()
+    var menuOpen by remember { mutableStateOf(false) }
+    var artDragX by remember { mutableStateOf(0f) }
+    var likeStamp by remember { mutableStateOf(0) }
+    val buttonBackground = if (c.isDark) Color(0xFF0A0A0B).copy(alpha = 0.5f) else Color(0xFFF3F0E9).copy(alpha = 0.58f)
+    val buttonBorder = if (c.isDark) Color.White.copy(alpha = 0.14f) else Color(0xFF221F1A).copy(alpha = 0.18f)
+
+    Box(
+        modifier
+            .clipToBounds()
+            .graphicsLayer { translationX = artDragX }
+            .pointerInput(Unit) {
+                var settle: kotlinx.coroutines.Job? = null
+                detectHorizontalDragGestures(
+                    onDragStart = { settle?.cancel() },
+                    onDragEnd = {
+                        val threshold = size.width * 0.22f
+                        if (artDragX <= -threshold) { haptics.confirm(); onNext() }
+                        else if (artDragX >= threshold) { haptics.confirm(); onPrevious() }
+                        settle = scope.launch {
+                            animate(artDragX, 0f, animationSpec = tween(210, easing = FastOutSlowInEasing)) { value, _ -> artDragX = value }
+                        }
+                    },
+                    onDragCancel = { artDragX = 0f },
+                ) { change, dragAmount ->
+                    change.consume()
+                    artDragX += dragAmount
+                }
+            }
+            .pointerInput(Unit) {
+                var verticalDrag = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { verticalDrag = 0f },
+                    onDragEnd = {
+                        if (verticalDrag >= size.height * 0.30f) onBack()
+                    },
+                    onDragCancel = { verticalDrag = 0f },
+                ) { change, dragAmount ->
+                    change.consume()
+                    verticalDrag = (verticalDrag + dragAmount).coerceAtLeast(0f)
+                }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(onDoubleTap = {
+                    if (!liked) onToggleLike()
+                    likeStamp++
+                    haptics.confirm()
+                })
+            },
+    ) {
+        val description = stringResource(R.string.player_album_artwork)
+        Crossfade(targetState = artworkUrl, animationSpec = tween(320), label = "classicCoverArt", modifier = Modifier.fillMaxSize()) { url ->
+            if (url != null) {
+                coil.compose.AsyncImage(url, description, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            } else {
+                Image(painterResource(R.drawable.velvet_asphalt), description, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            }
+        }
+        if (canvasVideo != null) {
+            val fade by animateFloatAsState(if (canvasPlaying) 1f else 0f, tween(600), label = "classicCanvasFade")
+            AndroidView(
+                factory = { context -> TextureView(context).also(canvasVideo) },
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = fade },
+            )
+        }
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    (if (c.isDark) 0.6f else 0.88f) to Color.Transparent,
+                    1f to if (c.isDark) c.bg.copy(alpha = 0.3f) else c.bg,
+                ),
+            ),
+        )
+        Box(
+            Modifier.matchParentSize().cornerBrackets(
+                if (c.isDark) Color.White.copy(alpha = 0.5f) else c.heroText.copy(alpha = 0.45f),
+                len = 16.dp,
+                inset = 12.dp,
+            ),
+        )
+        CodeLabel(
+            "REC / TRK ${trackIndex + 1}-${trackCount.coerceAtLeast(1)}",
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 14.dp),
+            color = if (c.isDark) Color.White.copy(alpha = 0.6f) else c.heroText.copy(alpha = 0.6f),
+        )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            RizxIconButton(RizxIcons.Back, stringResource(R.string.player_back), onBack, background = buttonBackground, border = buttonBorder, tint = if (c.isDark) Color.White else c.heroText)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                RizxIconButton(RizxIcons.Lyrics, stringResource(R.string.player_lyrics), onOpenLyrics, background = buttonBackground, border = buttonBorder, tint = if (c.isDark) Color.White else c.heroText)
+                Box {
+                    RizxIconButton(RizxIcons.MoreVert, stringResource(R.string.player_more_options), { menuOpen = true }, background = buttonBackground, border = buttonBorder, tint = if (c.isDark) Color.White else c.heroText)
+                    menu(menuOpen) { menuOpen = false }
+                }
+            }
+        }
+        LikeStamp(trigger = likeStamp)
+    }
+}
+
 /**
  * The web's track heading: `■ NOW PLAYING` over the title in the display face over the artist in tracked
  * uppercase mono, centred, cross-fading when the track changes so next/prev feels intentional instead of
