@@ -258,8 +258,9 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.CANVAS_QUALITY] = quality.name }
     }
 
-    // Apple and TIDAL on by default; they either have this album's loop or they don't. YouTube is a
-    // search, and a search is the one that can be wrong, so it stays opt-in (the owner's call).
+    // All three on by default. Apple and TIDAL come first and either have this album's loop or they
+    // don't; YouTube is the fallback that gives most songs *some* motion. It went opt-in on 2026-09-08
+    // and the owner's covers turned static overnight, so it is back on (2026-09-09).
     override val canvasAppleEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_APPLE] ?: true }
 
     override suspend fun setCanvasAppleEnabled(enabled: Boolean) {
@@ -272,7 +273,7 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.CANVAS_TIDAL] = enabled }
     }
 
-    override val canvasYoutubeEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_YOUTUBE] ?: false }
+    override val canvasYoutubeEnabled: Flow<Boolean> = pref { it[Keys.CANVAS_YOUTUBE] ?: true }
 
     override suspend fun setCanvasYoutubeEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.CANVAS_YOUTUBE] = enabled }

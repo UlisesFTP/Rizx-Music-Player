@@ -42,4 +42,11 @@
     <string name="player_layout_classic_caption">Progress, title, transport, then like and add to playlist below.</string>
     <string name="player_layout_compact">Compact</string>
     <string name="player_layout_compact_caption">Like and add to playlist flank the title, above the progress bar.</string>
+
+    <!-- Now Playing: the web's stage and console (2026-09-09) -->
+    <string name="player_eyebrow_now_playing">NOW PLAYING</string>
+    <string name="player_stereo">STEREO</string>
+    <string name="player_visual_archive" translatable="false">RIZX VISUAL ARCHIVE</string>
+    <string name="player_record_track" translatable="false">REC / TRK</string>
+    <string name="player_stream" translatable="false">STREAM</string>
 </resources>

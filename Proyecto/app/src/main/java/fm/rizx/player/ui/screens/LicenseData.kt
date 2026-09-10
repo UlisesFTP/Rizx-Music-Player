@@ -52,7 +52,7 @@ object LicenseData {
 
     /** Bundled typefaces — the OFL requires them to be named with their licence. */
     val fonts: List<DependencyLicense> = listOf(
-        DependencyLicense("Space Grotesk", "variable", "OFL-1.1"),
+        DependencyLicense("DM Sans", "variable", "OFL-1.1"),
         DependencyLicense("Martian Mono", "variable", "OFL-1.1"),
         DependencyLicense("Doto", "variable", "OFL-1.1"),
         DependencyLicense("Manrope", "variable", "OFL-1.1"),

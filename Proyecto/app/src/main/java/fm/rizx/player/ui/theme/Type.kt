@@ -15,8 +15,22 @@ import fm.rizx.player.R
 
 // Variable fonts bundled under res/font (OFL). Each weight maps the `wght` axis so the
 // correct instance renders on API 26+ (the project minSdk).
-private fun sgFont(weight: FontWeight, axis: Int) =
-    Font(R.font.space_grotesk, weight, variationSettings = FontVariation.Settings(FontVariation.weight(axis)))
+// DM Sans — the display face, shared with Rizx Web (OFL, variable). Its `opsz` axis (9–40) is what a
+// browser sets from the font size automatically; Compose fixes the axes per Font, so the family comes
+// in three optical sizes and [sg] picks the one nearest the size it is asked for.
+private fun dmFont(weight: FontWeight, axis: Int, opticalSize: Float) =
+    Font(
+        R.font.dm_sans,
+        weight,
+        variationSettings = FontVariation.Settings(FontVariation.weight(axis), FontVariation.Setting("opsz", opticalSize)),
+    )
+
+private fun dmFamily(opticalSize: Float) = FontFamily(
+    dmFont(FontWeight.Normal, 400, opticalSize),
+    dmFont(FontWeight.Medium, 500, opticalSize),
+    dmFont(FontWeight.SemiBold, 600, opticalSize),
+    dmFont(FontWeight.Bold, 700, opticalSize),
+)
 
 private fun mrFont(weight: FontWeight, axis: Int) =
     Font(R.font.manrope, weight, variationSettings = FontVariation.Settings(FontVariation.weight(axis)))
@@ -39,12 +53,21 @@ private fun dotFont(weight: FontWeight, axis: Int, round: Float = 100f) =
         variationSettings = FontVariation.Settings(FontVariation.weight(axis), FontVariation.Setting("ROND", round)),
     )
 
-/** Space Grotesk — display / headings. */
-val SpaceGrotesk = FontFamily(
-    sgFont(FontWeight.Medium, 500),
-    sgFont(FontWeight.SemiBold, 600),
-    sgFont(FontWeight.Bold, 700),
-)
+/** DM Sans at text optical size — labels and small headings (≤ 18sp). */
+val DmSansText = dmFamily(14f)
+
+/** DM Sans at a middle optical size — section titles (19–30sp). */
+val DmSansTitle = dmFamily(24f)
+
+/** DM Sans at display optical size — the giant editorial titles (> 30sp), as the web renders them. */
+val DmSansDisplay = dmFamily(40f)
+
+/** The display family for a given size, mirroring the browser's automatic optical sizing. */
+fun displayFamilyFor(size: Int): FontFamily = when {
+    size <= 18 -> DmSansText
+    size <= 30 -> DmSansTitle
+    else -> DmSansDisplay
+}
 
 /** Manrope — legacy body face (kept for easy revert; `mr()` now renders Martian Mono). */
 val Manrope = FontFamily(
@@ -76,8 +99,9 @@ private val TightLineHeight = LineHeightStyle(
 )
 
 /**
- * Space Grotesk display style. Sizes/letter-spacing mirror the design's inline
- * `font:` declarations (e.g. `font:700 19px 'Space Grotesk';letter-spacing:-.01em`).
+ * Display style — **DM Sans** since 2026-09-09 (the owner's call: the phone's titles should be the web's).
+ * The function keeps its historical name so no call site had to move; sizes/letter-spacing mirror the
+ * design's inline `font:` declarations.
  */
 fun sg(
     size: Int,
@@ -85,7 +109,7 @@ fun sg(
     letterSpacingEm: Float = -0.01f,
     lineHeight: Int = 0,
 ): TextStyle = TextStyle(
-    fontFamily = SpaceGrotesk,
+    fontFamily = displayFamilyFor(size),
     fontWeight = weight,
     fontSize = size.sp,
     letterSpacing = letterSpacingEm.em,

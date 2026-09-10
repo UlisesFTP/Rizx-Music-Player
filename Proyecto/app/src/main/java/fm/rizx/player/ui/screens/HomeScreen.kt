@@ -468,7 +468,9 @@ fun HomeScreen(
                     }
                     Column(Modifier.weight(1f)) {
                         Text(greeting, style = mr(12, FontWeight.SemiBold), color = c.muted)
-                        Text(stringResource(R.string.home_subtitle), style = sg(19, FontWeight.Bold, -0.01f), color = c.text)
+                        // DM Sans runs wider than the face it replaced: a size that let the Spanish
+                        // "descubrimiento" break mid-word next to three buttons now fits it whole.
+                        Text(stringResource(R.string.home_subtitle), style = sg(17, FontWeight.SemiBold, -0.02f), color = c.text)
                     }
                     RizxIconButton(RizxIcons.Search, stringResource(R.string.action_search), onOpenSearch, background = c.elev, border = c.line, iconSize = 21.dp)
                     RizxIconButton(RizxIcons.Favorite, stringResource(R.string.home_liked_songs_cd), onOpenLikes, background = c.elev, border = c.line, iconSize = 20.dp, tint = c.redAccent)

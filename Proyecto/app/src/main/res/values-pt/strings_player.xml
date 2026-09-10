@@ -42,4 +42,8 @@
     <string name="player_layout_classic_caption">Progresso, título, controles e, abaixo, curtir e adicionar à lista.</string>
     <string name="player_layout_compact">Compacto</string>
     <string name="player_layout_compact_caption">Curtir e adicionar à lista ladeiam o título, acima da barra de progresso.</string>
+
+    <!-- Now Playing: the web's stage and console (2026-09-09) -->
+    <string name="player_eyebrow_now_playing">A TOCAR AGORA</string>
+    <string name="player_stereo">ESTÉREO</string>
 </resources>

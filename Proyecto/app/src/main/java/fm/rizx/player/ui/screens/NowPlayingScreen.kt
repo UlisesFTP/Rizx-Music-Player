@@ -13,7 +13,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.provider.Settings
 import android.view.TextureView
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -50,6 +54,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,6 +64,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -66,6 +73,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -75,6 +83,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -82,6 +91,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fm.rizx.player.R
@@ -93,7 +103,8 @@ import fm.rizx.player.ui.components.RizxIconButton
 import fm.rizx.player.ui.components.TransportButton
 import fm.rizx.player.ui.components.TransportMarker
 import fm.rizx.player.ui.components.TransportPlayButton
-import fm.rizx.player.ui.components.VerticalLabel
+import fm.rizx.player.ui.components.bottomRule
+import fm.rizx.player.ui.components.topRule
 import fm.rizx.player.ui.components.clickableScale
 import fm.rizx.player.domain.model.PlayerLayout
 import fm.rizx.player.domain.model.ProviderRef
@@ -102,7 +113,6 @@ import fm.rizx.player.domain.usecase.LinkedArtist
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.ui.theme.brutalShadow
 import fm.rizx.player.ui.theme.code
-import fm.rizx.player.ui.theme.cornerBrackets
 import fm.rizx.player.ui.theme.RizxTheme
 import fm.rizx.player.ui.theme.dot
 import fm.rizx.player.ui.theme.dotGrid
@@ -110,11 +120,18 @@ import fm.rizx.player.ui.theme.isLargeScreenDevice
 import fm.rizx.player.ui.theme.mr
 import fm.rizx.player.ui.theme.sg
 import fm.rizx.player.ui.util.rememberRizxHaptics
+import androidx.palette.graphics.Palette
+import coil.request.ImageRequest
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun NowPlayingScreen(
@@ -211,6 +228,16 @@ fun NowPlayingScreen(
     val npOnFill = c.onFill
     val npTextShadow = if (c.isDark) Shadow(color = Color.Black.copy(alpha = 0.35f), blurRadius = 12f) else Shadow(Color.Transparent)
 
+    // The cover's own colours, for the ambient lights behind it: Coil hands the decoded bitmap over
+    // (software-backed, so Palette can read it) and the three most populous swatches are kept, each
+    // weighted by how much of the cover it fills. Recomputed only when the cover changes.
+    var coverBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var ambient by remember { mutableStateOf<List<AmbientLight>>(emptyList()) }
+    LaunchedEffect(coverBitmap) {
+        val bitmap = coverBitmap ?: return@LaunchedEffect
+        ambient = withContext(Dispatchers.Default) { ambientLightsFrom(bitmap) }
+    }
+
     // One-shot "rise" of the waveform on entry (bars grow up from the baseline).
     val waveGrow = remember { Animatable(0f) }
     LaunchedEffect(Unit) { waveGrow.animateTo(1f, animationSpec = tween(520, easing = FastOutSlowInEasing)) }
@@ -225,9 +252,6 @@ fun NowPlayingScreen(
         isAdvancing = isPlaying && !loading,
         speed = playbackSpeed,
     )
-
-    val heroBtnBg = if (c.isDark) Color(0xFF0A0A0B).copy(alpha = 0.5f) else Color(0xFFF3F0E9).copy(alpha = 0.58f)
-    val heroBtnLine = if (c.isDark) Color.White.copy(alpha = 0.14f) else Color(0xFF221F1A).copy(alpha = 0.18f)
 
     // Deterministic waveform bar heights (0..1), matching the design's seeded formula.
     val barHeights = remember {
@@ -272,7 +296,8 @@ fun NowPlayingScreen(
           // already pinned at the cap, so lowering the reserve alone changes nothing about the cover and
           // hands Compact's freed row to the trailing spacer instead — a band of dead paper under the
           // transport, which is the opposite of what folding a row away was for.
-          val artHeight = (maxHeight - controlsReserve * fontScale).coerceIn(180.dp, artMaxFor(layout))
+          // The console is laid out at its own height and the stage takes everything above it, so the
+          // cover is always the largest square the screen allows — no reserve to get wrong per device.
           // Side by side only where it is genuinely better: a landscape window on a device whose *shortest*
           // edge is tablet-sized, and only when it is tall enough for the whole control stack. A phone never
           // gets here — it stays upright — but the height check still matters, because a short landscape
@@ -285,147 +310,184 @@ fun NowPlayingScreen(
           // functions — these two blocks read forty-odd pieces of state and a dozen callbacks between them,
           // and threading all of that through a parameter list would be a far larger change than the
           // layout it buys.
-          val artwork: @Composable (Modifier) -> Unit = { artModifier ->
-            // ---- Album art ----
-            Box(
-                artModifier
-                    .clipToBounds()
-                    .graphicsLayer { translationX = artDragX }
-                    // Swipe the cover: horizontal = prev/next, a downward drag dismisses the player. One
-                    // axis-locked drag node so the two never fight (and neither fights the waveform's own
-                    // seek-drag, which is a separate region below). Double-tap-to-like is its own tap node.
-                    .pointerInput(Unit) {
-                        var axis = 0 // 0 undecided · 1 horizontal (skip) · 2 vertical (dismiss)
-                        var settle: kotlinx.coroutines.Job? = null
-                        detectDragGestures(
-                            onDragStart = { settle?.cancel(); axis = 0 },
-                            onDragEnd = {
-                                if (axis == 1) {
-                                    val t = size.width * 0.22f
-                                    if (artDragX <= -t) { haptics.confirm(); onNext() }
-                                    else if (artDragX >= t) { haptics.confirm(); onPrevious() }
-                                    settle = scope.launch { animate(artDragX, 0f, animationSpec = tween(210, easing = FastOutSlowInEasing)) { v, _ -> artDragX = v } }
-                                } else if (axis == 2) {
-                                    if (screenDragY >= size.height * 0.30f) onBack()
-                                    else settle = scope.launch { animate(screenDragY, 0f, animationSpec = tween(210, easing = FastOutSlowInEasing)) { v, _ -> screenDragY = v } }
-                                }
-                                axis = 0
-                            },
-                            onDragCancel = { artDragX = 0f; screenDragY = 0f; axis = 0 },
-                        ) { change, delta ->
-                            if (axis == 0) axis = if (abs(delta.x) >= abs(delta.y)) 1 else 2
-                            change.consume()
-                            if (axis == 1) artDragX += delta.x
-                            else screenDragY = (screenDragY + delta.y).coerceAtLeast(0f)
-                        }
-                    }
-                    .pointerInput(Unit) {
-                        detectTapGestures(onDoubleTap = {
-                            if (!liked) onToggleLike()
-                            likeStamp++
-                            haptics.confirm()
-                        })
-                    },
-            ) {
-                // Procedural "cover": an aurora-tinted gradient stands in for album art.
-                Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.linearGradient(
-                            listOf(
-                                if (c.isDark) androidx.compose.ui.graphics.lerp(Color(0xFF1A161E), npAccent, 0.22f) else c.heroA,
-                                if (c.isDark) Color(0xFF0C0C11) else c.heroB,
-                            ),
-                        ),
-                    ),
+          val stage: @Composable (Modifier) -> Unit = { stageModifier ->
+            // ---- Stage: the web's ink panel — toolbar, framed cover, caption band, record line ----
+            Column(stageModifier.background(StageBg)) {
+                StageToolbar(
+                    title = title,
+                    artist = artist,
+                    artworkUrl = artworkUrl,
+                    onBack = onBack,
+                    onOpenLyrics = onOpenLyrics,
+                    menuOpen = menuOpen,
+                    onOpenMenu = { menuOpen = true },
+                    onDismissMenu = { menuOpen = false },
+                    menu = menu,
                 )
-                // Album artwork on top of the gradient base — real cover when available, else the sample.
-                // Crossfaded on track change so next/prev dissolves instead of hard-cutting. Only the base
-                // image fades; the scrim, canvas video and HUD above stay put (fading them would flicker).
-                val albumArtworkDesc = stringResource(R.string.player_album_artwork)
-                Crossfade(targetState = artworkUrl, animationSpec = tween(320), label = "coverArt", modifier = Modifier.fillMaxSize()) { url ->
-                    if (url != null) {
-                        coil.compose.AsyncImage(
-                            model = url,
-                            contentDescription = albumArtworkDesc,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Image(
-                            painter = painterResource(R.drawable.velvet_asphalt),
-                            contentDescription = albumArtworkDesc,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
-                // The canvas: animated cover art, muted and looping, fading in over the artwork once a
-                // real frame has been decoded — so a track with no canvas, or a slow lookup, never
-                // reveals anything and the cover stays put.
-                //
-                // The surface is created as soon as there is a player to attach it to, and only its
-                // *alpha* follows [canvasPlaying]. Gating the AndroidView itself on the fade deadlocks:
-                // the fade waits for the first rendered frame, and the first frame can never be rendered
-                // because there is no surface to render it onto.
-                if (canvasVideo != null) {
-                    val fade by animateFloatAsState(
-                        targetValue = if (canvasPlaying) 1f else 0f,
-                        animationSpec = tween(600),
-                        label = "canvasFade",
-                    )
-                    AndroidView(
-                        factory = { ctx -> TextureView(ctx).also(canvasVideo) },
-                        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = fade },
-                    )
-                }
-                // Bottom scrim — fades the cover into the zone below (paper in light, the wash in dark).
-                //
-                // Trimmed twice on Paper (0.6 → 0.8 → 0.88): its only job is to blend the seam where the
-                // cover meets the paper, and spread over the bottom 40% it read as a pale haze *on the
-                // artwork* — loudest on a dark cover, where it looked like a glow rising out of the bottom
-                // edge. It is now a 12% strip: enough to soften the join, not enough to veil the art. Ivory
-                // keeps 0.6, where the same gradient ends at 30% of a near-black background and barely
-                // registers.
-                Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.verticalGradient(
-                            (if (c.isDark) 0.6f else 0.88f) to Color.Transparent,
-                            1.0f to if (c.isDark) c.bg.copy(alpha = 0.3f) else c.bg,
-                        ),
-                    ),
-                )
-                // HUD chrome over the art (ref #4): corner brackets + a serial/track code.
-                Box(
-                    Modifier.matchParentSize().cornerBrackets(
-                        if (c.isDark) Color.White.copy(alpha = 0.5f) else c.heroText.copy(alpha = 0.45f),
-                        len = 16.dp,
-                        inset = 12.dp,
-                    ),
-                )
-                CodeLabel(
-                    "REC / TRK ${trackIndex + 1}-${trackCount.coerceAtLeast(1)}",
-                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 14.dp),
-                    color = if (c.isDark) Color.White.copy(alpha = 0.6f) else c.heroText.copy(alpha = 0.6f),
-                )
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                    // Soft lights in the cover's own colours drifting behind it — the web's liquid
+                    // ambient, kept dim so the cover stays the subject.
+                    AmbientLights(ambient, Modifier.matchParentSize())
+                BoxWithConstraints(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(start = STAGE_INSET, end = STAGE_INSET, top = 10.dp, bottom = 12.dp),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    RizxIconButton(RizxIcons.Back, stringResource(R.string.player_back), onBack, background = heroBtnBg, border = heroBtnLine, tint = if (c.isDark) Color.White else c.heroText)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        RizxIconButton(RizxIcons.Lyrics, stringResource(R.string.player_lyrics), onOpenLyrics, background = heroBtnBg, border = heroBtnLine, tint = if (c.isDark) Color.White else c.heroText)
-                        Box {
-                            RizxIconButton(
-                                RizxIcons.MoreVert, stringResource(R.string.player_more_options), { menuOpen = true },
-                                background = heroBtnBg, border = heroBtnLine,
-                                tint = if (c.isDark) Color.White else c.heroText,
+                    // The cover is a square: as wide as the stage allows, but never taller than what is
+                    // left once the caption band and the record line have taken their rows — so a short
+                    // screen shrinks the cover instead of pushing the controls off the bottom.
+                    val side = minOf(
+                        maxWidth,
+                        STAGE_ART_MAX,
+                        (maxHeight - CAPTION_HEIGHT - META_HEIGHT - META_GAP).coerceAtLeast(120.dp),
+                    )
+                    Column(Modifier.width(side)) {
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer { translationX = artDragX }
+                                .border(1.dp, StageInk.copy(alpha = 0.5f), RectangleShape),
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(side)
+                                    .clipToBounds()
+                                    // Swipe the cover: horizontal = prev/next, a downward drag dismisses the
+                                    // player. One axis-locked drag node so the two never fight (and neither
+                                    // fights the waveform's own seek-drag, which is a separate region below).
+                                    // Double-tap-to-like is its own tap node.
+                                    .pointerInput(Unit) {
+                                        var axis = 0 // 0 undecided · 1 horizontal (skip) · 2 vertical (dismiss)
+                                        var settle: kotlinx.coroutines.Job? = null
+                                        detectDragGestures(
+                                            onDragStart = { settle?.cancel(); axis = 0 },
+                                            onDragEnd = {
+                                                if (axis == 1) {
+                                                    val t = size.width * 0.22f
+                                                    if (artDragX <= -t) { haptics.confirm(); onNext() }
+                                                    else if (artDragX >= t) { haptics.confirm(); onPrevious() }
+                                                    settle = scope.launch { animate(artDragX, 0f, animationSpec = tween(210, easing = FastOutSlowInEasing)) { v, _ -> artDragX = v } }
+                                                } else if (axis == 2) {
+                                                    if (screenDragY >= size.height * 0.30f) onBack()
+                                                    else settle = scope.launch { animate(screenDragY, 0f, animationSpec = tween(210, easing = FastOutSlowInEasing)) { v, _ -> screenDragY = v } }
+                                                }
+                                                axis = 0
+                                            },
+                                            onDragCancel = { artDragX = 0f; screenDragY = 0f; axis = 0 },
+                                        ) { change, delta ->
+                                            if (axis == 0) axis = if (abs(delta.x) >= abs(delta.y)) 1 else 2
+                                            change.consume()
+                                            if (axis == 1) artDragX += delta.x
+                                            else screenDragY = (screenDragY + delta.y).coerceAtLeast(0f)
+                                        }
+                                    }
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(onDoubleTap = {
+                                            if (!liked) onToggleLike()
+                                            likeStamp++
+                                            haptics.confirm()
+                                        })
+                                    },
+                            ) {
+                                // A dark base under the cover, so a slow image never flashes the panel colour.
+                                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF1A1917), Color(0xFF0C0C0B)))))
+                                // Album artwork — real cover when available, else the sample. Crossfaded on
+                                // track change so next/prev dissolves instead of hard-cutting. Only the base
+                                // image fades; the canvas video and the stamp above stay put.
+                                val albumArtworkDesc = stringResource(R.string.player_album_artwork)
+                                Crossfade(targetState = artworkUrl, animationSpec = tween(320), label = "coverArt", modifier = Modifier.fillMaxSize()) { url ->
+                                    if (url != null) {
+                                        coil.compose.AsyncImage(
+                                            // Software-backed on purpose: Palette cannot read a hardware bitmap.
+                                            model = ImageRequest.Builder(LocalContext.current).data(url).allowHardware(false).build(),
+                                            contentDescription = albumArtworkDesc,
+                                            contentScale = ContentScale.Crop,
+                                            onSuccess = { state -> coverBitmap = (state.result.drawable as? BitmapDrawable)?.bitmap },
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    } else {
+                                        Image(
+                                            painter = painterResource(R.drawable.velvet_asphalt),
+                                            contentDescription = albumArtworkDesc,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
+                                }
+                                // The canvas: animated cover art, muted and looping, fading in over the artwork
+                                // once a real frame has been decoded — so a track with no canvas, or a slow
+                                // lookup, never reveals anything and the cover stays put.
+                                //
+                                // The surface is created as soon as there is a player to attach it to, and only
+                                // its *alpha* follows [canvasPlaying]. Gating the AndroidView itself on the fade
+                                // deadlocks: the fade waits for the first rendered frame, and the first frame can
+                                // never be rendered because there is no surface to render it onto.
+                                if (canvasVideo != null) {
+                                    val fade by animateFloatAsState(
+                                        targetValue = if (canvasPlaying) 1f else 0f,
+                                        animationSpec = tween(600),
+                                        label = "canvasFade",
+                                    )
+                                    AndroidView(
+                                        factory = { ctx -> TextureView(ctx).also(canvasVideo) },
+                                        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = fade },
+                                    )
+                                }
+                                // Double-tap-to-like feedback: a red heart stamps over the cover, then fades.
+                                LikeStamp(trigger = likeStamp)
+                            }
+                            // The caption band under the cover: the album, or the archive line when the
+                            // song does not carry one — as the web prints it.
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = CAPTION_HEIGHT)
+                                    .topRule(StageInk.copy(alpha = 0.28f))
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    album.ifBlank { stringResource(R.string.player_visual_archive) }.uppercase(),
+                                    style = code(10, FontWeight.Medium, 0.11f),
+                                    color = StageInk,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                        // The record line: `REC / TRK 01-50` with the position in red, and what is decoding.
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = META_GAP).height(META_HEIGHT),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            val metaStyle = code(9, FontWeight.Medium, 0.12f)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(stringResource(R.string.player_record_track) + " ", style = metaStyle, color = StageInk.copy(alpha = 0.58f), maxLines = 1)
+                                Text(
+                                    String.format(java.util.Locale.ROOT, "%02d-%02d", (trackIndex + 1).coerceAtLeast(1), trackCount.coerceAtLeast(1)),
+                                    style = metaStyle,
+                                    color = c.redAccent,
+                                    maxLines = 1,
+                                )
+                            }
+                            val codec = audioFormat?.shortLabel?.substringBefore(" · ")?.takeIf { it.isNotBlank() }
+                                ?: stringResource(R.string.player_stream)
+                            Text(
+                                (codec + " · " + stringResource(R.string.player_stereo)).uppercase(),
+                                style = metaStyle,
+                                color = StageInk.copy(alpha = 0.58f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(start = 10.dp),
                             )
-                            menu(menuOpen) { menuOpen = false }
                         }
                     }
                 }
-                // Double-tap-to-like feedback: a red heart stamps over the cover, then fades. One-shot.
-                LikeStamp(trigger = likeStamp)
+                }
             }
           }
           val controlsZone: @Composable (Modifier) -> Unit = { zoneModifier ->
@@ -491,7 +553,7 @@ fun NowPlayingScreen(
                 if (c.isDark) {
                     // Legibility scrim: slight top darken, fade to the footer.
                     Box(
-                        Modifier.fillMaxSize().background(
+                        Modifier.matchParentSize().background(
                             Brush.verticalGradient(
                                 0.0f to c.bg.copy(alpha = 0.16f),
                                 0.42f to Color.Transparent,
@@ -501,7 +563,9 @@ fun NowPlayingScreen(
                     )
                 }
                 Column(
-                    Modifier.fillMaxSize(),
+                    // Its own height when stacked — the stage above takes the rest — and the full pane
+                    // when it sits beside the cover, where centring it is what looks right.
+                    if (twoPane) Modifier.fillMaxSize() else Modifier.fillMaxWidth().padding(bottom = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     // Centred in the pane on a wide screen: with the artwork beside the stack rather than
                     // above it, the controls are a third of the height and pinning them to the top leaves a
@@ -515,25 +579,18 @@ fun NowPlayingScreen(
                     // a Row measures at its own intrinsic width first, so a long title would otherwise
                     // claim the whole row and push the buttons off the end of a narrow screen.
                     if (layout == PlayerLayout.COMPACT) {
-                        Row(
-                            paneWidth.padding(horizontal = ACTION_INSET),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            addToPlaylistButton(true)
-                            TrackTextBlock(
-                                title = title,
-                                artist = artist,
-                                artistLinks = artistLinks,
-                                onOpenArtist = onOpenArtist,
-                                audioFormat = audioFormat,
-                                shadow = npTextShadow,
-                                modifier = Modifier.weight(1f),
-                                // The buttons already own the row's ends; the classic 24.dp on top of them
-                                // would leave the title a sliver on a 320.dp screen.
-                                horizontalPadding = 8.dp,
-                            )
-                            likeButton(true)
-                        }
+                        // The web's track heading: the framed add-to-playlist on the left, the bare heart on
+                        // the right, and the eyebrow / title / artist centred between them.
+                        TrackHeading(
+                            title = title,
+                            artist = artist,
+                            artistLinks = artistLinks,
+                            onOpenArtist = onOpenArtist,
+                            shadow = npTextShadow,
+                            modifier = paneWidth.padding(start = TRANSPORT_INSET, end = TRANSPORT_INSET, top = CONSOLE_TOP),
+                            leading = { addToPlaylistButton(true) },
+                            trailing = { likeButton(true) },
+                        )
                     }
 
                     // ---- Waveform scrubber (tap or drag to seek) ----
@@ -541,9 +598,37 @@ fun NowPlayingScreen(
                     // position round-trips back through the player (same trick as the mini-player). Read
                     // only in the draw phase below, so a drag redraws just the waveform, not the screen.
                     var drag by remember { mutableStateOf<Float?>(null) }
+                    // Fluid live bars. The analyser publishes a reading ~25 times a second; on every display
+                    // frame the drawn bars move toward the newest reading with a quick attack and a slower
+                    // release, so the wave breathes with the music instead of stepping between readings.
+                    // The loop exists only while sound is moving — a paused player costs no frames — and the
+                    // state is read in the draw phase, so each frame repaints the waveform strip alone.
+                    val smoothedLevels = remember { mutableStateOf(FloatArray(0)) }
+                    LaunchedEffect(isPlaying, loading) {
+                        if (!isPlaying || loading) return@LaunchedEffect
+                        var last = 0L
+                        while (true) {
+                            withFrameNanos { now ->
+                                val target = levels()
+                                val dt = if (last == 0L) 16f else ((now - last) / 1_000_000f).coerceIn(1f, 50f)
+                                last = now
+                                val current = smoothedLevels.value
+                                val next = if (current.size == target.size) current.copyOf() else FloatArray(target.size)
+                                val attack = 1f - exp(-dt / WAVE_ATTACK_MS)
+                                val release = 1f - exp(-dt / WAVE_RELEASE_MS)
+                                for (i in target.indices) {
+                                    val t = target[i]
+                                    val v = next[i]
+                                    next[i] = v + (t - v) * (if (t > v) attack else release)
+                                }
+                                smoothedLevels.value = next
+                            }
+                        }
+                    }
+                    val fluid = isPlaying && !loading
                     BoxWithConstraints(
                         paneWidth
-                            .padding(horizontal = 20.dp, vertical = 14.dp)
+                            .padding(start = 20.dp, end = 20.dp, top = if (layout == PlayerLayout.CLASSIC) CONSOLE_TOP else 8.dp, bottom = 8.dp)
                             .height(WAVEFORM_HEIGHT)
                             .pointerInput(Unit) {
                                 detectTapGestures { offset ->
@@ -578,7 +663,7 @@ fun NowPlayingScreen(
                         ) {
                             // Read the live spectrum here (draw phase) so only this waveform redraws (~25fps),
                             // not the whole screen. Falls back to the seeded shape before any audio arrives.
-                            val live = levels()
+                            val live = if (fluid) smoothedLevels.value.takeIf { it.size >= 8 } ?: levels() else levels()
                             val reactive = live.size >= 8
                             val n = if (reactive) live.size else barHeights.size
                             val gap = 2.dp.toPx()
@@ -647,14 +732,13 @@ fun NowPlayingScreen(
 
                     // Classic keeps the title under the times, where it has the full pane to itself.
                     if (layout == PlayerLayout.CLASSIC) {
-                        TrackTextBlock(
+                        TrackHeading(
                             title = title,
                             artist = artist,
                             artistLinks = artistLinks,
                             onOpenArtist = onOpenArtist,
-                            audioFormat = audioFormat,
                             shadow = npTextShadow,
-                            modifier = paneWidth,
+                            modifier = paneWidth.padding(horizontal = ACTION_INSET, vertical = 4.dp),
                         )
                     }
 
@@ -667,7 +751,7 @@ fun NowPlayingScreen(
                     // 48.dp plus the play block still have to fit a 320.dp-wide screen, which the old mix of
                     // 46, 50 and 92.dp did not.
                     Row(
-                        paneWidth.padding(horizontal = TRANSPORT_INSET, vertical = 6.dp),
+                        paneWidth.padding(horizontal = TRANSPORT_INSET, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
@@ -731,16 +815,7 @@ fun NowPlayingScreen(
                         }
                     }
 
-                    // Pushes the stack to the top in portrait; in the centred wide pane it would take
-                    // all the slack and there would be nothing left to centre.
-                    if (!twoPane) Spacer(Modifier.weight(1f))
                 }
-                // Rotated technical label running up the left edge (refs #3/#4).
-                VerticalLabel(
-                    "NOW PLAYING",
-                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp),
-                    color = c.muted,
-                )
             }
           }
 
@@ -750,7 +825,7 @@ fun NowPlayingScreen(
               // at its natural square and the whole control stack takes the right, so neither is the
               // letterboxed strip that a rotated portrait layout gives you.
               Row(Modifier.fillMaxSize().graphicsLayer { translationY = screenDragY }) {
-                  artwork(Modifier.weight(1f).fillMaxHeight())
+                  stage(Modifier.weight(1f).fillMaxHeight())
                   Column(Modifier.weight(1f).fillMaxHeight()) {
                       controlsZone(Modifier.fillMaxWidth().weight(1f))
                   // ---- Bottom action bar: nearby devices · up-next peek · radio ----
@@ -767,8 +842,8 @@ fun NowPlayingScreen(
               }
           } else {
           Column(Modifier.fillMaxSize().graphicsLayer { translationY = screenDragY }) {
-            artwork(Modifier.fillMaxWidth().height(artHeight))
-            controlsZone(Modifier.fillMaxWidth().weight(1f))
+            stage(Modifier.fillMaxWidth().weight(1f))
+            controlsZone(Modifier.fillMaxWidth())
 
             // ---- Bottom action bar: nearby devices · up-next peek · radio ----
             // The two new actions share the drawer's strip so they read as one bar instead of floating over
@@ -829,56 +904,132 @@ fun NowPlayingScreen(
  * can never push the row past the screen or move the controls below it.
  */
 /**
- * Title · artists · decoded format, cross-fading when the track changes so next/prev feels intentional
- * instead of a hard swap. Keyed by the text pair; one-shot, so no continuous driver.
+ * The web's track heading: `■ NOW PLAYING` over the title in the display face over the artist in tracked
+ * uppercase mono, centred, cross-fading when the track changes so next/prev feels intentional instead of
+ * a hard swap. [leading] and [trailing] are the two actions that flank it in the compact layout; when
+ * neither is given (Classic) the text takes the whole width.
  *
- * Extracted because [PlayerLayout] moves it: in [PlayerLayout.COMPACT] it sits *between* the like and
- * add buttons rather than on its own line, which is also why [horizontalPadding] is a parameter — the
- * classic layout's 24.dp breathing room would squeeze the title into a marquee the moment two 46.dp
- * buttons take the ends of the row.
+ * The title is sized like the design's `9vw` and marquees when it is still too long for one line.
  */
 @Composable
-private fun TrackTextBlock(
+private fun TrackHeading(
     title: String,
     artist: String,
     artistLinks: List<LinkedArtist>,
     onOpenArtist: (ProviderRef) -> Unit,
-    audioFormat: AudioFormatUi?,
     shadow: Shadow?,
     modifier: Modifier = Modifier,
-    horizontalPadding: Dp = 24.dp,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val c = RizxTheme.colors
-    AnimatedContent(
-        targetState = title to artist,
-        transitionSpec = {
-            (fadeIn(tween(280)) + slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it / 3 }) togetherWith
-                (fadeOut(tween(180)) + slideOutVertically(tween(180)) { -it / 3 })
-        },
-        label = "trackText",
-        modifier = modifier,
-    ) { (animTitle, animArtist) ->
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                animTitle,
-                style = sg(26, FontWeight.Bold, -0.02f).copy(shadow = shadow),
-                color = c.text,
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                // Marquee: a title too long for one line scrolls leftward instead of clipping.
-                modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE),
-            )
-            ArtistLine(
-                fallback = animArtist,
-                links = artistLinks,
-                onOpenArtist = onOpenArtist,
-                shadow = shadow,
-            )
-            AudioFormatLine(audioFormat, shadow)
+    val titleSize = (LocalConfiguration.current.screenWidthDp * 0.09f).roundToInt().coerceIn(29, 46)
+    val flanked = leading != null || trailing != null
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (flanked) Box(Modifier.width(ACTION_BUTTON), contentAlignment = Alignment.Center) { leading?.invoke() }
+        AnimatedContent(
+            targetState = title to artist,
+            transitionSpec = {
+                (fadeIn(tween(280)) + slideInVertically(tween(280, easing = FastOutSlowInEasing)) { it / 3 }) togetherWith
+                    (fadeOut(tween(180)) + slideOutVertically(tween(180)) { -it / 3 })
+            },
+            label = "trackText",
+            modifier = Modifier.weight(1f),
+        ) { (animTitle, animArtist) ->
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.size(8.dp).background(c.redAccent))
+                    Text(
+                        stringResource(R.string.player_eyebrow_now_playing),
+                        style = code(11, FontWeight.Medium, 0.13f).copy(shadow = shadow),
+                        color = c.text,
+                        maxLines = 1,
+                    )
+                }
+                Text(
+                    animTitle,
+                    style = sg(titleSize, FontWeight.Medium, -0.055f, lineHeight = titleSize + 2).copy(shadow = shadow),
+                    color = c.text,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                    // Marquee: a title too long for one line scrolls leftward instead of clipping.
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).basicMarquee(iterations = Int.MAX_VALUE),
+                )
+                ArtistLine(
+                    fallback = animArtist,
+                    links = artistLinks,
+                    onOpenArtist = onOpenArtist,
+                    shadow = shadow,
+                )
+            }
         }
+        if (flanked) Box(Modifier.width(ACTION_BUTTON), contentAlignment = Alignment.Center) { trailing?.invoke() }
+    }
+}
+
+/**
+ * The stage's toolbar, as the web draws it on a phone: the back glyph, the song's own thumbnail with its
+ * title and artist, and the lyrics and options squares framed in ivory. Sits on the ink panel in both
+ * themes, which is what makes the cover below read as a print rather than a photo on paper.
+ */
+@Composable
+private fun StageToolbar(
+    title: String,
+    artist: String,
+    artworkUrl: String?,
+    onBack: () -> Unit,
+    onOpenLyrics: () -> Unit,
+    menuOpen: Boolean,
+    onOpenMenu: () -> Unit,
+    onDismissMenu: () -> Unit,
+    menu: @Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = TOOLBAR_HEIGHT)
+            .bottomRule(StageInk.copy(alpha = 0.25f), 2.dp)
+            .padding(horizontal = 12.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RizxIconButton(RizxIcons.Back, stringResource(R.string.player_back), onBack, size = 48.dp, iconSize = 22.dp, tint = StageInk)
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            CoverArt(
+                tintFor(title), initial = null, Modifier.size(38.dp),
+                imageUrl = artworkUrl, borderColor = StageInk.copy(alpha = 0.45f),
+            )
+            Column(Modifier.weight(1f)) {
+                Text(title, style = sg(12, FontWeight.Medium, -0.01f), color = StageInk, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    artist.uppercase(),
+                    style = code(9, FontWeight.Medium, 0.06f),
+                    color = StageInk.copy(alpha = 0.58f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+        StageSquareButton(RizxIcons.Lyrics, stringResource(R.string.player_lyrics), onOpenLyrics)
+        Box {
+            StageSquareButton(RizxIcons.MoreVert, stringResource(R.string.player_more_options), onOpenMenu)
+            menu(menuOpen, onDismissMenu)
+        }
+    }
+}
+
+/** A 48dp square framed in ivory at 65 % — the web's `.expanded-icon-button` on the stage. */
+@Composable
+private fun StageSquareButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(48.dp)
+            .border(2.dp, StageInk.copy(alpha = 0.65f), RectangleShape)
+            .clickableScale(scale = 0.9f, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription, tint = StageInk, modifier = Modifier.size(21.dp))
     }
 }
 
@@ -890,32 +1041,32 @@ private fun ArtistLine(
     shadow: Shadow?,
 ) {
     val c = RizxTheme.colors
-    val style = mr(14, FontWeight.Medium).copy(shadow = shadow)
+    val style = code(11, FontWeight.Medium, 0.08f).copy(shadow = shadow)
     if (links.isEmpty()) {
         Text(
-            fallback,
+            fallback.uppercase(),
             style = style,
-            color = c.text2,
+            color = c.muted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 5.dp).padding(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.padding(top = 7.dp).padding(horizontal = 10.dp, vertical = 2.dp),
         )
         return
     }
     Row(
-        Modifier.fillMaxWidth().padding(top = 5.dp),
+        Modifier.fillMaxWidth().padding(top = 7.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         links.forEachIndexed { index, artist ->
             if (index > 0) {
-                Text("·", style = style, color = c.text2.copy(alpha = 0.55f))
+                Text("·", style = style, color = c.muted.copy(alpha = 0.55f))
             }
             Text(
-                artist.name,
+                artist.name.uppercase(),
                 style = style,
-                color = c.text2,
+                color = c.muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
@@ -931,32 +1082,6 @@ private fun ArtistLine(
             )
         }
     }
-}
-
-/**
- * One line of monospace saying what is decoding: `FLAC · 16-bit · 48 kHz`, `OPUS · 160 kbps · 48 kHz`.
- *
- * Deliberately quiet — it is information, not a badge. A lossless codec gets the accent colour because
- * that is the fact worth spotting at a glance, and **it is decided by the codec, never by the bitrate**:
- * a large lossy file is still lossy.
- *
- * The word `BIT-PERFECT` appears nowhere in this app. Between Android's mixer, the automatic equalizer,
- * loudness normalisation and the crossfade envelope, the samples reaching the DAC are not the samples in
- * the file, and claiming otherwise would be the one dishonest line in a feature built on measuring things.
- */
-@Composable
-private fun AudioFormatLine(format: AudioFormatUi?, shadow: Shadow?) {
-    val label = format?.shortLabel ?: return
-    val c = RizxTheme.colors
-    Text(
-        label,
-        style = code(11).copy(shadow = shadow),
-        color = if (format.isLosslessCodec) c.accent else c.text2.copy(alpha = 0.7f),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = 6.dp),
-    )
 }
 
 /**
@@ -1336,14 +1461,14 @@ private const val QUEUE_DRAWER_FRACTION = 0.38f
  * artist already printed under the title and pushed the artwork 69dp shorter for the privilege — removing
  * it is the whole of "organize the player better", and the artwork simply gets the space back.
  */
-private val CONTROLS_RESERVE = 385.dp
+private val CONTROLS_RESERVE = 435.dp
 
 /**
  * The same sum for [PlayerLayout.COMPACT], which has one row fewer: like and add-to-playlist ride *in*
  * the title row (46dp buttons inside an 81dp block, so the row costs nothing extra) instead of taking
  * their own 54dp line below the transport. 385 − 54 = 331, headroom included on both sides.
  */
-private val COMPACT_CONTROLS_RESERVE = 331.dp
+private val COMPACT_CONTROLS_RESERVE = 405.dp
 
 /** Both layouts stack the same rows; only Compact folds one of them away, so only its reserve differs. */
 private fun controlsReserveFor(layout: PlayerLayout): Dp = when (layout) {
@@ -1351,14 +1476,133 @@ private fun controlsReserveFor(layout: PlayerLayout): Dp = when (layout) {
     PlayerLayout.COMPACT -> COMPACT_CONTROLS_RESERVE
 }
 
+
+// ---- The stage (the web's `.expanded-stage`, phone rules) ----------------------------------------
+
+/** The ink panel behind the cover, in both themes — the design's `#080807`. */
+private val StageBg = Color(0xFF080807)
+
+/** The stage's own ink: the design's `--stage-ink`, bright paper on the black panel. */
+private val StageInk = Color(0xFFF4F0E6)
+
+/** The toolbar's minimum height (66px on the web). */
+private val TOOLBAR_HEIGHT = 58.dp
+
+/** The caption band under the cover (48px on the web). */
+private val CAPTION_HEIGHT = 42.dp
+
+/** The record line's height and the gap above it (`margin-top: 12px`). */
+private val META_HEIGHT = 14.dp
+private val META_GAP = 8.dp
+
+/** The stage's side padding — tighter than the web's 22px so the cover nearly fills the panel, as the owner asked. */
+private val STAGE_INSET = 14.dp
+
+/** The cover's cap: a phone never reaches it; a tablet's stage does. */
+private val STAGE_ART_MAX = 560.dp
+
+
+/** The console's top padding on a phone (`padding: 28px 18px 46px`). */
+private val CONSOLE_TOP = 12.dp
+
+/** Attack and release of the fluid waveform, in milliseconds of time constant. */
+private const val WAVE_ATTACK_MS = 55f
+private const val WAVE_RELEASE_MS = 170f
+
+// ---- Ambient lights --------------------------------------------------------------------------------
+
+/** One light: a cover colour and how much of the cover it covers (0..1), which sets its size and glow. */
+private data class AmbientLight(val color: Color, val weight: Float)
+
+/** How often the lights move. ~18 fps is plenty for a drift this slow, and it is a `delay` ticker, never a vsync driver. */
+private const val AMBIENT_TICK_MS = 55L
+
+/** The brightest a light gets at its centre; "not too bright" was the brief. */
+private const val AMBIENT_ALPHA = 0.55f
+
 /**
- * How tall the artwork is allowed to get. Compact's cap is the classic one plus exactly the row it
- * folds away, so the space that row used to occupy goes to the cover — which is the whole point of the
- * arrangement. Short screens never reach either figure; they are governed by the reserve.
+ * The two or three colours that matter on a cover, weighted by how much of it they fill. Palette
+ * quantises a downsampled copy; each swatch is scored by its population *and* its saturation, so the
+ * neon on a dark cover beats the dark it sits on. The chosen colours are then brought to a lighting
+ * range — enough saturation and a mid lightness — because a cover's dominant colour is often a dark,
+ * and a dark light on a black panel is no light at all. Grey covers give a grey glow, which is right.
  */
-private fun artMaxFor(layout: PlayerLayout): Dp = when (layout) {
-    PlayerLayout.CLASSIC -> ART_MAX
-    PlayerLayout.COMPACT -> ART_MAX + (CONTROLS_RESERVE - COMPACT_CONTROLS_RESERVE)
+private fun ambientLightsFrom(bitmap: Bitmap): List<AmbientLight> {
+    val palette = runCatching { Palette.from(bitmap).maximumColorCount(16).generate() }.getOrNull() ?: return emptyList()
+    val hsl = FloatArray(3)
+    val scored = palette.swatches.map { swatch ->
+        androidx.core.graphics.ColorUtils.colorToHSL(swatch.rgb, hsl)
+        val saturation = hsl[1]
+        Triple(swatch, swatch.population * (0.25f + saturation), hsl[2])
+    }.sortedByDescending { it.second }.take(3)
+    val total = scored.sumOf { it.second.toDouble() }.toFloat().coerceAtLeast(1f)
+    return scored.map { (swatch, score, _) ->
+        androidx.core.graphics.ColorUtils.colorToHSL(swatch.rgb, hsl)
+        hsl[1] = hsl[1].coerceAtLeast(0.42f)
+        hsl[2] = hsl[2].coerceIn(0.42f, 0.6f)
+        AmbientLight(Color(androidx.core.graphics.ColorUtils.HSLToColor(hsl)), score / total)
+    }
 }
 
-private val ART_MAX = 470.dp
+/**
+ * Soft lights drifting behind the cover in its own colours. Three radial glows on slow, independent
+ * Lissajous paths, each sized and brightened by its colour's share of the cover; the colours
+ * cross-fade when the song changes.
+ *
+ * Audio-safe by construction: positions are read in the `offset`/`graphicsLayer` lambdas only, so a
+ * tick moves layers without recomposing anything, and the ticker is a coroutine `delay`, not a
+ * per-vsync animation. When the system has animations switched off the lights hold still.
+ */
+@Composable
+private fun AmbientLights(lights: List<AmbientLight>, modifier: Modifier = Modifier) {
+    if (lights.isEmpty()) return
+    val context = LocalContext.current
+    val reduceMotion = remember {
+        runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false)
+    }
+    val clock = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(reduceMotion) {
+        if (reduceMotion) return@LaunchedEffect
+        val start = System.nanoTime()
+        while (true) {
+            clock.floatValue = (System.nanoTime() - start) / 1_000_000_000f
+            delay(AMBIENT_TICK_MS)
+        }
+    }
+    BoxWithConstraints(modifier) {
+        val w = maxWidth
+        val h = maxHeight
+        val base = maxOf(w, h)
+        lights.take(3).forEachIndexed { index, light ->
+            val color by animateColorAsState(light.color, animationSpec = tween(900), label = "ambient$index")
+            val alpha = AMBIENT_ALPHA * (0.7f + 0.3f * light.weight.coerceIn(0f, 1f))
+            val diameter = base * (0.72f + 0.5f * light.weight.coerceIn(0f, 1f))
+            val phase = index * 2.1f
+            val fx = 0.21f + index * 0.045f
+            val fy = 0.16f + index * 0.038f
+            Box(
+                Modifier
+                    .offset {
+                        val t = clock.floatValue
+                        val cx = w.toPx() * (0.5f + 0.36f * sin(t * fx + phase))
+                        val cy = h.toPx() * (0.5f + 0.32f * cos(t * fy + phase * 1.3f))
+                        val half = diameter.toPx() / 2f
+                        IntOffset((cx - half).roundToInt(), (cy - half).roundToInt())
+                    }
+                    .size(diameter)
+                    .graphicsLayer {
+                        val breath = 1f + 0.07f * sin(clock.floatValue * 0.31f + phase)
+                        scaleX = breath
+                        scaleY = breath
+                    }
+                    .background(
+                        Brush.radialGradient(
+                            0f to color.copy(alpha = alpha),
+                            0.5f to color.copy(alpha = alpha * 0.42f),
+                            1f to Color.Transparent,
+                        ),
+                    ),
+            )
+        }
+    }
+}

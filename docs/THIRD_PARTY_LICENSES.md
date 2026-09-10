@@ -90,7 +90,7 @@ Variable TrueType fonts under `app/src/main/res/font/`, all licensed **SIL Open 
 
 | Font | File | License | Role |
 |---|---|---|---|
-| Space Grotesk | `space_grotesk.ttf` | OFL-1.1 | Display / headings |
+| DM Sans | `dm_sans.ttf` | OFL-1.1 | Display / headings (the web's face; replaced Space Grotesk on 2026-09-09) |
 | Manrope | `manrope.ttf` | OFL-1.1 | Legacy body face (kept for revert) |
 | Martian Mono | `martian_mono.ttf` | OFL-1.1 | Technical monospace — body / UI / labels (industrial restyle) |
 | Doto | `doto.ttf` | OFL-1.1 | Dot-matrix numerals / short labels (Nothing-OS accent) |

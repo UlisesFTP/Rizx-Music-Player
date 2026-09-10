@@ -136,7 +136,7 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `animated covers default to on, over any network, from Apple and TIDAL but not YouTube`() = runTest {
+    fun `animated covers default to on, over any network, from every source`() = runTest {
         val repo = SettingsRepositoryImpl(backgroundScope.newStore())
 
         assertEquals(true, repo.canvasEnabled.first())
@@ -144,14 +144,14 @@ class SettingsRepositoryTest {
         assertEquals(CanvasNetworkPolicy.ANY, repo.canvasNetworkPolicy.first())
         assertEquals(true, repo.canvasAppleEnabled.first())
         assertEquals(true, repo.canvasTidalEnabled.first())
-        assertEquals(false, repo.canvasYoutubeEnabled.first())
+        assertEquals(true, repo.canvasYoutubeEnabled.first())
         assertEquals(LyricsVisualQuality.AUTOMATIC, repo.lyricsVisualQuality.first())
         // The Home feed blends every source by default, as the web does.
         assertEquals(SettingsRepositoryImpl.FEED_PROVIDER_ALL, repo.feedProvider.first())
 
-        repo.setCanvasYoutubeEnabled(true)
+        repo.setCanvasYoutubeEnabled(false)
         repo.setCanvasNetworkPolicy(CanvasNetworkPolicy.UNMETERED_ONLY)
-        assertEquals(true, repo.canvasYoutubeEnabled.first())
+        assertEquals(false, repo.canvasYoutubeEnabled.first())
         assertEquals(CanvasNetworkPolicy.UNMETERED_ONLY, repo.canvasNetworkPolicy.first())
     }
 

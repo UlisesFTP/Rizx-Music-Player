@@ -42,4 +42,8 @@
     <string name="player_layout_classic_caption">Progression, titre, commandes, puis j\'aime et ajouter à la liste en dessous.</string>
     <string name="player_layout_compact">Compacte</string>
     <string name="player_layout_compact_caption">J\'aime et ajouter à la liste encadrent le titre, au-dessus de la progression.</string>
+
+    <!-- Now Playing: the web's stage and console (2026-09-09) -->
+    <string name="player_eyebrow_now_playing">EN LECTURE</string>
+    <string name="player_stereo">STÉRÉO</string>
 </resources>

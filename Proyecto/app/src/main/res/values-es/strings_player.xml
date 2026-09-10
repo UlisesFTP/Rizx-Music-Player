@@ -42,4 +42,8 @@
     <string name="player_layout_classic_caption">Progreso, título, controles y, debajo, me gusta y añadir a lista.</string>
     <string name="player_layout_compact">Compacto</string>
     <string name="player_layout_compact_caption">Me gusta y añadir a lista flanquean el título, sobre la barra de progreso.</string>
+
+    <!-- Now Playing: the web's stage and console (2026-09-09) -->
+    <string name="player_eyebrow_now_playing">REPRODUCIENDO AHORA</string>
+    <string name="player_stereo">STEREO</string>
 </resources>
