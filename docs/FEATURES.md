@@ -1,6 +1,6 @@
 # Features
 
-_Current feature inventory: 2026-08-25 · Rizx Player 1.0.0_
+_Current feature inventory: 2026-09-13 · Rizx Player 1.0.0. The manual, screen by screen, is [USER_GUIDE.md](USER_GUIDE.md)._
 
 A tour of what Rizx Player does. Everything below is built on the shared domain pipeline described in
 [ARCHITECTURE.md](ARCHITECTURE.md), so features compose cleanly — a local file, a downloaded track, and a
@@ -14,6 +14,10 @@ Deezer track are all just `Track`s with different `ProviderRef` sources.
   **waveform seek bar** with a scrub time bubble, shuffle & repeat, an output-device switcher, a radio
   button, and an **Up-Next drawer** that is a real queue manager: pull it up, reorder, remove, or tap any
   song to jump to it.
+- **Two player layouts** — *Classic* (full-bleed cover with corner brackets and a floating toolbar) and
+  *Compact* (the web's ink stage: framed cover that takes every dp the controls leave, caption band,
+  `REC / TRK` record line, the heading flanked by add-to-playlist and like). Three **ambient lights**
+  in the cover's own dominant colours drift behind the cover; they hold still under reduced motion.
 - **Mini-player** — a floating bar across the app that expands into Now Playing.
 - **Gapless & crossfade** — volume-envelope fades between tracks.
 - **Optional loudness boost** — the setting currently applies a fixed +6 dB `LoudnessEnhancer` gain. It
@@ -308,6 +312,18 @@ by night, the red state marker):
 - They show the last song even with the app closed, and every button works from there: play resumes
   the restored queue, ♥ likes the current song, the microphone lands on Audio ID already listening.
 
+## In-app updates
+
+- The app watches this repository's **GitHub Releases** once a day and shortly after launch
+  (throttled to one request per 12 h), notifies **once per new version**, and Settings › App › *App
+  updates* shows the state and opens a dialog with the release notes and size.
+- **Download** streams the APK into app-private storage and verifies it against the SHA-256 digest
+  GitHub publishes for the asset; **Install** hands it to Android's installer, which asks for
+  confirmation (and, the first time, for the "install unknown apps" switch). **Skip this version**
+  silences that version; nothing installs without the user.
+- Detection compares the release tag as a semantic version with the installed `versionName`; a
+  debug-signed `releaseTest` asset is never offered.
+
 ## Artist pages
 
 - **Full paged discography** split by type (albums / singles & EPs / compilations), top tracks, similar
@@ -342,8 +358,13 @@ by night, the red state marker):
 
 ## Design & theming
 
-- **Material 3** with a custom brutalist / Nothing-OS-inspired visual language (dot-matrix numerals,
-  monospace labels, tactile press feedback and semantic haptics).
+- **Material 3** with a custom brutalist / editorial visual language shared with Rizx Web: **DM Sans**
+  display type (three optical sizes), **Martian Mono** labels and body, **Doto** dot-matrix numerals,
+  kickers, red signal dots and serials, 2dp ink frames with a hard offset shadow, blueprint grids,
+  tactile press feedback and semantic haptics.
+- **Editorial Library, Settings and Equalizer** (since 2026-09-08): framed surfaces, playlist collages,
+  a liked-songs hero, the equalizer as a radar readout with vertical faders, and a glyph mark on every
+  Settings section header.
 - Warm **Paper (light)** and near-black **Ivory (dark)** themes — driven entirely by design tokens
   (`RizxTheme.colors`), with no hard-coded colors in screens.
 - **Responsive** — phones stay portrait; tablets and unfolded foldables get landscape and a two-pane

@@ -1,6 +1,6 @@
 # Architecture
 
-_Current implementation snapshot: 2026-08-25 · app 1.0.0 · Room schema 7_
+_Current implementation snapshot: 2026-09-13 · app 1.0.0 · Room schema 7. The package-by-package map, with the flows drawn out, is [TECHNICAL_GUIDE.md](TECHNICAL_GUIDE.md); this document goes deeper on the load-bearing parts._
 
 Rizx Player is a single-module Android app (`fm.rizx.player`) built on a clean, one-directional layering.
 This document describes the layers, the identity model, how streaming and playback work, and the queue —
@@ -303,8 +303,9 @@ bridge.
   `exportSchema` is
   **on**: each version's schema JSON is committed under `app/schemas/`, and every version bump ships its
   `Migration` together with the new JSON (see [BUILD.md](BUILD.md#room-schemas)).
-- **DataStore (Preferences)** — settings and small key/value state (enabled providers, playback resolver
-  settings, etc.).
+- **DataStore (Preferences)** — four files: `settings` (every user setting, enabled and active
+  providers, resolver settings), `rizx_plugins` (installed plugins), `app_update` (the updater's last
+  answer, skipped and notified versions) and `account_session` (Keystore-sealed tokens).
 - **kotlinx.serialization** — `Track`/queue/session serialization (`TrackJson`), always stripped of
   transient stream state before writing.
 
@@ -355,6 +356,34 @@ second player); the red dotted bar is 24 tap zones over one bitmap, each mapped 
 The microphone deep-links into the Audio ID screen already listening; the widget's play button hands a
 recognized track to the normal `PlaybackController`. Titles are drawn into bitmaps with the app's
 dot-matrix face because `RemoteViews` cannot load a custom typeface.
+
+## In-app updates
+
+`data/update/` (spec 024, ADR 0032). `GitHubAppUpdateRepository` reads the repository's
+`releases/latest`, parses the tag as a `SemanticVersion`, treats 404 as "nothing published", and picks
+the `.apk` asset that says `release` (never one named `releaseTest`, `debug` or `test`, which are
+debug-signed). `AppUpdateCoordinator` publishes one `StateFlow<AppUpdateState>` for the worker, the
+Settings row, the dialog and the notification, throttles real lookups to one per 12 h and remembers
+the last answer, the skipped version and the notified version in the `app_update` DataStore.
+`ApkDownloader` streams the asset over the `@DownloadHttp` client into `files/updates/` with a running
+SHA-256 checked against GitHub's per-asset digest; `AppUpdateInstaller` offers the file through the
+FileProvider to the system installer (`REQUEST_INSTALL_PACKAGES`, plus the user's one-time "install
+unknown apps" grant). `AppUpdateWorker` runs once shortly after launch and every 24 h through
+WorkManager, exactly like the sync worker (an entry-point worker, no factory). Outside a store there
+is no silent install: the last step is always Android's own confirmation sheet.
+
+## The UI system
+
+`ui/theme` holds the token palette (`RizxTheme.colors`, *Paper* light / *Ivory* dark), the four bundled
+faces (DM Sans in three optical sizes for display, Martian Mono narrowed to `wdth 88` for labels and
+body, Doto for numerals, Manrope kept for revert) and the text-style helpers `sg()`, `mr()`, `code()`,
+`dot()`. `ui/components/Editorial.kt` is the editorial vocabulary shared with Rizx Web — kickers,
+signal-dot eyebrows, display titles, 2dp ink frames with a hard offset shadow (red on dark), index
+tags, segmented tabs, the search field — and `Decor.kt` the motifs (blueprint grid and circles,
+hatch, dot grid, corner brackets, `brutalShadow`). Now Playing has two layouts (`PlayerLayout`); the
+Compact stage measures the cover from the space the controls leave, and three ambient lights derived
+from the cover's palette (population × saturation, lifted into a lighting range) drift behind it from a
+55 ms ticker — never a per-frame full-screen canvas — and freeze under reduced motion.
 
 ## Testing
 

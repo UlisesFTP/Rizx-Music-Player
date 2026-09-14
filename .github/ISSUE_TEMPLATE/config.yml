@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: User guide
+    url: https://github.com/UlisesFTP/Rizx-Music-Player/blob/main/docs/USER_GUIDE.md
+    about: Every screen, control and setting, and what to do when something does not work.
+  - name: Security report
+    url: https://github.com/UlisesFTP/Rizx-Music-Player/blob/main/SECURITY.md
+    about: Please do not file security problems as public issues.

@@ -118,6 +118,15 @@ losing them means never being able to update the published app under the same id
 > signed release cannot update those installs — Android blocks cross-signature updates by design, so
 > such devices must uninstall once.
 
+### Releasing
+
+A release is a **tag plus a GitHub release**: bump `versionName` and `versionCode`, build and verify
+the signed APK (`apksigner verify --print-certs`; the certificate fingerprints are in the README),
+`git tag vX.Y.Z`, then publish a GitHub release for the tag — not a draft, not a pre-release — with
+`Rizx-X.Y.Z-release.apk` attached and the notes in the body. Installed apps read that release list,
+verify the asset against the SHA-256 digest GitHub computes on upload, and offer the update
+(spec 024; the full checklist is in [TECHNICAL_GUIDE.md § Releasing](TECHNICAL_GUIDE.md#20-releasing)).
+
 ## Room schemas
 
 `RizxDatabase` exports one schema JSON per database version into **`app/schemas/`** (committed). The
@@ -143,7 +152,9 @@ cd Proyecto
 ```
 
 Unit tests use JUnit4 · MockK · Turbine · OkHttp MockWebServer and run on the JVM (no emulator needed).
-The 2026-08-25 repository snapshot runs **1,651 tests in 186 suites with zero failures or skips**.
+The 2026-09-13 repository snapshot runs **1,695 tests in 193 suites with zero failures or skips**. The
+same gate — `testDebugUnitTest lintDebug assembleDebug` — runs in GitHub Actions
+(`.github/workflows/android-ci.yml`) on every push to `main` and every pull request.
 Instrumented tests run via `./gradlew connectedDebugAndroidTest` (device/emulator required): the
 karaoke-lyrics timing screen, and the **Room migration tests** (`RizxMigrationTest`), which open a
 database at the previous version from the exported schema, apply the real `Migration`, and check that

@@ -1,86 +1,73 @@
-# Documentation map and current status
+# Rizx Player documentation
 
-_Reviewed against the repository on 2026-09-08 · Rizx Player 1.0.0 (version code 3)_
+_Index reviewed on 2026-09-13 · Rizx Player 1.0.0 (versionCode 3)._
 
-This is the entry point for Rizx documentation. The Android Studio project is in `Proyecto/`; product
-documentation is in this directory. Specifications and ADRs are retained as the history of individual
-implementation slices, so their original scope and “deferred” sections are not a list of current product
-gaps. When a historical document conflicts with the shipped code, the current code and the active
-documents below are authoritative.
+Everything about the project that is not code lives in this directory. Start with the reading order
+for your role, then use the map. The Android Studio project is in `../Proyecto/`; when a historical
+statement here conflicts with the shipped code, the code and the living documents below win.
 
-## Current project snapshot
+## Reading order
 
-| Area | Current state |
+| If you are… | Read, in this order |
 |---|---|
-| Android | `minSdk 26`, `targetSdk 36`, `compileSdk 36` |
-| App | `fm.rizx.player`, version `1.0.0` (`versionCode 3`) |
-| Build | Gradle 8.12 · AGP 8.9.1 · Kotlin 2.0.21 · KSP 2.0.21-1.0.28 · Hilt 2.52 |
-| Java | Java 21 recommended to run Gradle; Java 17 bytecode target; Gradle JVM must be 17–23 |
-| Shape | One Android application module plus the `:baselineprofile` test module |
-| Persistence | Room schema v7 (exported schemas 4–7) · DataStore · filesystem playback snapshot · sync outbox |
-| Automated verification | 1,666 JVM tests in 189 suites, all passing; `lintDebug` reports 0 errors; `lintReleaseTest` and `assembleReleaseTest` pass |
-| Source size | 480 main Kotlin files · 198 JVM test files · 4 instrumented-test files |
+| a listener, or explaining the app to one | [`USER_GUIDE.md`](USER_GUIDE.md), then [`FEATURES.md`](FEATURES.md) for the tour |
+| a developer about to change code | [`../AGENTS.md`](../AGENTS.md) → [`CONTEXT.md`](CONTEXT.md) (header, then the tail) → [`GOVERNANCE.md`](GOVERNANCE.md) → [`TECHNICAL_GUIDE.md`](TECHNICAL_GUIDE.md) → the deep dive of your area |
+| a coding agent (or the person driving one) | the same, and `GOVERNANCE.md` §11 first |
+| building, signing or releasing | [`BUILD.md`](BUILD.md), then `TECHNICAL_GUIDE.md` §18–§20 |
+| writing a plugin | [`plugins/PLUGIN_GUIDE.md`](plugins/PLUGIN_GUIDE.md), or [`plugins/PLUGIN_SPEC_FOR_AGENTS.md`](plugins/PLUGIN_SPEC_FOR_AGENTS.md) if you are an agent |
+| deploying the optional backend or a share domain | `TECHNICAL_GUIDE.md` §11, [`BUILD.md`](BUILD.md) § Public runtime configuration, [`../share-site/README.md`](../share-site/README.md) |
+| checking what the app does with data | [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md), [`../SECURITY.md`](../SECURITY.md) |
+| checking licences | [`LICENSING.md`](LICENSING.md), [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md), [`../LICENSE`](../LICENSE), [`../NOTICE`](../NOTICE) |
 
-The automated results above are a verified repository snapshot, not a promise that every provider is
-online or that device-only flows have passed on every Android release. See the manual checklist before a
-public build.
+## Map
 
-## Active documentation
+### Living documents (kept current with every slice)
 
-| Document | Purpose |
+| File | What it is |
 |---|---|
-| [`../README.md`](../README.md) | Product overview, architecture summary and quick build commands |
-| [`BUILD.md`](BUILD.md) | Reproducible build, Java/Gradle setup, signing, tests and troubleshooting |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Current layers, identity, resolution, playback, persistence and DSP |
-| [`FEATURES.md`](FEATURES.md) | Current user-facing features and device compatibility |
-| [`PROVIDERS.md`](PROVIDERS.md) | Native providers, capability model and plugin runtime |
-| [`plugins/PLUGIN_GUIDE.md`](plugins/PLUGIN_GUIDE.md) | Author-facing plugin contract and security limits |
-| [`plugins/PLUGIN_SPEC_FOR_AGENTS.md`](plugins/PLUGIN_SPEC_FOR_AGENTS.md) | Exact plugin shapes and implementation rules |
-| [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md) | Data processing, network access and permissions |
-| [`LICENSING.md`](LICENSING.md) | GPL obligations, trademarks and implementation notes |
-| [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) | Direct dependencies, algorithms, fonts and licenses |
-| [`../share-site/README.md`](../share-site/README.md) | What a share-link domain must serve (App Links statement, landing page) |
+| [`CONTEXT.md`](CONTEXT.md) | Where the project stands: the state table, what is implemented and what is private, configuration names, the interfaces other clients depend on, and the dated running log (newest last). |
+| [`GOVERNANCE.md`](GOVERNANCE.md) | The rulebook: roles, the workflow, the definition of done, the invariants with where each is enforced, design rules, release rules, where knowledge lives, the decision log, open items, the agent protocol. |
+| [`TECHNICAL_GUIDE.md`](TECHNICAL_GUIDE.md) | The map of the code: layers, packages, the domain model, providers and resolution, the playback pipeline, every subsystem, the UI, persistence, network, build, tests, releasing, security, a glossary. |
+| [`USER_GUIDE.md`](USER_GUIDE.md) | The product from the listener's side: installing and updating, every screen, control and setting, permissions, troubleshooting, privacy. |
+| [`../AGENTS.md`](../AGENTS.md) | The short standing instructions for anyone touching the code — human or agent. |
+| [`../README.md`](../README.md) | The repository's front page: what Rizx is, screenshots, features, download, build, documentation links. |
 
-## Specifications and decisions
+### Deep dives (single topics, linked from the guides)
 
-The app was built slice by slice under Spec Driven Development: each feature has a specification and,
-where a trade-off was made, an architecture decision record. Those working documents, the release
-checklist and the author's planning notes are maintained outside this repository and are not part of
-the published documentation. Where a design decision matters to a reader of the code, the active
-documents above state it directly (identity model, ephemeral streams, keyless-only sources, plugin
-isolation, local-first sync). The Corresponding Source of the app is complete without them.
+| File | What it is |
+|---|---|
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | The load-bearing rules in depth: identity, two-phase resolution, playback, the queue, downloads, canvas, lyrics, recommendations, the 8D engine, recognition, persistence, sync, widgets, testing. |
+| [`PROVIDERS.md`](PROVIDERS.md) | The two provider contracts, the registry, every content source and how it stays keyless, the plugin runtime, how to add a provider. |
+| [`FEATURES.md`](FEATURES.md) | The feature tour and the device-compatibility table. |
+| [`BUILD.md`](BUILD.md) | Toolchain, local configuration, public runtime configuration, build types, release signing, Room schemas, tests, troubleshooting. |
+| [`plugins/PLUGIN_GUIDE.md`](plugins/PLUGIN_GUIDE.md) · [`plugins/PLUGIN_SPEC_FOR_AGENTS.md`](plugins/PLUGIN_SPEC_FOR_AGENTS.md) | The plugin contract for authors, and the same as exact shapes for coding agents. |
 
-## Known engineering limits
+### Policies and contribution
 
-- The queue repository is in-memory while a sanitized playback/session snapshot restores the current
-  queue and position after process death.
-- Crossfade is a volume-envelope fade between items, not two overlapping main players. Canvas owns a
-  separate muted video-only ExoPlayer; the playback service remains the sole owner of the audio player.
-- “Normalize volume” currently applies a fixed `LoudnessEnhancer` gain, not measured LUFS normalization.
-- Room exports begin at schema 4; the instrumented migration suite proves 4 → 5, 5 → 6 and 6 → 7, not
-  versions 1–3.
-- `quickjs-kt` cannot interrupt an infinite JavaScript loop. Plugin restart recovers the host, but the
-  wedged runtime thread remains until the Android process exits. Plugins also retain outbound network
-  access through the guarded `fetch` bridge.
-- `jaudiotagger` remains an Android-compatibility risk that must be re-evaluated before public release.
-- In-app updates read the repository's GitHub Releases (`releases/latest`, keyless, once a day and
-  once after launch) and verify the downloaded APK against the release asset's SHA-256 digest, but the
-  install itself is Android's: the app hands the file to the system package installer, which asks the
-  user to confirm, and only after the user has allowed installs from this app once
-  (`REQUEST_INSTALL_PACKAGES`). There is no silent update outside a store.
-- The shared HTTP `User-Agent` is a constant (`RizxPlayer/1.0` plus the repository URL) rather than
-  being derived from `BuildConfig.VERSION_NAME`; bump it with the major version.
-- Account sync is local-first and optional. The realtime invalidation channel is open only while the
-  app is on screen; in the background the debounced, foreground and 6-hour schedules are the guarantee.
-  The backend (a Supabase project with the schema, the `rizx_sync` RPC and a few Edge Functions) is a
-  separate deployment that a fork has to provide; without its configuration the app hides those
-  features and everything else works.
-- Provider endpoints are third-party and can change independently; each failure is isolated by design.
+| File | What it is |
+|---|---|
+| [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md) | What the app processes, which services it contacts and why, permissions. |
+| [`LICENSING.md`](LICENSING.md) · [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) | GPL-3.0 obligations, trademarks, Corresponding Source; every bundled dependency and its licence. |
+| [`../CONTRIBUTING.md`](../CONTRIBUTING.md) · [`../SECURITY.md`](../SECURITY.md) · [`../CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md) | How to contribute, how to report a vulnerability, how we treat each other. |
+| [`../.github/`](../.github/) | The CI workflow (the gate on every pull request), issue templates, the pull-request template. |
+| [`assets/`](assets/) | The README banner and screenshots. |
 
-## Documentation maintenance
+### Outside this directory, and private
 
-For a release, update this snapshot, `BUILD.md`, the version/date in the privacy and license reports,
-and the in-app license data (`ui/screens/LicenseData.kt` **and** `THIRD_PARTY_LICENSES.md` — the
-in-app list is what a user of the APK sees, so a new dependency must land in both). Documentation must
-stay publishable as-is: no credentials, no configuration values, no personal data, no links to files
-that are not in the repository.
+- `../share-site/` — the static files a share-link host serves (landing page, App Links statement).
+- The maintainer's private design record — one spec per slice (`specs/`), one ADR per trade-off
+  (`adr/`), checklists and the operational agent context — is git-ignored. Its decisions are restated
+  in `GOVERNANCE.md` §9 and `CONTEXT.md`; the Corresponding Source of the app is complete without it.
+- `../supabase/` (untracked) — the optional backend's migrations and Edge Functions; a deployment
+  state, not part of the app.
+
+## Conventions for writing here
+
+- English, plain, one idea per sentence; dates as `YYYY-MM-DD`; numbers with what produced them.
+- No configuration value, token, key, keystore, stream URL or personal data, ever — names only.
+- No link to a file that is not in the repository.
+- `CONTEXT.md`'s log is append-only at the tail, newest last; `GOVERNANCE.md`'s decision log is
+  append-only, a reversed decision gets a new line.
+- For a release, update `CONTEXT.md`'s state table, `BUILD.md`, the version and date in the privacy
+  and licensing documents, and the in-app licence data (`ui/screens/LicenseData.kt` **and**
+  `THIRD_PARTY_LICENSES.md` — the in-app list is what a user of the APK sees).

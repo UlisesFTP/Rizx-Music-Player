@@ -17,7 +17,8 @@ Thumbs.db
 
 # ── Internal planning & spec material (kept private) ─────────────────────────
 # Root planning docs that guide development but are not part of the shipped project.
-/AGENTS.md
+# AGENTS.md is PUBLIC since 2026-09-13 (standing instructions for contributors and agents);
+# CLAUDE.md stays private: it imports the private docs/AGENT_CONTEXT.md and machine rules.
 /CLAUDE.md
 /ROADMAP.md
 /*_STUDY.md

@@ -1,0 +1,45 @@
+name: Feature request
+description: Propose a change to what the app does.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Rizx is developed slice by slice from a short written statement of each change. A request
+        that already reads like one — why, what the contract is, how you would verify it — is the
+        fastest way in. Check the decision log in [`docs/CONTEXT.md`](../blob/main/docs/CONTEXT.md)
+        and the "Known limits" in [`docs/GOVERNANCE.md`](../blob/main/docs/GOVERNANCE.md) first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation from the listener's side, not the solution yet.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What the app should do, screen by screen if it has a UI.
+    validations:
+      required: true
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Rules it must keep
+      description: |
+        Keyless sources only; stream URLs never stored; provider failures isolated; nothing about
+        listening leaves the phone unless the user signs in. Say how the proposal respects them, or
+        which one it needs a decision on.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and the decision log.
+          required: true
