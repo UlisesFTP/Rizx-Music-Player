@@ -63,6 +63,11 @@ isolation, local-first sync). The Corresponding Source of the app is complete wi
   wedged runtime thread remains until the Android process exits. Plugins also retain outbound network
   access through the guarded `fetch` bridge.
 - `jaudiotagger` remains an Android-compatibility risk that must be re-evaluated before public release.
+- In-app updates read the repository's GitHub Releases (`releases/latest`, keyless, once a day and
+  once after launch) and verify the downloaded APK against the release asset's SHA-256 digest, but the
+  install itself is Android's: the app hands the file to the system package installer, which asks the
+  user to confirm, and only after the user has allowed installs from this app once
+  (`REQUEST_INSTALL_PACKAGES`). There is no silent update outside a store.
 - The shared HTTP `User-Agent` is a constant (`RizxPlayer/1.0` plus the repository URL) rather than
   being derived from `BuildConfig.VERSION_NAME`; bump it with the major version.
 - Account sync is local-first and optional. The realtime invalidation channel is open only while the

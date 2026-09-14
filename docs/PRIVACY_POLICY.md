@@ -58,6 +58,21 @@ embeds, only for imports and editorial charts), **LRCLIB**, **NetEase**, **KuGou
 - **When:** only while you actively use a feature backed by that service. Disabled providers are never
   contacted.
 
+### Update check — GitHub (automatic)
+
+The app looks for a newer version of itself by reading the public release list of its own
+repository on **GitHub** (`api.github.com`, operated by GitHub, Inc.). This is the one request that
+does not wait for you to use a feature: it runs shortly after the app starts and about once a day in
+the background, at most once every twelve hours.
+
+- **What is sent:** nothing about you or your library — only the standard metadata any HTTP request
+  carries (your IP address and the app's `User-Agent`). No account, device identifier or usage data
+  is included.
+- **Why:** to show a notification and a Settings row when a newer version is published, and, if you
+  choose, to download that version's APK from the same release page. Installing it is always your
+  explicit action in Android's installer.
+- **Who receives it:** GitHub, under its own terms and privacy policy.
+
 ### Microphone — music recognition
 
 When, and only when, you start a recognition from the Audio ID screen or the Audio ID widget:

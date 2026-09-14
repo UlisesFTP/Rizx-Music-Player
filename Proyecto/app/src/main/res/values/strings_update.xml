@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- In-app updates from GitHub Releases (spec 024) -->
+    <string name="update_row_title">App updates</string>
+    <string name="update_row_caption">Version %1$s · from GitHub Releases</string>
+    <string name="update_value_check">Check</string>
+    <string name="update_value_checking">Checking…</string>
+    <string name="update_value_up_to_date">Up to date</string>
+    <string name="update_value_available">%1$s available</string>
+    <string name="update_value_downloading">%1$d %%</string>
+    <string name="update_value_downloading_unknown">Downloading…</string>
+    <string name="update_value_ready">Ready to install</string>
+    <string name="update_value_failed">Failed</string>
+
+    <string name="update_dialog_eyebrow">App updates</string>
+    <string name="update_dialog_title">Rizx updates</string>
+    <string name="update_unknown">Nothing checked yet.</string>
+    <string name="update_checking">Looking for a newer version on GitHub…</string>
+    <string name="update_up_to_date">You have the latest version (%1$s).</string>
+    <string name="update_skipped">Version %1$s was skipped. You have %2$s.</string>
+    <string name="update_available_title">Rizx %1$s</string>
+    <string name="update_available_size">%1$s · you have %2$s</string>
+    <string name="update_mobile_data">You\'re on mobile data.</string>
+    <string name="update_notes_empty">No release notes.</string>
+    <string name="update_download">Download</string>
+    <string name="update_skip">Skip this version</string>
+    <string name="update_later">Later</string>
+    <string name="update_check_again">Check again</string>
+    <string name="update_downloading">Downloading %1$s of %2$s</string>
+    <string name="update_downloading_unknown">Downloading %1$s…</string>
+    <string name="update_cancel">Cancel</string>
+    <string name="update_ready">Downloaded and verified. Android will ask you to confirm the install; the app restarts afterwards.</string>
+    <string name="update_install">Install</string>
+    <string name="update_allow_install">Allow installs</string>
+    <string name="update_allow_install_caption">Android needs your permission once so Rizx can install its own updates. You\'ll come back here afterwards.</string>
+    <string name="update_failed_network">Couldn\'t reach GitHub. Check your connection and try again.</string>
+    <string name="update_failed_verification">The downloaded file doesn\'t match the published one. Try again.</string>
+    <string name="update_failed_unknown">Something went wrong. Try again.</string>
+    <string name="update_retry">Retry</string>
+
+    <string name="update_notification_channel">App updates</string>
+    <string name="update_notification_channel_caption">When a new version of Rizx is published</string>
+    <string name="update_notification_title">Rizx %1$s is available</string>
+    <string name="update_notification_text">Tap to download and install the update.</string>
+    <string name="update_notification_action">Update</string>
+</resources>

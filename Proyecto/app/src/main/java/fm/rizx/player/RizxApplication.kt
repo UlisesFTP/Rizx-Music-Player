@@ -15,6 +15,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.components.SingletonComponent
 import fm.rizx.player.data.sync.SyncScheduler
+import fm.rizx.player.data.update.AppUpdateScheduler
 import fm.rizx.player.domain.plugin.PluginRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,12 @@ class RizxApplication : Application(), ImageLoaderFactory {
     @InstallIn(SingletonComponent::class)
     interface SyncBootstrapEntryPoint {
         fun syncScheduler(): SyncScheduler
+    }
+
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface UpdateBootstrapEntryPoint {
+        fun appUpdateScheduler(): AppUpdateScheduler
     }
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -133,6 +140,14 @@ class RizxApplication : Application(), ImageLoaderFactory {
                 // channel on a cold start.
                 if (foregroundWatcher.isForeground) scheduler.onForeground()
             }.onFailure { android.util.Log.w("Sync", "sync bootstrap failed", it) }
+            // In-app updates (spec 024): one check shortly after start and one a day in the background.
+            // The coordinator's own 12 h window keeps the start check from becoming a request per launch.
+            runCatching {
+                EntryPointAccessors
+                    .fromApplication(this@RizxApplication, UpdateBootstrapEntryPoint::class.java)
+                    .appUpdateScheduler()
+                    .onAppStart()
+            }.onFailure { android.util.Log.w("AppUpdate", "update bootstrap failed", it) }
         }
     }
 

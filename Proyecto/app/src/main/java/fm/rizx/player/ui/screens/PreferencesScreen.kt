@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -31,6 +32,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -82,6 +85,7 @@ import fm.rizx.player.ui.util.ListFilter
 import fm.rizx.player.ui.icons.RizxIcons
 import fm.rizx.player.data.local.settings.SettingsRepositoryImpl
 import fm.rizx.player.ui.settings.AppLanguage
+import fm.rizx.player.ui.settings.AppUpdateViewModel
 import fm.rizx.player.ui.settings.PreferencesViewModel
 import fm.rizx.player.ui.settings.currentAppLanguage
 import fm.rizx.player.ui.settings.setAppLanguage
@@ -107,6 +111,7 @@ fun PreferencesScreen(
     onOpenAbout: () -> Unit,
     vm: PreferencesViewModel = hiltViewModel(),
     accountVm: AccountViewModel = hiltViewModel(),
+    updateVm: AppUpdateViewModel = hiltViewModel(),
 ) {
     val c = RizxTheme.colors
     val context = LocalContext.current
@@ -174,6 +179,17 @@ fun PreferencesScreen(
 
     var query by rememberSaveable { mutableStateOf("") }
     var clearCacheOpen by remember { mutableStateOf(false) }
+    // In-app updates (spec 024). The state is app-wide (the coordinator's), so this row and the dialog a
+    // notification opens always agree; a tap on that notification lands in the inbox and opens the dialog.
+    var updateDialogOpen by remember { mutableStateOf(false) }
+    val updateState by updateVm.state.collectAsStateWithLifecycle()
+    val pendingUpdateOpen by updateVm.pendingOpen.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingUpdateOpen) {
+        if (pendingUpdateOpen != 0L && updateVm.consumeOpen()) {
+            updateDialogOpen = true
+            updateVm.check(force = false)
+        }
+    }
     // Hoisted out of the row: turning "Save to the phone" on may first need the legacy storage
     // permission (Android 8–9 only, API < 29), and a permission launcher must be remembered at a
     // stable call position — not inside a row the filter can stop emitting.
@@ -272,6 +288,9 @@ fun PreferencesScreen(
     val langCaption = stringResource(R.string.pref_language_caption)
     // The equalizer row reads what is in charge of the curve: the automatic equalizer, or the presets.
     val eqValueShown = if (autoEq) stringResource(R.string.eq_auto_badge) else eqValue
+    val updateTitle = stringResource(R.string.update_row_title)
+    val updateCaption = stringResource(R.string.update_row_caption, updateVm.installedVersion)
+    val updateValue = appUpdateRowValue(updateState)
     val aboutTitle = stringResource(R.string.pref_about)
     val aboutValue = stringResource(R.string.pref_about_v)
     val accountTitle = stringResource(R.string.pref_account_sync)
@@ -397,6 +416,14 @@ fun PreferencesScreen(
             },
         ),
         stringResource(R.string.settings_app) to listOf(
+            // Opening the dialog also refreshes the answer when the last one is old; the dialog's own
+            // button forces a fresh lookup.
+            entry(updateTitle, updateValue, updateCaption) {
+                SettingRow(updateTitle, updateValue, updateCaption) {
+                    updateDialogOpen = true
+                    updateVm.check(force = false)
+                }
+            },
             entry(accountTitle, accountValue, accountCaption) {
                 SettingRow(accountTitle, accountValue, accountCaption, onClick = onOpenAccount)
             },
@@ -528,6 +555,22 @@ fun PreferencesScreen(
             confirmLabel = stringResource(R.string.settings_clear_cache_confirm),
             onConfirm = vm::clearCache,
             onDismiss = { clearCacheOpen = false },
+        )
+    }
+    if (updateDialogOpen) {
+        AppUpdateDialog(
+            state = updateState,
+            installedVersion = updateVm.installedVersion,
+            onMobileData = updateVm.onMobileData(),
+            canInstall = updateVm::canInstall,
+            onCheck = { updateVm.check(force = true) },
+            onDownload = updateVm::download,
+            onCancelDownload = updateVm::cancelDownload,
+            onSkip = { updateVm.skip(); updateDialogOpen = false },
+            onRetry = updateVm::retry,
+            onInstall = { path -> context.startActivity(updateVm.installIntent(path)) },
+            onAllowInstall = { context.startActivity(updateVm.permissionIntent()) },
+            onDismiss = { updateDialogOpen = false },
         )
     }
     if (languageDialogOpen) {
@@ -1134,21 +1177,50 @@ internal fun visibleEntries(query: String, rows: List<SettingsEntry>): List<Sett
     rows.filter { it.matches(query) }
 
 /**
- * The eyebrow and serial of a section (`■ AUDIO … S01`), by position in the groups list. The titles
- * stay where they are built; only the design's two decorations live here.
+ * The eyebrow, serial and identity mark of a section (`[♪] ■ AUDIO … S01`), by position in the groups
+ * list. The titles stay where they are built; only the design's decorations live here. The marks
+ * follow the web's settings page (2026-09-13): sound → volume, playback → repeat, appearance → theme,
+ * sources → catalogue lines, downloads → arrow, system → refresh; the two sections only the phone has
+ * take the star (taste) and a drive (storage).
  */
-private data class SectionMeta(@StringRes val eyebrow: Int, val code: String)
+private data class SectionMeta(@StringRes val eyebrow: Int, val code: String, val icon: ImageVector)
 
 private val SECTION_META = listOf(
-    SectionMeta(R.string.settings_eyebrow_sound, "S01"),
-    SectionMeta(R.string.settings_eyebrow_playback, "P02"),
-    SectionMeta(R.string.settings_eyebrow_appearance, "V03"),
-    SectionMeta(R.string.settings_eyebrow_sources, "C04"),
-    SectionMeta(R.string.settings_eyebrow_recs, "R05"),
-    SectionMeta(R.string.settings_eyebrow_downloads, "D06"),
-    SectionMeta(R.string.settings_eyebrow_data, "M07"),
-    SectionMeta(R.string.settings_eyebrow_app, "A08"),
+    SectionMeta(R.string.settings_eyebrow_sound, "S01", RizxIcons.Volume),
+    SectionMeta(R.string.settings_eyebrow_playback, "P02", RizxIcons.Repeat),
+    SectionMeta(R.string.settings_eyebrow_appearance, "V03", RizxIcons.Theme),
+    SectionMeta(R.string.settings_eyebrow_sources, "C04", RizxIcons.QueueMusic),
+    SectionMeta(R.string.settings_eyebrow_recs, "R05", RizxIcons.Star),
+    SectionMeta(R.string.settings_eyebrow_downloads, "D06", RizxIcons.Download),
+    SectionMeta(R.string.settings_eyebrow_data, "M07", RizxIcons.Storage),
+    SectionMeta(R.string.settings_eyebrow_app, "A08", RizxIcons.Refresh),
 )
+
+/** The mark's square (the web's 38px on a phone) and its hard shadow (3px). */
+private val SECTION_ICON_SIZE = 38.dp
+private val SECTION_ICON_SHADOW = 3.dp
+
+/**
+ * A section's identity mark: its glyph in a red-framed square with the red hard shadow, taking the
+ * corner left of the eyebrow/title stack. Decorative — the eyebrow beside it is what reads, so there is
+ * no content description. The shadow is reserved inside the mark's own bounds, like [EditorialSurface].
+ */
+@Composable
+private fun SectionIcon(icon: ImageVector) {
+    val c = RizxTheme.colors
+    Box(Modifier.padding(end = SECTION_ICON_SHADOW, bottom = SECTION_ICON_SHADOW)) {
+        Box(
+            Modifier
+                .size(SECTION_ICON_SIZE)
+                .brutalShadow(c.redAccent, offset = SECTION_ICON_SHADOW)
+                .background(c.elev)
+                .border(Editorial.Frame, c.redAccent, RectangleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = c.text, modifier = Modifier.size(19.dp))
+        }
+    }
+}
 
 /** True on a section's last visible row, which draws no rule under it — the card's frame is the closing line. */
 private val LocalLastRow = compositionLocalOf { false }
@@ -1164,15 +1236,18 @@ private fun SettingsGroup(meta: SectionMeta, title: String, query: String, rows:
     if (visible.isEmpty()) return
     val c = RizxTheme.colors
     EditorialSurface(Modifier.padding(bottom = 14.dp)) {
+        // The mark, the eyebrow/title stack and the serial on one centred line, as the web lays its
+        // header out once the mark is there (`align-items: center`).
         Row(
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 62.dp)
                 .bottomRule(c.hardLine, Editorial.Frame)
                 .padding(bottom = 18.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            SectionIcon(meta.icon)
             Column(Modifier.weight(1f)) {
                 SignalEyebrow(stringResource(meta.eyebrow))
                 SurfaceTitle(title, Modifier.padding(top = 6.dp))

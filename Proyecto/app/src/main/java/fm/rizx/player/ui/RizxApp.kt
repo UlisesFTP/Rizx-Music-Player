@@ -61,6 +61,7 @@ import fm.rizx.player.ui.navigation.Routes
 import fm.rizx.player.ui.recognition.RecognitionScreen
 import fm.rizx.player.ui.player.PlaybackViewModel
 import fm.rizx.player.ui.player.PlayerViewModel
+import fm.rizx.player.ui.settings.AppUpdateViewModel
 import fm.rizx.player.ui.queue.QueueViewModel
 import fm.rizx.player.ui.util.rememberSaveToPhonePermission
 import fm.rizx.player.ui.screens.AboutScreen
@@ -131,6 +132,13 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     val pendingRecognition by playerViewModel.pendingRecognition.collectAsStateWithLifecycle()
     LaunchedEffect(pendingRecognition) {
         if (pendingRecognition != 0L) nav.navigate(Routes.RECOGNITION) { launchSingleTop = true }
+    }
+    // A tap on the "new version" notification: go to Settings, whose screen consumes the request and
+    // opens the update dialog (spec 024).
+    val updateViewModel: AppUpdateViewModel = hiltViewModel()
+    val pendingUpdate by updateViewModel.pendingOpen.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingUpdate) {
+        if (pendingUpdate != 0L) nav.navigateTabAt(Routes.SETTINGS)
     }
     // One visual player for the whole activity. Home and Now Playing borrow it by placement; the
     // coordinator gives Now Playing priority during navigation and stops whenever neither is visible.

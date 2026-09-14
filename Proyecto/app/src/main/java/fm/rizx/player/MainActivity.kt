@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import fm.rizx.player.domain.model.ThemeMode
 import fm.rizx.player.domain.recognition.RecognitionInbox
+import fm.rizx.player.domain.update.AppUpdateInbox
 import fm.rizx.player.domain.share.ShareLinkInbox
 import fm.rizx.player.domain.share.ShareLinks
 import fm.rizx.player.ui.RizxApp
@@ -53,6 +54,9 @@ class MainActivity : ComponentActivity() {
     /** Where a widget's microphone tap waits for the recognition screen. */
     @Inject lateinit var recognitionRequests: RecognitionInbox
 
+    /** A tap on the "new version" notification: the Settings screen opens the update dialog. */
+    @Inject lateinit var updateRequests: AppUpdateInbox
+
     /**
      * Below API 33 the app language is applied by hand from its stored preference (see AppLanguage.kt);
      * on 33+ this wrap is a no-op because LocaleManager already localized the base context.
@@ -69,6 +73,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             receiveShareLink(intent)
             receiveRecognitionRequest(intent)
+            receiveUpdateRequest(intent)
         }
         applyOrientationPolicy()
         keepScreenAwake()
@@ -117,11 +122,17 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         receiveShareLink(intent)
         receiveRecognitionRequest(intent)
+        receiveUpdateRequest(intent)
     }
 
     /** The microphone on a home screen widget: the app opens on the recognition screen and listens. */
     private fun receiveRecognitionRequest(intent: Intent?) {
         if (intent?.action == ACTION_RECOGNIZE) recognitionRequests.offer()
+    }
+
+    /** The "new version" notification (spec 024): the app opens Settings on the update dialog. */
+    private fun receiveUpdateRequest(intent: Intent?) {
+        if (intent?.action == ACTION_OPEN_UPDATE) updateRequests.offer()
     }
 
     /**
@@ -141,6 +152,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Explicit intent action a widget uses to ask for song identification. */
         const val ACTION_RECOGNIZE = "fm.rizx.player.action.RECOGNIZE"
+
+        /** Explicit intent action the update notification uses to open the update dialog. */
+        const val ACTION_OPEN_UPDATE = "fm.rizx.player.action.OPEN_UPDATE"
     }
 
     /**

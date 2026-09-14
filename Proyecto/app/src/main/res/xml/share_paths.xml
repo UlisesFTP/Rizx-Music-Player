@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="playlist_exports" path="playlist_exports/" />
+    <!-- A downloaded release APK, offered to the package installer (spec 024). -->
+    <files-path name="updates" path="updates/" />
 </paths>

@@ -262,6 +262,63 @@ object RizxIcons {
         }
     }
 
+    // ---- Settings section marks (the web's `.settings-section-icon` glyphs, redrawn in this set's
+    // heavy fills and square strokes; 2026-09-13) --------------------------------------------------
+
+    /** "Sound": a solid speaker cone with one hard wave in front of it. */
+    val Volume = icon {
+        fill {
+            moveTo(4f, 9f); horizontalLineTo(8f); lineTo(13.5f, 4.5f); verticalLineTo(19.5f); lineTo(8f, 15f)
+            horizontalLineTo(4f); close()
+        }
+        stroke(2.4f) { moveTo(17f, 8.5f); arcToRelative(4.2f, 4.2f, 0f, false, true, 0f, 7f) }
+    }
+
+    /** "Appearance": a ring with its right half filled — light against dark, the theme switch in one mark. */
+    val Theme = icon {
+        stroke(2.2f) {
+            moveTo(4.4f, 12f)
+            arcTo(7.6f, 7.6f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 19.6f, y1 = 12f)
+            arcTo(7.6f, 7.6f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 4.4f, y1 = 12f)
+        }
+        fill {
+            moveTo(12f, 4.4f)
+            arcTo(7.6f, 7.6f, 0f, isMoreThanHalf = false, isPositiveArc = true, x1 = 12f, y1 = 19.6f)
+            close()
+        }
+    }
+
+    /** "Downloads": a solid arrow dropping onto a tray. */
+    val Download = icon {
+        fill {
+            moveTo(10.6f, 3f); horizontalLineTo(13.4f); verticalLineTo(10.5f); horizontalLineTo(18f)
+            lineTo(12f, 16.5f); lineTo(6f, 10.5f); horizontalLineTo(10.6f); close()
+            moveTo(4f, 18.5f); horizontalLineTo(20f); verticalLineTo(21f); horizontalLineTo(4f); close()
+        }
+    }
+
+    /** "Data & storage": a drive cabinet with two bays, each with its indicator block. */
+    val Storage = icon {
+        stroke(2.2f) {
+            moveTo(3.5f, 4.5f); horizontalLineTo(20.5f); verticalLineTo(19.5f); horizontalLineTo(3.5f); close()
+            moveTo(3.5f, 12f); horizontalLineTo(20.5f)
+        }
+        fill {
+            moveTo(15.2f, 7f); horizontalLineTo(17.8f); verticalLineTo(9.6f); horizontalLineTo(15.2f); close()
+            moveTo(15.2f, 14.4f); horizontalLineTo(17.8f); verticalLineTo(17f); horizontalLineTo(15.2f); close()
+        }
+    }
+
+    /** "App / system": the web's refresh arrow — a three-quarter ring with a square-cornered head. */
+    val Refresh = icon {
+        stroke(2.4f) {
+            moveTo(4f, 12f)
+            arcToRelative(8f, 8f, 0f, isMoreThanHalf = true, isPositiveArc = false, dx1 = 2.3f, dy1 = -5.7f)
+            lineTo(4f, 8.6f)
+            moveTo(4f, 4f); verticalLineTo(8.6f); horizontalLineTo(8.6f)
+        }
+    }
+
     val Grip = icon {
         fill {
             moveTo(8f, 5f); horizontalLineTo(10.4f); verticalLineTo(7.4f); horizontalLineTo(8f); close()

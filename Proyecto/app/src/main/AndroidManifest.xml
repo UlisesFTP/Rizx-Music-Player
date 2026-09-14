@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- In-app updates (spec 024): the app hands a downloaded release APK to the system installer.
+         Android additionally asks the user, once, to allow installs from this app. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Equalizer / audio effects (Phase 15). -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
