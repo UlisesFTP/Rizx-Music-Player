@@ -154,7 +154,7 @@ class HomeViewModelTest {
         HomeFeedStore(File(tmp.root, "home_feed.json"), io = mainDispatcherRule.dispatcher)
 
     private fun vm(repo: DashboardRepository, forYou: ForYouRepository = FakeForYou()) =
-        HomeViewModel(repo, InMemoryQueueRepository(), FakePlayback(), forYou, store(), FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents())
+        HomeViewModel(repo, InMemoryQueueRepository(), FakePlayback(), forYou, store(), FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents()).useDispatchers(mainDispatcherRule.dispatcher)
 
     @Test
     fun `loads the feed into Content`() = runTest(mainDispatcherRule.dispatcher.scheduler) {
@@ -183,7 +183,7 @@ class HomeViewModelTest {
                 FakeDash { throw AppError.Network("offline") },
                 InMemoryQueueRepository(), FakePlayback(), FakeForYou(), store(), FakeSettingsRepository(), FakeFavorites(),
                 NoopPlaylists, FakeRecents(listOf(recent)),
-            )
+            ).useDispatchers(mainDispatcherRule.dispatcher)
 
             assertEquals(HomeUiState.Offline, vm.state.first { it !is HomeUiState.Loading })
             assertEquals(listOf(recent), vm.continueListening.first { it.isNotEmpty() })
@@ -287,7 +287,7 @@ class HomeViewModelTest {
             var networkCalls = 0
             val dash = FakeDash { networkCalls++; HomeFeed() }
 
-            val vm = HomeViewModel(dash, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents())
+            val vm = HomeViewModel(dash, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents()).useDispatchers(mainDispatcherRule.dispatcher)
             val content = vm.state.first { it is HomeUiState.Content } as HomeUiState.Content
 
             assertEquals("From cache", content.feed.topTracks.single().items.single().title)
@@ -307,7 +307,7 @@ class HomeViewModelTest {
                 FakeDash { throw AppError.Network("offline") },
                 InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache, FakeSettingsRepository(), FakeFavorites(),
                 NoopPlaylists, FakeRecents(),
-            )
+            ).useDispatchers(mainDispatcherRule.dispatcher)
 
             vm.state.first { it is HomeUiState.Content }
             vm.refresh()
@@ -322,7 +322,7 @@ class HomeViewModelTest {
             // setting, resolved in one place (the controller), so every entry point agrees — this
             // screen just says "start a radio from this song".
             val playback = FakePlayback()
-            val vm = HomeViewModel(FakeDash { HomeFeed() }, InMemoryQueueRepository(), playback, FakeForYou(), store(), FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents())
+            val vm = HomeViewModel(FakeDash { HomeFeed() }, InMemoryQueueRepository(), playback, FakeForYou(), store(), FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents()).useDispatchers(mainDispatcherRule.dispatcher)
             val youtube = Track("Mix song", source = ProviderRef("youtube", "abcdefghijk"))
             val deezer = Track("Chart song", source = ProviderRef("deezer", "1"))
 
@@ -340,7 +340,7 @@ class HomeViewModelTest {
             val vm = HomeViewModel(
                 FakeDash { chartFeed(10) }, InMemoryQueueRepository(), playback, FakeForYou(), store(),
                 FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents(),
-            )
+            ).useDispatchers(mainDispatcherRule.dispatcher)
 
             val mix = vm.mixes.first { it.mixes.isNotEmpty() }.mixes.first()
             vm.playMix(mix, "Around the world")
@@ -403,7 +403,7 @@ class HomeViewModelTest {
         val vm = HomeViewModel(
             FakeDash { loads++; HomeFeed(topTracks = listOf(AttributedResult("d", "Deezer", listOf(Track("Yellow", source = ProviderRef("deezer", "1")))))) }, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), store(),
             FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents(), sync = sync,
-        )
+        ).useDispatchers(mainDispatcherRule.dispatcher)
         vm.state.first { it is HomeUiState.Content }
         val before = loads
 

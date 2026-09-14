@@ -1,5 +1,6 @@
 package fm.rizx.player.ui.home
 
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,6 +36,7 @@ import fm.rizx.player.domain.usecase.TasteProfile
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import fm.rizx.player.domain.account.AccountRepository
@@ -124,6 +126,27 @@ class HomeViewModel @Inject constructor(
 ) : ViewModel() {
 
     /**
+     * Where the cache read and the taste statistics run. Plain properties rather than constructor
+     * parameters because Hilt injects every parameter of an `@HiltViewModel` and there is no
+     * `CoroutineDispatcher` binding — the same seam as `SearchViewModel.useIoDispatcher`.
+     */
+    private var io: CoroutineDispatcher = Dispatchers.IO
+    private var background: CoroutineDispatcher = Dispatchers.Default
+
+    /**
+     * Test seam. Left on the real pools, a load's cache read or a statistics pass outlives the test
+     * that started it, and resuming onto a `Dispatchers.Main` that has already been torn down kills
+     * the coroutine machinery — which surfaces as `UncaughtExceptionsBeforeTest` in whichever test
+     * happens to run next (it did, on CI, on 2026-09-13). The flows below are built lazily so they
+     * read the dispatcher this hands them rather than the one they were constructed with.
+     */
+    @VisibleForTesting
+    internal fun useDispatchers(io: CoroutineDispatcher, background: CoroutineDispatcher = io) = apply {
+        this.io = io
+        this.background = background
+    }
+
+    /**
      * The listening log the statistics run on: every play with its counts, not just a list of titles.
      * Deeper than any row shows, because the weighting needs a distribution to weigh — recency decay,
      * "on repeat" and "rediscover" all say nothing across a handful of plays.
@@ -139,14 +162,15 @@ class HomeViewModel @Inject constructor(
      * out of [HomeUiState] for exactly that reason — it must not wait on the feed, and the feed's
      * failure must not take it away.
      */
-    val continueListening: StateFlow<List<Track>> =
+    val continueListening: StateFlow<List<Track>> by lazy {
         combine(history, favorites.favoriteTracks()) { played, liked ->
             ContinueListening.build(profile(played, liked), today(), CONTINUE_ITEMS)
         }
             // Off the main thread: this re-runs on every play, and reading it means decoding a few
             // hundred stored tracks before the statistics even start.
-            .flowOn(Dispatchers.Default)
+            .flowOn(background)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }
 
     /** The one identity Home may animate; queue identity and engine state stay joined here, not in UI. */
     val playbackIndicator: StateFlow<HomePlaybackIndicator> =
@@ -180,7 +204,7 @@ class HomeViewModel @Inject constructor(
      * settled on the first frame: a wall that gained a tile when the slow half landed would push the
      * whole feed down. [MixBuilder.pick] is the exception, and the Home reserves its card's height.
      */
-    val mixes: StateFlow<HomeMixes> =
+    val mixes: StateFlow<HomeMixes> by lazy {
         combine(history, favorites.favoriteTracks(), state) { played, liked, ui ->
             val content = ui as? HomeUiState.Content
             val profile = profile(played, liked)
@@ -189,10 +213,11 @@ class HomeViewModel @Inject constructor(
                 mixes = mixBuilder.build(profile, content?.feed ?: HomeFeed(), sections, today()),
                 pick = mixBuilder.pick(profile, sections),
             )
-        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeMixes())
+        }.flowOn(background).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeMixes())
+    }
 
     /** Up to three typed, playable pages; pure selection keeps refreshes from reshuffling the pager. */
-    val heroes: StateFlow<List<HomeHeroItem>> =
+    val heroes: StateFlow<List<HomeHeroItem>> by lazy {
         combine(mixes, state) { homeMixes, ui ->
             val content = ui as? HomeUiState.Content
             homeHeroItems(
@@ -201,6 +226,7 @@ class HomeViewModel @Inject constructor(
                 sections = content?.forYouSections.orEmpty(),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }
 
     /**
      * The taste behind both of the above, read at the moment it is needed.
@@ -259,7 +285,7 @@ class HomeViewModel @Inject constructor(
         account?.let { repo ->
             viewModelScope.launch {
                 repo.state.map { (it as? AccountState.SignedIn)?.profile?.id }.distinctUntilChanged().drop(1).collect {
-                    withContext(Dispatchers.IO) { cache.clear() }
+                    withContext(io) { cache.clear() }
                     refresh()
                 }
             }
@@ -293,7 +319,7 @@ class HomeViewModel @Inject constructor(
         _isRefreshing.value = !useCache && _state.value is HomeUiState.Content
         val job = viewModelScope.launch {
             var selection = ""
-            val cached = withContext(Dispatchers.IO) {
+            val cached = withContext(io) {
                 regionalConsent = forYou.regionalConsent.first()
                 countryName = forYou.countryName()
                 selection = cacheKey()

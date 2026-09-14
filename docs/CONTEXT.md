@@ -122,3 +122,11 @@ every clone since the first push built only on the maintainer's machine. Fix: th
 `local.properties`, no bundled plugin, no keystore — CI's conditions) passes the full gate: 1,695
 tests in 193 suites, lint 0 errors, `assembleDebug`. Lesson recorded in `GOVERNANCE.md` §9: the CI
 gate is what proves the *published* source builds, not the maintainer's working tree.
+The second CI run then failed one test, `HomeViewModelTest › network failure yields Offline`, with
+`UncaughtExceptionsBeforeTest`: the ViewModel's cache read (`withContext(Dispatchers.IO)`) and taste
+flows (`flowOn(Dispatchers.Default)`) ran on real threads, and on the slower runner a coroutine from
+the previous test resumed onto a `Dispatchers.Main` the test rule had already torn down. Fix: the same
+seam `SearchViewModel` already had — overridable `io`/`background` dispatchers (`useDispatchers`, a
+`@VisibleForTesting internal` method, since Hilt has no `CoroutineDispatcher` binding) and the three
+derived `StateFlow`s built lazily so they read the overridden dispatcher; every construction in the
+test class hands over the test scheduler. No other ViewModel with JVM tests touches a real dispatcher.
