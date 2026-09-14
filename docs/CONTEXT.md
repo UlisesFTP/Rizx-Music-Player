@@ -111,3 +111,14 @@ grew a user guide, a technical guide, governance, this context file, a public `A
 contributing/security/conduct files, issue and pull-request templates, a CI workflow and the README
 with the banner and screenshots. `docs/adr/` was found deleted from disk during the day and restored
 from the Recycle Bin.
+
+**2026-09-13 — the public tree was missing a package; the first CI run caught it.** The first push
+of the Android CI workflow failed in `kspDebugKotlin`: Hilt could not resolve `SessionStore`,
+`SupabaseAuthApi` and their siblings. Cause: the `.gitignore` rule `supabase/`, written for the
+backend folder at the repository root, was unanchored and also matched the app's own
+`data/remote/supabase` Kotlin package (six files) and its test, so they had never been committed —
+every clone since the first push built only on the maintainer's machine. Fix: the rule is now
+`/supabase/`, the package and its test are tracked, and a checkout of the index (no
+`local.properties`, no bundled plugin, no keystore — CI's conditions) passes the full gate: 1,695
+tests in 193 suites, lint 0 errors, `assembleDebug`. Lesson recorded in `GOVERNANCE.md` §9: the CI
+gate is what proves the *published* source builds, not the maintainer's working tree.

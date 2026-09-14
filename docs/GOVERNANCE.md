@@ -182,6 +182,7 @@ Durable decisions, oldest first, with where the reasoning is recorded. Add a lin
 | 2026-09-09 | DM Sans is bundled as the display face; Now Playing becomes the web's stage over the app's console. | ADR 0031 (amended) |
 | 2026-09-10 | The stage is weight-based with ambient lights from the cover palette; the YouTube canvas source stays on by default (turning it off made covers static); Classic keeps the full-bleed stage. | `CONTEXT.md` |
 | 2026-09-13 | In-app updates read GitHub Releases and hand off to the system installer; AGENTS.md is public; the documentation set (user guide, technical guide, governance, context) is part of the definition of done; CI runs the gate on pull requests. | ADR 0032, spec 024, this file |
+| 2026-09-13 | Ignore rules that name a folder are anchored to the root (`/supabase/`); the first CI run showed an unanchored rule had kept the app's `data/remote/supabase` package out of the public tree. A release tag is cut only after CI is green on that commit, because CI — not the maintainer's tree — is what proves the published source builds. | `CONTEXT.md` 2026-09-13, `.gitignore` |
 
 ## 10. Open items and known debt
 
@@ -197,6 +198,7 @@ Recorded so nobody rediscovers them; none blocks daily work.
 - The shared HTTP User-Agent is a constant; bump it with the major version.
 - The share-link host must serve `/.well-known/assetlinks.json`; `share-site/` documents it but
   does not ship one (it carries the deployment's certificate fingerprint).
+- Until the fix of 2026-09-13 is pushed, `origin/main` lacks `data/remote/supabase` and does not build from a clone; the tag `v1.0.0` must be cut after that push.
 - The tracked `.vite/deps/` metadata at the repository root is a leftover with no role in the Android
   build; removing it is a housekeeping commit for the maintainer.
 - Older docs (`ARCHITECTURE.md`, `FEATURES.md`, `PROVIDERS.md`) were refreshed on 2026-09-13 but

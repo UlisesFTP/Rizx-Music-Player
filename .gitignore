@@ -105,4 +105,6 @@ docs/AGENT_CONTEXT.md
 docs/AGENT_CONTEXT_ARCHIVE.md
 
 # Supabase backend (migrations + Edge Functions) is deployment state, applied via MCP/CLI; not published.
-supabase/
+# Anchored to the repository root on purpose: an unanchored `supabase/` also matched the app's own
+# `data/remote/supabase` Kotlin package and kept it out of the public tree until 2026-09-13.
+/supabase/
