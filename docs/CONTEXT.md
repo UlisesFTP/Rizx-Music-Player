@@ -158,3 +158,12 @@ Home, and the sync pulled them (3 favorites, 6 taste rows, nothing sent) with no
 before it applied 3,828 taste rows, also with no crash. One clean run does not prove the fix on its own,
 because the failure depends on timing and the old build was not run on this path; the instrumented test
 is the proof. The fix ships in 1.0.1; 1.0.0 still carries the bug.
+
+**2026-10-30 — v1.0.1 published.** Version 1.0.1 (`versionCode 4`) carries the fix above and nothing else.
+The first CI run on commit `0a281fb` failed after 37 seconds, before compiling anything, because the runner
+could not resolve the Hilt Gradle plugin; the plugin line had not changed, and a rerun of the same commit
+passed. The tag `v1.0.1` was then pushed on that commit and the release was created with
+`Rizx-1.0.1-release.apk` (11,867,389 bytes, built from that commit, SHA-256 `8923d344…3f3a8a`, as GitHub's
+asset digest confirms; the size matching 1.0.0's is a coincidence, the code differs). `apksigner` confirms
+the published signing certificate. `releases/latest` now answers `v1.0.1`. The updater's path from 1.0.0 to
+1.0.1 on a real device had not been observed when this entry was written.
