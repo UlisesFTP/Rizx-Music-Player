@@ -86,53 +86,56 @@ fun AppUpdateDialog(
                 .heightIn(max = 560.dp)
                 .background(c.elev)
                 .border(1.5.dp, c.hardLine)
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 18.dp),
         ) {
-            SignalEyebrow(stringResource(R.string.update_dialog_eyebrow))
-            val update = state.current
-            Text(
-                if (update != null) stringResource(R.string.update_available_title, update.versionName)
-                else stringResource(R.string.update_dialog_title),
-                style = sg(22, FontWeight.Bold, -0.01f),
-                color = c.text,
-                modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
-            )
+            // Only this part scrolls: long release notes must not push the actions out of sight, least
+            // of all when the dialog opened by itself (spec 025).
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                SignalEyebrow(stringResource(R.string.update_dialog_eyebrow))
+                val update = state.current
+                Text(
+                    if (update != null) stringResource(R.string.update_available_title, update.versionName)
+                    else stringResource(R.string.update_dialog_title),
+                    style = sg(22, FontWeight.Bold, -0.01f),
+                    color = c.text,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
+                )
 
-            when (state) {
-                AppUpdateState.Unknown -> Body(stringResource(R.string.update_unknown))
-                AppUpdateState.Checking -> Body(stringResource(R.string.update_checking))
-                is AppUpdateState.UpToDate -> Body(
-                    state.skippedVersion?.let { stringResource(R.string.update_skipped, it, installedVersion) }
-                        ?: stringResource(R.string.update_up_to_date, installedVersion),
-                )
-                is AppUpdateState.Available -> {
-                    ReleaseSummary(state.update, installedVersion, onMobileData)
-                    ReleaseNotes(state.update)
-                }
-                is AppUpdateState.Downloading -> {
-                    ReleaseSummary(state.update, installedVersion, onMobileData)
-                    val fraction = state.fraction
-                    Body(
-                        if (state.totalBytes > 0) stringResource(R.string.update_downloading, formatBytes(state.downloadedBytes), formatBytes(state.totalBytes))
-                        else stringResource(R.string.update_downloading_unknown, formatBytes(state.downloadedBytes)),
+                when (state) {
+                    AppUpdateState.Unknown -> Body(stringResource(R.string.update_unknown))
+                    AppUpdateState.Checking -> Body(stringResource(R.string.update_checking))
+                    is AppUpdateState.UpToDate -> Body(
+                        state.skippedVersion?.let { stringResource(R.string.update_skipped, it, installedVersion) }
+                            ?: stringResource(R.string.update_up_to_date, installedVersion),
                     )
-                    ProgressBar(fraction)
-                }
-                is AppUpdateState.Ready -> {
-                    ReleaseSummary(state.update, installedVersion, onMobileData = false)
-                    Body(stringResource(R.string.update_ready))
-                    if (!installAllowed) {
-                        Body(stringResource(R.string.update_allow_install_caption), muted = true)
+                    is AppUpdateState.Available -> {
+                        ReleaseSummary(state.update, installedVersion, onMobileData)
+                        ReleaseNotes(state.update)
                     }
+                    is AppUpdateState.Downloading -> {
+                        ReleaseSummary(state.update, installedVersion, onMobileData)
+                        val fraction = state.fraction
+                        Body(
+                            if (state.totalBytes > 0) stringResource(R.string.update_downloading, formatBytes(state.downloadedBytes), formatBytes(state.totalBytes))
+                            else stringResource(R.string.update_downloading_unknown, formatBytes(state.downloadedBytes)),
+                        )
+                        ProgressBar(fraction)
+                    }
+                    is AppUpdateState.Ready -> {
+                        ReleaseSummary(state.update, installedVersion, onMobileData = false)
+                        Body(stringResource(R.string.update_ready))
+                        if (!installAllowed) {
+                            Body(stringResource(R.string.update_allow_install_caption), muted = true)
+                        }
+                    }
+                    is AppUpdateState.Failed -> Body(
+                        when (state.reason) {
+                            AppUpdateFailure.NETWORK -> stringResource(R.string.update_failed_network)
+                            AppUpdateFailure.VERIFICATION -> stringResource(R.string.update_failed_verification)
+                            AppUpdateFailure.UNKNOWN -> stringResource(R.string.update_failed_unknown)
+                        },
+                    )
                 }
-                is AppUpdateState.Failed -> Body(
-                    when (state.reason) {
-                        AppUpdateFailure.NETWORK -> stringResource(R.string.update_failed_network)
-                        AppUpdateFailure.VERIFICATION -> stringResource(R.string.update_failed_verification)
-                        AppUpdateFailure.UNKNOWN -> stringResource(R.string.update_failed_unknown)
-                    },
-                )
             }
 
             Spacer(Modifier.height(18.dp))

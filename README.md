@@ -110,7 +110,7 @@
 ### 🧩 Widgets, plugins, updates
 - **Three home-screen widgets** — a Nothing-style card with a tap-to-seek bar, a compact bar, and an Audio ID card.
 - A **sandboxed plugin runtime** (QuickJS) that runs Nuclear-compatible plugins with per-plugin isolation and quarantine.
-- **In-app updates** — the app watches this repository's releases, notifies you once per new version, downloads the APK, verifies it against the published SHA-256 and hands it to Android's installer.
+- **In-app updates** — the app watches this repository's releases, tells you once per new version, downloads the APK, verifies it against the published SHA-256 and hands it to Android's installer.
 
 ### 🎨 Design
 - A brutalist, editorial visual language shared with the web version: **DM Sans** display type, **Martian Mono** labels, **Doto** dot-matrix numerals, a warm *Paper* light theme and a near-black *Ivory* dark theme, semantic haptics, blueprint backgrounds. Four languages: English, Español, Português, Français.
@@ -203,7 +203,7 @@ Use **JDK 21** for Gradle (17–23 work; Java 25 does not) and an Android SDK wi
 git clone https://github.com/UlisesFTP/Rizx-Music-Player.git
 cd Rizx-Music-Player/Proyecto
 ./gradlew assembleDebug          # debug APK — no configuration needed
-./gradlew testDebugUnitTest      # 1,695 JVM tests, no device needed
+./gradlew testDebugUnitTest      # 1,702 JVM tests, no device needed
 ./gradlew lintDebug
 ./gradlew assembleRelease        # needs your own keystore (see docs/BUILD.md)
 ```

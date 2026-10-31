@@ -72,7 +72,7 @@ crash the app. Repositories degrade gracefully — if one source is down, the ot
 | **Community lossless index** | Streaming (lossless) | True-FLAC sources for downloads and Hi-Res playback | Via **plugin** — the repository bundles no index |
 | **Shazam-compatible recognition** | *(not a registry provider)* | Identifies ambient audio from a fingerprint computed on the device | Unofficial keyless endpoint — no key, no account, and the app identifies itself honestly rather than imitating a device |
 | **Apple Music · TIDAL · YouTube** (canvas) | *(not a registry provider)* | Animated covers: Apple motion artwork, TIDAL video covers, the song's own music video as a muted fallback — in that priority | Public page data and embed tokens; per-source toggles |
-| **GitHub** | *(not a content provider)* | The repository's release list, read by the in-app updater once a day; the release asset's SHA-256 digest verifies the download | Public REST API, keyless, 60 requests an hour per address |
+| **GitHub** | *(not a content provider)* | The repository's release list, read by the in-app updater at most once an hour; the release asset's SHA-256 digest verifies the download | Public REST API, keyless, 60 requests an hour per address |
 | **Your own backend** (optional) | *(not a content provider)* | Account, cross-device sync of playlists/favorites/taste, unlisted share links | A Supabase project you deploy; the app only ships its publishable coordinates and works fully without it |
 
 **Recognition is deliberately outside the registry.** `ProviderRegistry` models interchangeable

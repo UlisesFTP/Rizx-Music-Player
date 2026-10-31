@@ -11,8 +11,8 @@ import kotlinx.serialization.json.Json
 
 /**
  * What the update flow remembers between launches: when it last asked GitHub and what it heard, the
- * version the user chose to skip, and the version already announced by a notification (so one release
- * is announced once, not on every periodic check).
+ * version the user chose to skip, and the versions already announced by a notification or by the prompt
+ * inside the app (so one release is announced once, not on every periodic check or launch).
  */
 interface AppUpdateStore {
     suspend fun lastCheckedAtMs(): Long
@@ -22,6 +22,8 @@ interface AppUpdateStore {
     suspend fun setSkippedVersion(version: String?)
     suspend fun notifiedVersion(): String?
     suspend fun setNotifiedVersion(version: String)
+    suspend fun promptedVersion(): String?
+    suspend fun setPromptedVersion(version: String)
 }
 
 /** The store over its own small Preferences DataStore (`app_update`), separate from the settings file. */
@@ -55,6 +57,12 @@ class DataStoreAppUpdateStore(
         dataStore.edit { prefs -> prefs[Keys.NOTIFIED_VERSION] = version }
     }
 
+    override suspend fun promptedVersion(): String? = read()[Keys.PROMPTED_VERSION]
+
+    override suspend fun setPromptedVersion(version: String) {
+        dataStore.edit { prefs -> prefs[Keys.PROMPTED_VERSION] = version }
+    }
+
     private suspend fun read(): Preferences = dataStore.data.first()
 
     private object Keys {
@@ -62,5 +70,6 @@ class DataStoreAppUpdateStore(
         val LAST_KNOWN = stringPreferencesKey("update.lastKnown")
         val SKIPPED_VERSION = stringPreferencesKey("update.skippedVersion")
         val NOTIFIED_VERSION = stringPreferencesKey("update.notifiedVersion")
+        val PROMPTED_VERSION = stringPreferencesKey("update.promptedVersion")
     }
 }

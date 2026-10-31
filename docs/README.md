@@ -1,6 +1,6 @@
 # Rizx Player documentation
 
-_Index reviewed on 2026-10-30 · Rizx Player 1.0.1 (versionCode 4)._
+_Index reviewed on 2026-10-31 · Rizx Player 1.0.2 (versionCode 5)._
 
 Everything about the project that is not code lives in this directory. Start with the reading order
 for your role, then use the map. The Android Studio project is in `../Proyecto/`; when a historical

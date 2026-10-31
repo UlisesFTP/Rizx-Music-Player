@@ -109,6 +109,7 @@ fun PreferencesScreen(
     onOpenEqualizer: () -> Unit,
     onOpenAccount: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenUpdateDialog: () -> Unit,
     vm: PreferencesViewModel = hiltViewModel(),
     accountVm: AccountViewModel = hiltViewModel(),
     updateVm: AppUpdateViewModel = hiltViewModel(),
@@ -179,17 +180,9 @@ fun PreferencesScreen(
 
     var query by rememberSaveable { mutableStateOf("") }
     var clearCacheOpen by remember { mutableStateOf(false) }
-    // In-app updates (spec 024). The state is app-wide (the coordinator's), so this row and the dialog a
-    // notification opens always agree; a tap on that notification lands in the inbox and opens the dialog.
-    var updateDialogOpen by remember { mutableStateOf(false) }
+    // In-app updates (specs 024, 025). The state is app-wide (the coordinator's) and the dialog lives in
+    // RizxApp, so this row, the notification and the prompt always agree.
     val updateState by updateVm.state.collectAsStateWithLifecycle()
-    val pendingUpdateOpen by updateVm.pendingOpen.collectAsStateWithLifecycle()
-    LaunchedEffect(pendingUpdateOpen) {
-        if (pendingUpdateOpen != 0L && updateVm.consumeOpen()) {
-            updateDialogOpen = true
-            updateVm.check(force = false)
-        }
-    }
     // Hoisted out of the row: turning "Save to the phone" on may first need the legacy storage
     // permission (Android 8–9 only, API < 29), and a permission launcher must be remembered at a
     // stable call position — not inside a row the filter can stop emitting.
@@ -420,7 +413,7 @@ fun PreferencesScreen(
             // button forces a fresh lookup.
             entry(updateTitle, updateValue, updateCaption) {
                 SettingRow(updateTitle, updateValue, updateCaption) {
-                    updateDialogOpen = true
+                    onOpenUpdateDialog()
                     updateVm.check(force = false)
                 }
             },
@@ -555,22 +548,6 @@ fun PreferencesScreen(
             confirmLabel = stringResource(R.string.settings_clear_cache_confirm),
             onConfirm = vm::clearCache,
             onDismiss = { clearCacheOpen = false },
-        )
-    }
-    if (updateDialogOpen) {
-        AppUpdateDialog(
-            state = updateState,
-            installedVersion = updateVm.installedVersion,
-            onMobileData = updateVm.onMobileData(),
-            canInstall = updateVm::canInstall,
-            onCheck = { updateVm.check(force = true) },
-            onDownload = updateVm::download,
-            onCancelDownload = updateVm::cancelDownload,
-            onSkip = { updateVm.skip(); updateDialogOpen = false },
-            onRetry = updateVm::retry,
-            onInstall = { path -> context.startActivity(updateVm.installIntent(path)) },
-            onAllowInstall = { context.startActivity(updateVm.permissionIntent()) },
-            onDismiss = { updateDialogOpen = false },
         )
     }
     if (languageDialogOpen) {

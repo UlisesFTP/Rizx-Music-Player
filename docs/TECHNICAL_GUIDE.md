@@ -1,6 +1,6 @@
 # Rizx Player — technical guide
 
-_Verified against the working tree on 2026-10-30 · Rizx Player 1.0.1 (versionCode 4) · Room schema 7._
+_Verified against the working tree on 2026-10-31 · Rizx Player 1.0.2 (versionCode 5) · Room schema 7._
 
 This is the map of the code: what the app is made of, how the pieces depend on each other, how a tap
 becomes sound, where every kind of state lives, and how the project is built, tested and released. It
@@ -131,7 +131,7 @@ Rizx-Music-Player/
 ```
 
 Numbers on 2026-09-13: 496 main Kotlin files (about 69,000 lines) in 90 packages, 202 JVM test files
-with 1,695 tests in 193 suites, 6 instrumented test files, 862 English strings in 21 files per locale.
+with 1,702 tests in 193 suites, 6 instrumented test files, 862 English strings in 21 files per locale.
 
 ## 3. Layers and the dependency rule
 
@@ -529,11 +529,13 @@ Outside a store an app cannot replace itself silently; the flow ends in Android'
 
 ```mermaid
 flowchart LR
-  W[AppUpdateWorker: after launch + every 24 h] --> C[AppUpdateCoordinator.check — 12 h throttle]
+  W[AppUpdateWorker: launch + foreground + every 24 h] --> C[AppUpdateCoordinator.check — 1 h throttle]
   C --> R[GitHubAppUpdateRepository: releases/latest]
   R --> C
-  C -- newer & not skipped --> N[AppUpdateNotifier: once per version]
-  N -- tap --> M[MainActivity ACTION_OPEN_UPDATE → AppUpdateInbox → Settings dialog]
+  C -- on screen: claimPrompt, once per version --> M[Update dialog in RizxApp]
+  C -- not yet prompted: claimNotification --> N[AppUpdateNotifier: once per version]
+  N -- tap --> A[MainActivity ACTION_OPEN_UPDATE → AppUpdateInbox]
+  A --> M
   M --> D[ApkDownloader: stream to files/updates, SHA-256 vs the asset digest]
   D --> I[AppUpdateInstaller: FileProvider URI → system installer]
 ```
@@ -544,9 +546,12 @@ flowchart LR
   key). GitHub's per-asset `sha256` digest is what the download is verified against; a release
   without one falls back to a size check, and Android's signature check still stands behind both.
 - One `StateFlow<AppUpdateState>` (`Unknown · Checking · UpToDate · Available · Downloading · Ready ·
-  Failed`) serves the worker, the Settings row, the dialog and the notification. The last answer, the
-  skipped version and the notified version live in their own DataStore (`app_update`); a whole
+  Failed`) serves the worker, the Settings row, the dialog and the notification. The last answer and
+  the skipped, notified and prompted versions live in their own DataStore (`app_update`); a whole
   downloaded file is `Ready` again on the next launch.
+- `RizxApp` hosts the one dialog (spec 025). `claimPrompt` opens it by itself once per version, for
+  `Available` or `Ready` only, while the app is on screen; a prompted version posts no notification, and
+  opening the prompt takes down one posted just before it.
 - `REQUEST_INSTALL_PACKAGES` is declared; the first install needs the user's one-time "install
   unknown apps" grant, which the dialog drives and re-checks on resume.
 - The release-day contract is in §20.
@@ -573,7 +578,7 @@ back stack; Now Playing, Queue and Lyrics slide vertically and hide the mini-pla
 | `home` | `HomeScreen` | Tabbed feed (All, For you, Songs, Playlists, Albums, Artists), mosaics, hero |
 | `search?q=` | `SearchScreen` | Search with five source tabs, suggestion pills, the genre wall, Audio ID entry |
 | `library?tab=` | `LibraryScreen` | All, Playlists, Liked, Downloads, Recent, Local |
-| `settings` | `PreferencesScreen` | Eight searchable sections; consumes the pending-update request |
+| `settings` | `PreferencesScreen` | Eight searchable sections |
 | `now_playing` · `queue` · `lyrics` | `NowPlayingScreen` · `QueueScreen` · `LyricsScreen` | The player, the full queue, karaoke lyrics with their own transport |
 | `album_detail/{provider}/{id}` · `artist_detail/…` · `editorial_playlist/…` · `genre/{id}` · `moods` · `station/…` | detail screens | Album, artist (bio, discography, similar), remote playlist, genre hub, all stations, one station |
 | `playlist_detail/{playlistId}` | `PlaylistDetailScreen` | A user playlist: filter, download all, export/share sheet |
@@ -583,7 +588,7 @@ back stack; Now Playing, Queue and Lyrics slide vertically and hide the mini-pla
 
 External entry points: the App Link and `rizx://share/<token>` (→ `ShareLinkInbox`), the widget
 microphone (`ACTION_RECOGNIZE` → `RecognitionInbox`), the update notification (`ACTION_OPEN_UPDATE`
-→ `AppUpdateInbox`), and widget button broadcasts. Each inbox is a one-slot handoff a screen consumes.
+→ `AppUpdateInbox`, consumed by `RizxApp`), and widget button broadcasts. Each inbox is a one-slot handoff.
 
 **ViewModels** (22, one per surface) expose `StateFlow`s and take events; `PlayerViewModel` holds
 app-wide playback and theme state, `PlaybackViewModel` is the seam over `PlaybackController`,
@@ -701,7 +706,7 @@ The step-by-step toolchain, signing and troubleshooting: [`BUILD.md`](BUILD.md).
 
 ## 19. Testing
 
-- **JVM** (`app/src/test`, 202 files, 1,695 tests in 193 suites) mirrors the package tree. High-value
+- **JVM** (`app/src/test`, 202 files, 1,702 tests in 193 suites) mirrors the package tree. High-value
   targets: `ProviderRegistry`, the streaming resolver, the queue, favorites and playlists, artwork
   selection, `ProviderRef` identity, the download pipeline (transcode, remux, the from-scratch Ogg
   tagger), the lyrics parsers and matchers, the recognition fingerprint and client against every
@@ -771,8 +776,6 @@ How to report a problem: [`../SECURITY.md`](../SECURITY.md).
 - The e-mail-code sign-in exists in the data layer but is not offered by the UI; Google is the only
   method today.
 - The shared HTTP User-Agent is a constant; bump it with the major version.
-- The updater's download-and-install path was verified with JVM tests and fixtures; an update from 1.0.0
-  to 1.0.1 is its first end-to-end run.
 - Provider endpoints are third-party and change without notice; each failure is isolated, none is
   guaranteed.
 

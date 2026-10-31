@@ -9,6 +9,7 @@ import fm.rizx.player.core.network.NetworkMonitor
 import fm.rizx.player.data.update.AppUpdateCoordinator
 import fm.rizx.player.data.update.AppUpdateInstaller
 import fm.rizx.player.data.update.AppUpdateNotifier
+import fm.rizx.player.data.update.AppUpdateScheduler
 import fm.rizx.player.domain.update.AppUpdateInbox
 import fm.rizx.player.domain.update.AppUpdateState
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,7 @@ class AppUpdateViewModel @Inject constructor(
     private val installer: AppUpdateInstaller,
     private val notifier: AppUpdateNotifier,
     private val network: NetworkMonitor,
+    private val scheduler: AppUpdateScheduler,
 ) : ViewModel() {
 
     val state: StateFlow<AppUpdateState> = coordinator.state
@@ -43,6 +45,22 @@ class AppUpdateViewModel @Inject constructor(
     fun check(force: Boolean = false) {
         viewModelScope.launch { coordinator.check(force) }
     }
+
+    /**
+     * Calls [open] when [state] should bring up the dialog by itself, once per version (spec 025). In
+     * this scope rather than the caller's: a state change must not cancel a claim that was just stored.
+     */
+    fun offerPrompt(state: AppUpdateState, open: () -> Unit) {
+        viewModelScope.launch {
+            if (coordinator.claimPrompt(state)) {
+                notifier.dismiss()
+                open()
+            }
+        }
+    }
+
+    /** A music player's process can outlive a release by days, so coming back looks again too. */
+    fun checkOnForeground() = scheduler.onAppStart()
 
     fun download() {
         notifier.dismiss()

@@ -359,16 +359,17 @@ dot-matrix face because `RemoteViews` cannot load a custom typeface.
 
 ## In-app updates
 
-`data/update/` (spec 024, ADR 0032). `GitHubAppUpdateRepository` reads the repository's
+`data/update/` (specs 024 and 025, ADR 0032). `GitHubAppUpdateRepository` reads the repository's
 `releases/latest`, parses the tag as a `SemanticVersion`, treats 404 as "nothing published", and picks
 the `.apk` asset that says `release` (never one named `releaseTest`, `debug` or `test`, which are
 debug-signed). `AppUpdateCoordinator` publishes one `StateFlow<AppUpdateState>` for the worker, the
-Settings row, the dialog and the notification, throttles real lookups to one per 12 h and remembers
-the last answer, the skipped version and the notified version in the `app_update` DataStore.
+Settings row, the dialog and the notification, throttles real lookups to one per hour and remembers
+the last answer and the skipped, notified and prompted versions in the `app_update` DataStore. The
+dialog lives in `RizxApp` and opens by itself once per version.
 `ApkDownloader` streams the asset over the `@DownloadHttp` client into `files/updates/` with a running
 SHA-256 checked against GitHub's per-asset digest; `AppUpdateInstaller` offers the file through the
 FileProvider to the system installer (`REQUEST_INSTALL_PACKAGES`, plus the user's one-time "install
-unknown apps" grant). `AppUpdateWorker` runs once shortly after launch and every 24 h through
+unknown apps" grant). `AppUpdateWorker` runs shortly after launch, on each return to the foreground and every 24 h through
 WorkManager, exactly like the sync worker (an entry-point worker, no factory). Outside a store there
 is no silent install: the last step is always Android's own confirmation sheet.
 

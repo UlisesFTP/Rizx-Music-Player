@@ -128,11 +128,29 @@ class AppUpdateCoordinator(
 
     /**
      * True exactly once per version: the caller may post the "new version" notification. Later checks
-     * that find the same version get false, so a release is announced once, not daily.
+     * that find the same version get false, so a release is announced once, not daily. A version the
+     * prompt inside the app already showed gets false too: the listener has heard about it.
      */
     suspend fun claimNotification(update: AppUpdate): Boolean {
         if (store.notifiedVersion() == update.versionName) return false
+        if (store.promptedVersion() == update.versionName) return false
         store.setNotifiedVersion(update.versionName)
+        return true
+    }
+
+    /**
+     * True exactly once per version, when [state] is worth interrupting for: the caller may open the
+     * dialog by itself (spec 025). A running download means the listener already acted, a failure has
+     * nothing useful to say unprompted, and a skipped version arrives here as up to date.
+     */
+    suspend fun claimPrompt(state: AppUpdateState): Boolean {
+        val update = when (state) {
+            is AppUpdateState.Available -> state.update
+            is AppUpdateState.Ready -> state.update
+            else -> return false
+        }
+        if (store.promptedVersion() == update.versionName) return false
+        store.setPromptedVersion(update.versionName)
         return true
     }
 
@@ -144,7 +162,10 @@ class AppUpdateCoordinator(
     }
 
     companion object {
-        /** How long a lookup's answer is trusted before the next check asks GitHub again. */
-        const val CHECK_INTERVAL_MS = 12L * 60 * 60 * 1000
+        /**
+         * How long a lookup's answer is trusted before the next check asks GitHub again. Short enough
+         * that opening the app finds a recent release; the keyless limit is 60 requests an hour.
+         */
+        const val CHECK_INTERVAL_MS = 60L * 60 * 1000
     }
 }

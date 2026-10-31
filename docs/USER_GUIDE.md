@@ -1,6 +1,6 @@
 # Rizx Player — user guide
 
-_For Rizx Player 1.0.1 on Android 8.0 and newer. Every label below is the English one; the app is
+_For Rizx Player 1.0.2 on Android 8.0 and newer. Every label below is the English one; the app is
 also available in Spanish, Portuguese and French._
 
 Rizx plays music from free public sources, plays the music already on your phone, works offline with
@@ -42,12 +42,14 @@ when something does not work.
    see the playback controls and download progress in the shade; saying no costs nothing else.
 
 **Updating.** Rizx checks the project's releases about once a day and shortly after you open it. When
-a newer version exists you get one notification, *Rizx x.y.z is available*, and the row **App
-updates** in Settings › App reads *x.y.z available*. Tap either: the dialog shows what changed and
-the size, **Download** fetches the file and verifies it, and **Install** hands it to Android, which
-asks you to confirm. The first time, Android needs you to **Allow installs** from Rizx — the dialog
-takes you to that switch and back. **Skip this version** hides that version until a newer one
-appears; **Later** just closes the dialog. Nothing installs without your confirmation.
+a newer version exists, a dialog opens by itself the next time the app is on screen, once for that
+version. If the app is not open you get one notification, *Rizx x.y.z is available*, and the row **App
+updates** in Settings › App reads *x.y.z available*; either one opens the same dialog. It shows what
+changed and the size, **Download** fetches the file and verifies it, and **Install** hands it to
+Android, which asks you to confirm. The first time, Android needs you to **Allow installs** from Rizx —
+the dialog takes you to that switch and back. **Skip this version** hides that version until a newer
+one appears; **Later** closes the dialog, which stays available in Settings. Nothing downloads or
+installs without your say.
 
 **Verifying a download.** The release page shows a SHA-256 digest next to the file; the app checks
 it before offering to install. The signing certificate's fingerprints are printed in the README so
@@ -426,7 +428,8 @@ Rizx never asks for your location or your contacts, and never listens in the bac
 - **Lossless is greyed out.** It needs a FLAC index plugin from the Store.
 - **An update will not install.** A build you compiled yourself, or an old debug-signed test build,
   cannot be updated by the published release: uninstall it first. If Android refused, allow installs
-  from Rizx when the dialog asks.
+  from Rizx when the dialog asks. If Android shows *App not installed*, tap **Done** and then **Install**
+  again. Google Play Protect may ask to scan the app first, because it does not come from the Play Store.
 - **A widget shows an old song.** It updates on every change while the app or its playback service
   runs; tap it to open Rizx.
 - **The app crashed.** Report it with the bug template on GitHub; the version is under Settings › App

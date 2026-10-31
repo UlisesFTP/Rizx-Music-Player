@@ -314,9 +314,10 @@ by night, the red state marker):
 
 ## In-app updates
 
-- The app watches this repository's **GitHub Releases** once a day and shortly after launch
-  (throttled to one request per 12 h), notifies **once per new version**, and Settings › App › *App
-  updates* shows the state and opens a dialog with the release notes and size.
+- The app watches this repository's **GitHub Releases** once a day, shortly after launch and when it
+  returns to the screen (throttled to one request per hour). A new version opens a dialog with the
+  release notes and size **by itself, once per version**, and otherwise posts one notification;
+  Settings › App › *App updates* shows the state and opens the same dialog.
 - **Download** streams the APK into app-private storage and verifies it against the SHA-256 digest
   GitHub publishes for the asset; **Install** hands it to Android's installer, which asks for
   confirmation (and, the first time, for the "install unknown apps" switch). **Skip this version**

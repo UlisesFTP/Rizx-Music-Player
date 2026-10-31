@@ -78,16 +78,16 @@ class AppUpdateCoordinatorTest {
     }
 
     @Test
-    fun `within twelve hours the answer comes from the store, not GitHub`() = runTest {
+    fun `within an hour the answer comes from the store, not GitHub`() = runTest {
         val repo = FakeRepository { update("1.1.0") }
         val c = coordinator(repo, this)
         c.check()
         assertEquals(1, repo.calls)
-        now += 60 * 60 * 1000
+        now += 59 * 60 * 1000
         assertEquals(update("1.1.0"), c.check())
         assertEquals(1, repo.calls)
         assertEquals(AppUpdateState.Available(update("1.1.0")), c.state.value)
-        now += 12 * 60 * 60 * 1000
+        now += 60 * 1000
         c.check()
         assertEquals(2, repo.calls)
         c.check(force = true)
@@ -153,6 +153,64 @@ class AppUpdateCoordinatorTest {
     }
 
     @Test
+    fun `the prompt opens once per version, and again for a newer one`() = runTest {
+        val c = coordinator(FakeRepository { null }, this)
+        assertTrue(c.claimPrompt(AppUpdateState.Available(update("1.1.0"))))
+        assertFalse(c.claimPrompt(AppUpdateState.Available(update("1.1.0"))))
+        assertFalse(c.claimPrompt(AppUpdateState.Ready(update("1.1.0"), "/x.apk")))
+        assertTrue(c.claimPrompt(AppUpdateState.Available(update("1.2.0"))))
+    }
+
+    @Test
+    fun `the prompted version survives a restart`() = runTest {
+        assertTrue(coordinator(FakeRepository { null }, this).claimPrompt(AppUpdateState.Available(update("1.1.0"))))
+        assertFalse(coordinator(FakeRepository { null }, this).claimPrompt(AppUpdateState.Available(update("1.1.0"))))
+    }
+
+    @Test
+    fun `a file already downloaded can still prompt`() = runTest {
+        val c = coordinator(FakeRepository { null }, this)
+        assertTrue(c.claimPrompt(AppUpdateState.Ready(update("1.1.0"), "/x.apk")))
+    }
+
+    @Test
+    fun `nothing else prompts, and asking does not use up the version`() = runTest {
+        val c = coordinator(FakeRepository { null }, this)
+        val silent = listOf(
+            AppUpdateState.Unknown,
+            AppUpdateState.Checking,
+            AppUpdateState.UpToDate("1.0.0"),
+            AppUpdateState.Downloading(update("1.1.0"), 0L, 10L),
+            AppUpdateState.Failed(update("1.1.0"), AppUpdateFailure.NETWORK),
+        )
+        silent.forEach { assertFalse(it.toString(), c.claimPrompt(it)) }
+        assertTrue(c.claimPrompt(AppUpdateState.Available(update("1.1.0"))))
+    }
+
+    @Test
+    fun `a skipped version does not prompt`() = runTest {
+        val c = coordinator(FakeRepository { update("1.1.0") }, this)
+        c.check()
+        c.skip()
+        assertFalse(c.claimPrompt(c.state.value))
+    }
+
+    @Test
+    fun `a version the prompt showed gets no notification`() = runTest {
+        val c = coordinator(FakeRepository { null }, this)
+        assertTrue(c.claimPrompt(AppUpdateState.Available(update("1.1.0"))))
+        assertFalse(c.claimNotification(update("1.1.0")))
+        assertTrue(c.claimNotification(update("1.2.0")))
+    }
+
+    @Test
+    fun `a version already notified can still prompt`() = runTest {
+        val c = coordinator(FakeRepository { null }, this)
+        assertTrue(c.claimNotification(update("1.1.0")))
+        assertTrue(c.claimPrompt(AppUpdateState.Available(update("1.1.0"))))
+    }
+
+    @Test
     fun `an already downloaded file makes the update ready on the next launch`() = runTest {
         val dir = File(folder.root, "updates").apply { mkdirs() }
         File(dir, "Rizx-1.1.0-release.apk").writeBytes(bytes)
@@ -168,6 +226,7 @@ class InMemoryAppUpdateStore : AppUpdateStore {
     private var known: AppUpdate? = null
     private var skipped: String? = null
     private var notified: String? = null
+    private var prompted: String? = null
     override suspend fun lastCheckedAtMs() = checkedAt
     override suspend fun lastKnown() = known
     override suspend fun saveCheck(update: AppUpdate?, atMs: Long) { known = update; checkedAt = atMs }
@@ -175,4 +234,6 @@ class InMemoryAppUpdateStore : AppUpdateStore {
     override suspend fun setSkippedVersion(version: String?) { skipped = version }
     override suspend fun notifiedVersion() = notified
     override suspend fun setNotifiedVersion(version: String) { notified = version }
+    override suspend fun promptedVersion() = prompted
+    override suspend fun setPromptedVersion(version: String) { prompted = version }
 }

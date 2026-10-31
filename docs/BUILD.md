@@ -152,7 +152,7 @@ cd Proyecto
 ```
 
 Unit tests use JUnit4 · MockK · Turbine · OkHttp MockWebServer and run on the JVM (no emulator needed).
-The 2026-09-13 repository snapshot runs **1,695 tests in 193 suites with zero failures or skips**. The
+The 2026-10-31 repository snapshot runs **1,702 tests in 193 suites with zero failures or skips**. The
 same gate — `testDebugUnitTest lintDebug assembleDebug` — runs in GitHub Actions
 (`.github/workflows/android-ci.yml`) on every push to `main` and every pull request.
 Instrumented tests run via `./gradlew connectedDebugAndroidTest` (device/emulator required): the

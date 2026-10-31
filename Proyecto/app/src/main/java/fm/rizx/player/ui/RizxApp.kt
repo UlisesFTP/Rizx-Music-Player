@@ -30,6 +30,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -38,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -65,6 +68,7 @@ import fm.rizx.player.ui.settings.AppUpdateViewModel
 import fm.rizx.player.ui.queue.QueueViewModel
 import fm.rizx.player.ui.util.rememberSaveToPhonePermission
 import fm.rizx.player.ui.screens.AboutScreen
+import fm.rizx.player.ui.screens.AppUpdateDialog
 import fm.rizx.player.ui.screens.EqualizerScreen
 import fm.rizx.player.ui.screens.LicensesScreen
 import fm.rizx.player.ui.screens.LyricsScreen
@@ -133,12 +137,39 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
     LaunchedEffect(pendingRecognition) {
         if (pendingRecognition != 0L) nav.navigate(Routes.RECOGNITION) { launchSingleTop = true }
     }
-    // A tap on the "new version" notification: go to Settings, whose screen consumes the request and
-    // opens the update dialog (spec 024).
+    // The update dialog, one for the whole app (specs 024, 025). It opens by itself once per version, on
+    // a tap on the "new version" notification, or from the Settings row. The state is collected with the
+    // lifecycle, so a check ending in the background does not spend the prompt where nobody can see it.
     val updateViewModel: AppUpdateViewModel = hiltViewModel()
+    val updateState by updateViewModel.state.collectAsStateWithLifecycle()
     val pendingUpdate by updateViewModel.pendingOpen.collectAsStateWithLifecycle()
+    var updateDialogOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(updateState) {
+        updateViewModel.offerPrompt(updateState) { updateDialogOpen = true }
+    }
     LaunchedEffect(pendingUpdate) {
-        if (pendingUpdate != 0L) nav.navigateTabAt(Routes.SETTINGS)
+        if (pendingUpdate != 0L && updateViewModel.consumeOpen()) {
+            updateDialogOpen = true
+            updateViewModel.check(force = false)
+        }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { updateViewModel.checkOnForeground() }
+    if (updateDialogOpen) {
+        val updateContext = LocalContext.current
+        AppUpdateDialog(
+            state = updateState,
+            installedVersion = updateViewModel.installedVersion,
+            onMobileData = updateViewModel.onMobileData(),
+            canInstall = updateViewModel::canInstall,
+            onCheck = { updateViewModel.check(force = true) },
+            onDownload = updateViewModel::download,
+            onCancelDownload = updateViewModel::cancelDownload,
+            onSkip = { updateViewModel.skip(); updateDialogOpen = false },
+            onRetry = updateViewModel::retry,
+            onInstall = { path -> updateContext.startActivity(updateViewModel.installIntent(path)) },
+            onAllowInstall = { updateContext.startActivity(updateViewModel.permissionIntent()) },
+            onDismiss = { updateDialogOpen = false },
+        )
     }
     // One visual player for the whole activity. Home and Now Playing borrow it by placement; the
     // coordinator gives Now Playing priority during navigation and stops whenever neither is visible.
@@ -560,6 +591,7 @@ fun RizxApp(playerViewModel: PlayerViewModel) {
                     onOpenEqualizer = { nav.navigate(Routes.EQUALIZER) },
                     onOpenAccount = { nav.navigate(Routes.ACCOUNT) },
                     onOpenAbout = { nav.navigate(Routes.ABOUT) },
+                    onOpenUpdateDialog = { updateDialogOpen = true },
                 )
             }
             composable(Routes.ACCOUNT) {

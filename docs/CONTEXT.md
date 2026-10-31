@@ -1,6 +1,6 @@
 # Rizx Player — project context
 
-_State header verified against the working tree on 2026-10-30. The running log at the end is
+_State header verified against the working tree on 2026-10-31. The running log at the end is
 append-only, newest last._
 
 This is the public "where the project stands" document: the current state in one table, what is
@@ -13,12 +13,12 @@ the map of the code is [`TECHNICAL_GUIDE.md`](TECHNICAL_GUIDE.md).
 
 | Area | Current state |
 |---|---|
-| App | Rizx Player **1.0.1** (`versionCode 4`), package `fm.rizx.player`, GPL-3.0 |
+| App | Rizx Player **1.0.2** (`versionCode 5`), package `fm.rizx.player`, GPL-3.0 |
 | Android | Kotlin 2.0.21 · Jetpack Compose (BOM 2024.12.01) · Hilt 2.52 · Media3 1.5.1 · `minSdk 26` · `targetSdk/compileSdk 36` |
 | Build | Gradle 8.12 · AGP 8.9.1 · KSP 2.0.21-1.0.28 · JDK 21 to run Gradle (17–23 work, 25 does not) |
 | Persistence | Room schema **7** (exported schemas 4–7) · four Preferences DataStores · JSON stores under `filesDir` |
 | Size | 496 main Kotlin files · 202 JVM test files · 6 instrumented test files · 4 locales (en, es, pt, fr) |
-| Verification | **1,695 JVM tests in 193 suites**, `lintDebug` 0 errors, `assembleDebug` pass, 21 instrumented tests on `rizx28` (2026-10-30); `assembleRelease` last verified 2026-09-13 |
+| Verification | **1,702 JVM tests in 193 suites**, `lintDebug` 0 errors, `assembleDebug` pass, 21 instrumented tests on `rizx28` (2026-10-31); `assembleRelease` last verified 2026-09-13 |
 | Distribution | Signed APK on GitHub Releases; the app updates itself from `releases/latest` (spec 024) |
 | Branches | `main` only. Rizx Web is a separate repository with `main` (web) and `electron` (desktop) lines |
 | Optional backend | A Supabase project (auth, `rizx_sync` RPC, Realtime, Edge Functions) — separate deployment, untracked `supabase/` |
@@ -167,3 +167,23 @@ passed. The tag `v1.0.1` was then pushed on that commit and the release was crea
 asset digest confirms; the size matching 1.0.0's is a coincidence, the code differs). `apksigner` confirms
 the published signing certificate. `releases/latest` now answers `v1.0.1`. The updater's path from 1.0.0 to
 1.0.1 on a real device had not been observed when this entry was written.
+
+**2026-10-31 — the update dialog opens by itself; the updater works end to end** (spec 025). A listener who
+missed the notification and never opened Settings could not learn about a release. The update dialog now
+lives in `RizxApp` and opens by itself once per version, while the app is on screen; the Settings row and the
+notification tap open that same dialog. A version already prompted posts no notification, and opening the
+prompt takes down one posted just before it. The lookup window went from 12 hours to 1, and the check also
+runs on return to the foreground. The download still starts only when the listener asks. No string or schema
+changed. Long release notes had pushed the dialog's buttons out of sight, so only its content scrolls now.
+
+Verified on an API 35 Play Store emulator with a release-signed build of this code posing as 1.0.0, against
+the real v1.0.1 on GitHub. The dialog opened by itself with no notification; Later held across a restart; the
+Settings row and the notification's intent opened the same dialog without leaving Home; a version found with
+the app in the background posted the notification, kept the prompt for the return, and the prompt took the
+notification down. Download, verification, the install permission and Android's installer then worked, and
+the installed APK's SHA-256 equals the published `8923d344…3f3a8a`: the first observed end-to-end update since
+spec 024. Two things seen on the way: Google Play Protect showed "App scan recommended" on the first install
+attempt, which the emulator lost connection during, so answering it was not observed, and it did not appear on
+the retry; and tapping Install after a failed attempt brings back Android's old failure screen until Done is
+tapped. The gate passes (1,702 JVM tests in 193 suites, lint 0 errors, `assembleDebug`) and so does the
+instrumented suite on `rizx28` (21 tests). A phone sees this from 1.0.2, the release that carries it.

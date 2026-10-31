@@ -124,7 +124,7 @@ Restated from `AGENTS.md` with where each is enforced, so a reader can check rat
   moved) → refresh `README.md`'s snapshot in `docs/`, `BUILD.md`, the policy dates and both licence
   lists → `assembleRelease` with the real keystore → `apksigner verify` → `git tag vX.Y.Z` → a GitHub
   release for the tag, not draft, not pre-release, with `Rizx-X.Y.Z-release.apk` attached and the
-  notes in the body. Installed apps pick it up within a day (spec 024).
+  notes in the body. Installed apps pick it up on their next launch or within a day (specs 024, 025).
 - **Signature continuity** is the one thing that cannot be recovered: the keystore and both
   passwords are backed up outside the repository, and `assembleRelease` refuses to package without it.
 - **What is never published:** `docs/specs/`, `docs/adr/`, `docs/checklists/`, the agent context,
@@ -185,13 +185,12 @@ Durable decisions, oldest first, with where the reasoning is recorded. Add a lin
 | 2026-09-13 | In-app updates read GitHub Releases and hand off to the system installer; AGENTS.md is public; the documentation set (user guide, technical guide, governance, context) is part of the definition of done; CI runs the gate on pull requests. | ADR 0032, spec 024, this file |
 | 2026-09-13 | Ignore rules that name a folder are anchored to the root (`/supabase/`); the first CI run showed an unanchored rule had kept the app's `data/remote/supabase` package out of the public tree. A release tag is cut only after CI is green on that commit, because CI — not the maintainer's tree — is what proves the published source builds. | `CONTEXT.md` 2026-09-13, `.gitignore` |
 | 2026-10-30 | List reads that can outgrow one CursorWindow run in a transaction, so a sync write between two windows cannot crash them. | `CONTEXT.md` 2026-10-30 |
+| 2026-10-31 | A new version opens the update dialog by itself, once per version, and a lookup window of one hour replaces twelve; the download still starts only when the listener asks. | Spec 025, `CONTEXT.md` 2026-10-31 |
 
 ## 10. Open items and known debt
 
 Recorded so nobody rediscovers them; none blocks daily work.
 
-- The updater's download → verify → install path has not yet been observed end to end on a device; 1.0.1 is the
-  first release an installed 1.0.0 can update to.
 - The e-mail-code sign-in exists in the data layer but is not offered by the UI.
 - `quickjs-kt` cannot interrupt a non-allocating infinite loop; restart abandons the thread.
 - `jaudiotagger` stays an Android-compatibility risk to re-evaluate.
