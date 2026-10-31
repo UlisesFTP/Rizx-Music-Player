@@ -187,3 +187,12 @@ attempt, which the emulator lost connection during, so answering it was not obse
 the retry; and tapping Install after a failed attempt brings back Android's old failure screen until Done is
 tapped. The gate passes (1,702 JVM tests in 193 suites, lint 0 errors, `assembleDebug`) and so does the
 instrumented suite on `rizx28` (21 tests). A phone sees this from 1.0.2, the release that carries it.
+
+**2026-10-31 — v1.0.2 published.** Version 1.0.2 (`versionCode 5`) carries the update prompt above. CI passed
+on commit `8c67e5f` at the first attempt; the tag `v1.0.2` is on that commit and the release has
+`Rizx-1.0.2-release.apk` (SHA-256 `7b554e1c…124ea1`, as GitHub's asset digest confirms). `apksigner` confirms
+the published signing certificate. Its size, 11,867,389 bytes, is the same as 1.0.0's and 1.0.1's, which the
+2026-10-30 entry called a coincidence; three in a row is not. The likely reason is that signing pads the file
+to a 4 KiB boundary, so small code changes do not move the total. Tell builds apart by SHA-256; `classes.dex`
+does differ. Phones on 1.0.0 and 1.0.1 hear about this release through the notification and the Settings row;
+the prompt itself first shows for the release after this one, on phones already running 1.0.2.
