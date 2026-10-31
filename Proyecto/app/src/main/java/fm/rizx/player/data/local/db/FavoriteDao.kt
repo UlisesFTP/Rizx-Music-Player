@@ -57,12 +57,15 @@ interface FavoriteDao {
     @Query("SELECT * FROM favorites WHERE type = :type AND provider = :provider AND sourceId = :sourceId")
     suspend fun find(type: String, provider: String, sourceId: String): FavoriteEntity?
 
+    /** Unbounded, so it may outgrow one CursorWindow: see TasteContributionDao.observeAll. */
+    @Transaction
     @Query("SELECT * FROM favorites")
     suspend fun all(): List<FavoriteEntity>
 
     @Query("DELETE FROM favorites")
     suspend fun deleteAll()
 
+    @Transaction
     @Query("SELECT * FROM favorites WHERE type = :type ORDER BY addedAtIso DESC")
     fun observeByType(type: String): Flow<List<FavoriteEntity>>
 

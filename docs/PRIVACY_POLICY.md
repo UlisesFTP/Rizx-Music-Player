@@ -1,6 +1,6 @@
 # Privacy Policy — Rizx Player
 
-_Last reviewed: 2026-08-25 · applies to Rizx Player Android, version 1.0.0_
+_Last reviewed: 2026-10-30 · applies to Rizx Player Android, version 1.0.1_
 
 > Rizx Player ("the app") is an open-source, native Android music player. This policy describes what the
 > app processes, where it goes, and what stays on your device.

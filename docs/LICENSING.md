@@ -1,6 +1,6 @@
 # Licensing & attribution
 
-_Reviewed against version 1.0.0 on 2026-08-25. This is engineering documentation, not legal advice._
+_Reviewed against version 1.0.1 on 2026-10-30. This is engineering documentation, not legal advice._
 
 ## App license: GPL-3.0
 

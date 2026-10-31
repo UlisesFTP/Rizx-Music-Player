@@ -1,6 +1,6 @@
 # Rizx Player — user guide
 
-_For Rizx Player 1.0.0 on Android 8.0 and newer. Every label below is the English one; the app is
+_For Rizx Player 1.0.1 on Android 8.0 and newer. Every label below is the English one; the app is
 also available in Spanish, Portuguese and French._
 
 Rizx plays music from free public sources, plays the music already on your phone, works offline with

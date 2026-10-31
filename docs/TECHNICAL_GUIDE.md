@@ -1,6 +1,6 @@
 # Rizx Player — technical guide
 
-_Verified against the working tree on 2026-09-13 · Rizx Player 1.0.0 (versionCode 3) · Room schema 7._
+_Verified against the working tree on 2026-10-30 · Rizx Player 1.0.1 (versionCode 4) · Room schema 7._
 
 This is the map of the code: what the app is made of, how the pieces depend on each other, how a tap
 becomes sound, where every kind of state lives, and how the project is built, tested and released. It
@@ -117,7 +117,7 @@ Rizx-Music-Player/
 │  │     ├─ main/assets/plugin-runtime/   # bootstrap.js, domparser.min.js, sucrase.min.js
 │  │     ├─ main/assets/plugins/   # git-ignored: bundled plugin archives, none in a clone
 │  │     ├─ test/                  # 202 JVM test files (mirror the package tree)
-│  │     └─ androidTest/           # 5 instrumented test files
+│  │     └─ androidTest/           # 6 instrumented test files
 │  ├─ baselineprofile/             # com.android.test module: startup profile generator
 │  ├─ build.gradle.kts · settings.gradle.kts · gradle.properties (public) · gradlew
 ├─ docs/                           # everything that is not code (index: docs/README.md)
@@ -131,7 +131,7 @@ Rizx-Music-Player/
 ```
 
 Numbers on 2026-09-13: 496 main Kotlin files (about 69,000 lines) in 90 packages, 202 JVM test files
-with 1,695 tests in 193 suites, 5 instrumented test files, 862 English strings in 21 files per locale.
+with 1,695 tests in 193 suites, 6 instrumented test files, 862 English strings in 21 files per locale.
 
 ## 3. Layers and the dependency rule
 
@@ -622,7 +622,8 @@ of the floating chrome; font scale is clamped to 1.15 on that chrome only.
 ## 16. Persistence
 
 **Room** — `RizxDatabase` (`rizx.db`, version 7, exported schemas 4–7 committed; every bump ships its
-`Migration`, JSON and instrumented test together):
+`Migration`, JSON and instrumented test together; a list read that can outgrow one 2 MB CursorWindow is
+a `@Transaction` query, because a write between two windows would otherwise crash it):
 
 | Table | Key | Holds |
 |---|---|---|
@@ -708,7 +709,8 @@ The step-by-step toolchain, signing and troubleshooting: [`BUILD.md`](BUILD.md).
   invalidation socket against `MockWebServer`, the update coordinator and downloader. Shared fakes
   (`FakeSettingsRepository`, `FakeCanvasRepository`, `InMemoryDaos`, `SyncTestDoubles`, …) sit at the
   test root. `Build.VERSION` checks stay in Android-only classes so nothing here branches on SDK.
-- **Instrumented** (`app/src/androidTest`, 5 files): `RizxMigrationTest` opens the database at the
+- **Instrumented** (`app/src/androidTest`, 6 files): `LargeResultConsistencyTest` races a writer against
+  reads larger than one CursorWindow; `RizxMigrationTest` opens the database at the
   previous version from its exported schema and runs the real `Migration` (4→5, 5→6, 6→7);
   `KaraokeLyricsTest` drives the karaoke clock by hand; `SettingsToggleSemanticsTest` asserts one
   named toggle node per row; a responsive-layout regression and a quick-pick grid test.
@@ -769,8 +771,8 @@ How to report a problem: [`../SECURITY.md`](../SECURITY.md).
 - The e-mail-code sign-in exists in the data layer but is not offered by the UI; Google is the only
   method today.
 - The shared HTTP User-Agent is a constant; bump it with the major version.
-- The updater's download-and-install path was verified with JVM tests and fixtures; the first real
-  GitHub release is its first end-to-end run.
+- The updater's download-and-install path was verified with JVM tests and fixtures; an update from 1.0.0
+  to 1.0.1 is its first end-to-end run.
 - Provider endpoints are third-party and change without notice; each failure is isolated, none is
   guaranteed.
 

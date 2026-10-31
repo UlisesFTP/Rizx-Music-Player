@@ -81,6 +81,7 @@ Restated from `AGENTS.md` with where each is enforced, so a reader can check rat
 | Providers, plugins and cloud calls fail independently; a broken one degrades alone. | The app must work with any source down, no plugin and no backend. | `DashboardRepositoryImpl` (per-section isolation), `StreamingRepositoryImpl` (fallback chain), `JsProviderInvoker` + quarantine, `NoSyncCoordinator` when unconfigured; tests under `data/repository`, `data/plugin`, `data/sync`. |
 | Sources are keyless: public endpoints and tokens a page hands to any visitor; never a defeated access control. | Legal and ethical line; also what keeps the app buildable with no configuration. | ADR 0018 (Spotify search absent); `PROVIDERS.md`; review. |
 | A stored row this build cannot decode is skipped, never thrown from a Flow. | Two web-written rows crashed the app on launch on 2026-09-07. | `TrackJson.decodeTrackOrNull`; `RecentlyPlayedRepositoryTest`. |
+| A list read that can outgrow one CursorWindow (about 2 MB) is a `@Transaction` query. | A write between two windows crashed the app on opening it on 2026-10-30. | The DAOs in `data/local/db`; `LargeResultConsistencyTest` (instrumented). |
 | Room is the library's source of truth; sync is local-first and optional; the app is complete without an account. | Offline must be identical; signing out keeps everything. | `data/sync/SyncRunner.kt` (outbox, echo filtering, recovery snapshots); `ARCHITECTURE.md` § sync; tests under `data/sync`. |
 | Nothing audible depends on the audio buffer size; effects wrap the sink, they are not `AudioProcessor`s. | Media3 promises no buffer size and drops custom processors on the float path. | `playback/spatial/SmartSpatialEngine.kt` (stepped per fixed segment), `PcmTappingAudioSink`; JVM tests under `playback/spatial`. |
 | Configuration is by property **name** only; no secret ever enters the repository. | The APK must contain nothing that grants more than an anonymous client has. | `app/build.gradle.kts` (`publicConfig`), `.gitignore`, `BUILD.md`, review. |
@@ -183,13 +184,14 @@ Durable decisions, oldest first, with where the reasoning is recorded. Add a lin
 | 2026-09-10 | The stage is weight-based with ambient lights from the cover palette; the YouTube canvas source stays on by default (turning it off made covers static); Classic keeps the full-bleed stage. | `CONTEXT.md` |
 | 2026-09-13 | In-app updates read GitHub Releases and hand off to the system installer; AGENTS.md is public; the documentation set (user guide, technical guide, governance, context) is part of the definition of done; CI runs the gate on pull requests. | ADR 0032, spec 024, this file |
 | 2026-09-13 | Ignore rules that name a folder are anchored to the root (`/supabase/`); the first CI run showed an unanchored rule had kept the app's `data/remote/supabase` package out of the public tree. A release tag is cut only after CI is green on that commit, because CI — not the maintainer's tree — is what proves the published source builds. | `CONTEXT.md` 2026-09-13, `.gitignore` |
+| 2026-10-30 | List reads that can outgrow one CursorWindow run in a transaction, so a sync write between two windows cannot crash them. | `CONTEXT.md` 2026-10-30 |
 
 ## 10. Open items and known debt
 
 Recorded so nobody rediscovers them; none blocks daily work.
 
-- The first real GitHub release is also the first end-to-end run of the updater's download → verify
-  → install path (JVM-tested until then).
+- The updater's download → verify → install path has not yet been observed end to end on a device; 1.0.1 is the
+  first release an installed 1.0.0 can update to.
 - The e-mail-code sign-in exists in the data layer but is not offered by the UI.
 - `quickjs-kt` cannot interrupt a non-allocating infinite loop; restart abandons the thread.
 - `jaudiotagger` stays an Android-compatibility risk to re-evaluate.
@@ -198,7 +200,6 @@ Recorded so nobody rediscovers them; none blocks daily work.
 - The shared HTTP User-Agent is a constant; bump it with the major version.
 - The share-link host must serve `/.well-known/assetlinks.json`; `share-site/` documents it but
   does not ship one (it carries the deployment's certificate fingerprint).
-- Until the fix of 2026-09-13 is pushed, `origin/main` lacks `data/remote/supabase` and does not build from a clone; the tag `v1.0.0` must be cut after that push.
 - The tracked `.vite/deps/` metadata at the repository root is a leftover with no role in the Android
   build; removing it is a housekeeping commit for the maintainer.
 - Older docs (`ARCHITECTURE.md`, `FEATURES.md`, `PROVIDERS.md`) were refreshed on 2026-09-13 but

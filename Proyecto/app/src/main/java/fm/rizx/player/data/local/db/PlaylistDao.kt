@@ -131,7 +131,11 @@ interface PlaylistDao {
     )
     fun observeSummaries(): Flow<List<PlaylistSummaryRow>>
 
-    /** Every item of every playlist, in playlist order — the input of the Library's collages and totals. */
+    /**
+     * Every item of every playlist, in playlist order — the input of the Library's collages and totals.
+     * Unbounded, so it outgrows one CursorWindow: see TasteContributionDao.observeAll.
+     */
+    @Transaction
     @Query("SELECT playlistId, trackJson FROM playlist_items ORDER BY playlistId, sortOrder ASC")
     fun observeItemDigests(): Flow<List<PlaylistItemDigestRow>>
 
@@ -158,9 +162,11 @@ interface PlaylistDao {
         insertItems(items)
     }
 
+    @Transaction
     @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId ORDER BY sortOrder ASC")
     fun observeItems(playlistId: String): Flow<List<PlaylistItemEntity>>
 
+    @Transaction
     @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId ORDER BY sortOrder ASC")
     suspend fun getItems(playlistId: String): List<PlaylistItemEntity>
 

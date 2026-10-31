@@ -1,6 +1,6 @@
 # Rizx Player — project context
 
-_State header verified against the working tree on 2026-09-13. The running log at the end is
+_State header verified against the working tree on 2026-10-30. The running log at the end is
 append-only, newest last._
 
 This is the public "where the project stands" document: the current state in one table, what is
@@ -13,12 +13,12 @@ the map of the code is [`TECHNICAL_GUIDE.md`](TECHNICAL_GUIDE.md).
 
 | Area | Current state |
 |---|---|
-| App | Rizx Player **1.0.0** (`versionCode 3`), package `fm.rizx.player`, GPL-3.0 |
+| App | Rizx Player **1.0.1** (`versionCode 4`), package `fm.rizx.player`, GPL-3.0 |
 | Android | Kotlin 2.0.21 · Jetpack Compose (BOM 2024.12.01) · Hilt 2.52 · Media3 1.5.1 · `minSdk 26` · `targetSdk/compileSdk 36` |
 | Build | Gradle 8.12 · AGP 8.9.1 · KSP 2.0.21-1.0.28 · JDK 21 to run Gradle (17–23 work, 25 does not) |
 | Persistence | Room schema **7** (exported schemas 4–7) · four Preferences DataStores · JSON stores under `filesDir` |
-| Size | 496 main Kotlin files · 202 JVM test files · 5 instrumented test files · 4 locales (en, es, pt, fr) |
-| Verification | **1,695 JVM tests in 193 suites**, `lintDebug` 0 errors, `assembleDebug` and `assembleRelease` pass (2026-09-13) |
+| Size | 496 main Kotlin files · 202 JVM test files · 6 instrumented test files · 4 locales (en, es, pt, fr) |
+| Verification | **1,695 JVM tests in 193 suites**, `lintDebug` 0 errors, `assembleDebug` pass, 21 instrumented tests on `rizx28` (2026-10-30); `assembleRelease` last verified 2026-09-13 |
 | Distribution | Signed APK on GitHub Releases; the app updates itself from `releases/latest` (spec 024) |
 | Branches | `main` only. Rizx Web is a separate repository with `main` (web) and `electron` (desktop) lines |
 | Optional backend | A Supabase project (auth, `rizx_sync` RPC, Realtime, Edge Functions) — separate deployment, untracked `supabase/` |
@@ -51,7 +51,7 @@ the log below. The Corresponding Source of the app is complete without the priva
 ## Configuration names (values never enter the repository)
 
 `RIZX_SUPABASE_URL` · `RIZX_SUPABASE_PUBLISHABLE_KEY` · `RIZX_GOOGLE_WEB_CLIENT_ID` ·
-`RIZX_SHARE_BASE_URL` · `RIZX_TURNSTILE_CHALLENGE_URL` (compiled, not consumed by 1.0.0). Read from
+`RIZX_SHARE_BASE_URL` · `RIZX_TURNSTILE_CHALLENGE_URL` (compiled, not consumed by the app). Read from
 Gradle properties or the environment; absent values compile to empty strings and hide the cloud
 screens. The release keystore lives in an uncommitted `Proyecto/keystore.properties`.
 
@@ -130,3 +130,31 @@ seam `SearchViewModel` already had — overridable `io`/`background` dispatchers
 `@VisibleForTesting internal` method, since Hilt has no `CoroutineDispatcher` binding) and the three
 derived `StateFlow`s built lazily so they read the overridden dispatcher; every construction in the
 test class hands over the test scheduler. No other ViewModel with JVM tests touches a real dispatcher.
+
+**2026-09-13 — v1.0.0 published.** After CI went green on commit `592e1d2` (the gitignore fix and
+the HomeViewModel dispatcher seam), the tag `v1.0.0` was pushed and the first GitHub release was
+created with `Rizx-1.0.0-release.apk` (11,867,389 bytes, built from that commit, SHA-256
+`11a99060…e9906` as GitHub's asset digest confirms) and the release notes; GitHub attached the source
+archives of the tag. `releases/latest` now answers, so installed apps report "up to date" and the
+README badges resolve. The next release bumps `versionName`/`versionCode` before tagging.
+
+**2026-10-30 — large reads are transactions; a crash on opening the app after using the web client.**
+The maintainer's phone (1.0.0) closed with `IllegalStateException: Couldn't read row 446, col 0 from
+CursorWindow` when the app was opened after listening on the desktop client, and did not close on the
+next launch. Retraced with the release `mapping.txt`, the frame is `TasteContributionDao.observeAll`,
+collected by Home. Android caches a cursor's row count on its first window and re-runs the query for
+each later one; outside a transaction a write between two windows can leave the cursor past the end.
+Sync upserts a row and then prunes that device to 300, so a read that counted between the two steps
+overruns by one. The second launch survives because those rows are already applied, so nothing is
+pruned. The row number in the message counts from the window's start, not the table's.
+The fix is `@Transaction` on the list reads that can outgrow a window: taste contributions, favorites,
+recently played and playlist items, with no schema change. `LargeResultConsistencyTest` runs a real WAL
+database with a writer against a reader; on `rizx28` both of its tests failed before the fix with the
+phone's stack and passed after it. The gate passes (1,695 JVM tests in 193 suites, lint 0 errors,
+`assembleDebug`) and so does the instrumented suite (21 tests).
+The real sequence ran once on an API 35 Play Store emulator with the minified `releaseTest` build and the
+maintainer's account. The maintainer played new songs on the desktop client, the app was then opened on
+Home, and the sync pulled them (3 favorites, 6 taste rows, nothing sent) with no crash; the sign-in sync
+before it applied 3,828 taste rows, also with no crash. One clean run does not prove the fix on its own,
+because the failure depends on timing and the old build was not run on this path; the instrumented test
+is the proof. The fix ships in 1.0.1; 1.0.0 still carries the bug.

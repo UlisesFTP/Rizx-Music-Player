@@ -53,9 +53,12 @@ interface RecentlyPlayedDao {
     @Query("DELETE FROM recently_played WHERE provider = :provider AND sourceId = :sourceId")
     suspend fun delete(provider: String, sourceId: String)
 
+    /** Up to 300 full tracks, enough to outgrow one CursorWindow: see TasteContributionDao.observeAll. */
+    @Transaction
     @Query("SELECT * FROM recently_played ORDER BY playedAtIso DESC LIMIT :limit")
     fun observe(limit: Int): Flow<List<RecentlyPlayedEntity>>
 
+    @Transaction
     @Query("SELECT * FROM recently_played")
     suspend fun all(): List<RecentlyPlayedEntity>
 

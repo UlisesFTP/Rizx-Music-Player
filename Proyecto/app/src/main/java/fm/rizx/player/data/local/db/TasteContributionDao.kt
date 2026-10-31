@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -25,9 +26,15 @@ interface TasteContributionDao {
     @Query("DELETE FROM taste_contributions WHERE deviceId = :deviceId")
     suspend fun deleteDevice(deviceId: String)
 
+    /**
+     * In a transaction because the result outgrows one CursorWindow: sync prunes this table while Home
+     * observes it, and a write between two windows crashed the read (LargeResultConsistencyTest).
+     */
+    @Transaction
     @Query("SELECT * FROM taste_contributions")
     fun observeAll(): Flow<List<TasteContributionEntity>>
 
+    @Transaction
     @Query("SELECT * FROM taste_contributions")
     suspend fun all(): List<TasteContributionEntity>
 
