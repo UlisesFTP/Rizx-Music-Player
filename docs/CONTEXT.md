@@ -251,3 +251,11 @@ Two things seen:
   prolific artist's newest record could sit past that page.
 
 Committed and pushed to `main`; not released.
+
+**2026-11-02 — v1.0.3 published.** Version 1.0.3 (`versionCode 6`) carries the Home discovery above
+(`272d435`). CI passed on both `272d435` and the version commit `766d706` at the first attempt, and the tag
+`v1.0.3` is on `766d706`. The release has `Rizx-1.0.3-release.apk`, 11,917,469 bytes, SHA-256
+`9b95b715…35666c`, which matches GitHub's asset digest. `apksigner` verifies it (v2) with the published
+certificate `D7:97:42:78…8A:95`, and `releases/latest` answers v1.0.3. Phones on 1.0.2 get the in-app update
+window; 1.0.0 and 1.0.1 get the notification and the Settings row. The update itself was not observed on a
+device for this release.
