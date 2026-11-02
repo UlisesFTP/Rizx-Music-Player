@@ -49,6 +49,11 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import fm.rizx.player.ui.home.HideTarget
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -150,7 +155,7 @@ enum class HomeTab(val labelRes: Int) {
 
 /** How many items a carousel previews on the [HomeTab.All] overview before "See all". */
 private const val PREVIEW_ITEMS = 10
-private const val FOR_YOU_PREVIEW_ROWS = 3
+private const val FOR_YOU_PREVIEW_ROWS = 6
 
 /**
  * Station tiles at the foot of the feed before "See all" — six rows of the mosaic. The provider
@@ -188,6 +193,9 @@ private fun forYouTitle(section: ForYouSection): String = when (section) {
     is ForYouSection.Mix -> stringResource(R.string.home_mix_of, section.seedTitle)
     is ForYouSection.BecauseYouLike -> stringResource(R.string.home_because_you_like, section.artistName)
     is ForYouSection.SimilarTo -> stringResource(R.string.home_similar_to, section.anchorName)
+    is ForYouSection.PlaylistsWith -> stringResource(R.string.home_playlists_with, section.anchorName)
+    is ForYouSection.GenrePlaylists -> stringResource(R.string.home_your_genre, genreLabel(section.genre))
+    is ForYouSection.NewFromArtists -> stringResource(R.string.home_new_from_artists)
 }
 
 /**
@@ -308,6 +316,25 @@ fun HomeScreen(
     val continueListening by vm.continueListening.collectAsStateWithLifecycle()
     val playbackIndicator by vm.playbackIndicator.collectAsStateWithLifecycle()
     val heroes by vm.heroes.collectAsStateWithLifecycle()
+    val showSeedPicker by vm.showSeedPicker.collectAsStateWithLifecycle()
+    val lastHidden by vm.lastHidden.collectAsStateWithLifecycle()
+    // The card a long press asked about; the sheet is open while this is set.
+    var hideTarget by remember { mutableStateOf<HideTarget?>(null) }
+    hideTarget?.let { target ->
+        NotInterestedSheet(
+            target = target,
+            onHide = { vm.hide(target); hideTarget = null },
+            onDismiss = { hideTarget = null },
+        )
+    }
+    val snackbars = remember { SnackbarHostState() }
+    val hiddenMessage = lastHidden?.let { stringResource(R.string.discovery_hidden, it.label) }
+    val undoLabel = stringResource(R.string.discovery_undo)
+    LaunchedEffect(lastHidden) {
+        val message = hiddenMessage ?: return@LaunchedEffect
+        val result = snackbars.showSnackbar(message, actionLabel = undoLabel, duration = SnackbarDuration.Short)
+        if (result == SnackbarResult.ActionPerformed) vm.undoHide() else vm.clearLastHidden()
+    }
     // Localized titles for the personalized rows, resolved here for the same reason as above.
     val content = state as? HomeUiState.Content
     val forYouRows = content?.forYouSections.orEmpty().map { forYouTitle(it) to it }
@@ -514,6 +541,14 @@ fun HomeScreen(
                             onPlay = vm::playTrack,
                             onSurprise = vm::playSurprise,
                         )
+                        // Cold start: no history, no likes. Offer a few chart artists to start from.
+                        val seedChoices = s.feed.topArtists.flatMap { it.items }.map { it.name }
+                            .filter { it.isNotBlank() }.distinct().take(SEED_CHOICES)
+                        if (showSeedPicker && seedChoices.size >= MIN_SEEDS) {
+                            item(key = "seed-picker") {
+                                SeedPickerCard(seedChoices, onDone = vm::pickSeeds, onNotNow = vm::dismissSeedPicker)
+                            }
+                        }
                     }
                     tabContent(
                         s.feed, tab, onOpenAlbum, onOpenArtist, onOpenEditorialPlaylist, vm::playTrack,
@@ -538,6 +573,7 @@ fun HomeScreen(
                         regionalConsent = s.regionalConsent,
                         countryName = s.countryName,
                         onSetRegionalConsent = vm::setRegionalConsent,
+                        onHide = { hideTarget = it },
                     )
                 }
 
@@ -573,6 +609,11 @@ fun HomeScreen(
             item { Spacer(Modifier.height(LocalBottomInset.current + 16.dp)) }
         }
         }
+        // "Hidden: X · Undo", above the mini player.
+        SnackbarHost(
+            snackbars,
+            Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBottomInset.current + 8.dp),
+        )
     }
 }
 
@@ -752,6 +793,8 @@ private fun LazyListScope.tabContent(
     regionalConsent: Boolean?,
     countryName: String?,
     onSetRegionalConsent: (Boolean) -> Unit,
+    /** Long press on a card: opens the "Not interested" sheet for it. */
+    onHide: (HideTarget) -> Unit = {},
 ) {
     when (tab) {
         HomeTab.All -> {
@@ -797,7 +840,7 @@ private fun LazyListScope.tabContent(
                 // One entry per personalized row, real or the skeleton standing in for it — keyed by the
                 // title, so the skeleton is woven into exactly the slot its row will land in.
                 forYouRows.take(FOR_YOU_PREVIEW_ROWS).forEach { (title, section) ->
-                    add(Strip("fy-$title") { forYouStrip(title, section, onPlay, onOpenAlbum, onOpenArtist) })
+                    add(Strip("fy-$title") { forYouStrip(title, section, onPlay, onOpenAlbum, onOpenArtist, onOpenEditorialPlaylist, onHide) })
                 }
                 forYouSkeletons.take((FOR_YOU_PREVIEW_ROWS - forYouRows.size).coerceAtLeast(0))
                     .forEach { title -> add(Strip("fy-$title") { skeletonCarousel(title) }) }
@@ -846,7 +889,10 @@ private fun LazyListScope.tabContent(
                             onSeeAll,
                             key = { it.source.identityKey },
                         ) { playlist ->
-                            CarouselCell(onClick = { onOpenEditorialPlaylist(playlist) }) {
+                            CarouselCell(
+                                onClick = { onOpenEditorialPlaylist(playlist) },
+                                onLongClick = { onHide(HideTarget.Playlist(playlist.source.identityKey, playlist.name)) },
+                            ) {
                                 HomeCover(
                                     playlist.source.id, initial = playlist.name.take(1),
                                     Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
@@ -897,7 +943,11 @@ private fun LazyListScope.tabContent(
                 add(
                     Strip("artists") {
                         carousel(popularArtistsTitle, artists, HomeTab.Artists, onSeeAll, key = { it.source.identityKey }) { artist ->
-                            CarouselCell(onClick = { onOpenArtist(artist.source) }, centered = true) {
+                            CarouselCell(
+                                onClick = { onOpenArtist(artist.source) },
+                                centered = true,
+                                onLongClick = { onHide(HideTarget.Artist(artist.name)) },
+                            ) {
                                 HomeCover(
                                     artist.source.id, initial = artist.name.take(1),
                                     Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
@@ -986,7 +1036,7 @@ private fun LazyListScope.tabContent(
             }
             if (hero != null) item(key = "for-you-hero") { hero() }
             forYouRows.forEach { (title, section) ->
-                forYouStrip(title, section, onPlay, onOpenAlbum, onOpenArtist, showAll = true)
+                forYouStrip(title, section, onPlay, onOpenAlbum, onOpenArtist, onOpenEditorialPlaylist, onHide, showAll = true)
             }
             forYouSkeletons.forEach { title -> skeletonCarousel(title) }
             if (discover != null) item(key = "for-you-daily-pick") { discover() }
@@ -1074,17 +1124,41 @@ private val CAROUSEL_ART = 152.dp
  */
 private class Strip(val key: String, val emit: LazyListScope.() -> Unit)
 
-/** One personalized row, whichever of the three shapes it happens to be. */
+/** One personalized row, whichever shape it happens to be. Every card long-presses into "Not interested". */
 private fun LazyListScope.forYouStrip(
     title: String,
     section: ForYouSection,
     onPlay: (Track) -> Unit,
     onOpenAlbum: (ProviderRef) -> Unit,
     onOpenArtist: (ProviderRef) -> Unit,
+    onOpenPlaylist: (PlaylistRef) -> Unit,
+    onHide: (HideTarget) -> Unit,
     showAll: Boolean = false,
 ) = when (section) {
-    is ForYouSection.Mix -> trackCarousel(title, section.items, onPlay, showAll)
-    is ForYouSection.BecauseYouLike -> trackCarousel(title, section.items, onPlay, showAll)
+    is ForYouSection.Mix -> trackCarousel(title, section.items, onPlay, showAll, onHide)
+    is ForYouSection.BecauseYouLike -> trackCarousel(title, section.items, onPlay, showAll, onHide)
+    is ForYouSection.PlaylistsWith -> discoveryPlaylistCarousel(title, section.playlists, onOpenPlaylist, onHide, showAll)
+    is ForYouSection.GenrePlaylists -> discoveryPlaylistCarousel(title, section.playlists, onOpenPlaylist, onHide, showAll)
+    // The release radar: covers with the artist under them and the platform badge, like the charts.
+    is ForYouSection.NewFromArtists -> carousel(
+        title,
+        section.albums,
+        itemLimit = if (showAll) Int.MAX_VALUE else PREVIEW_ITEMS,
+        key = { "nfa-${it.source.identityKey}" },
+    ) { album ->
+        val artist = album.artists.firstOrNull()?.name?.takeIf { it.isNotBlank() }
+        val hideArtist: (() -> Unit)? = artist?.let { name -> { onHide(HideTarget.Artist(name)) } }
+        CarouselCell(onClick = { onOpenAlbum(album.source) }, onLongClick = hideArtist) {
+            HomeCover(
+                album.source.id, initial = album.title.take(1),
+                Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
+                imageUrl = album.artwork.tileUrl(),
+            )
+            CellTitle(album.title)
+            CellSubtitle(artist ?: stringResource(R.string.home_generic_album))
+            SourceBadge(album.source.provider)
+        }
+    }
     // The anchor's neighborhood: similar artists as circles, records by them as squares, one mixed
     // strip — the reference feeds' "Similar to <artist>" shape.
     is ForYouSection.SimilarTo -> carousel(
@@ -1100,7 +1174,11 @@ private fun LazyListScope.forYouStrip(
         itemLimit = if (showAll) Int.MAX_VALUE else PREVIEW_ITEMS,
     ) { cell ->
         when (cell) {
-            is ArtistRef -> CarouselCell(onClick = { onOpenArtist(cell.source) }, centered = true) {
+            is ArtistRef -> CarouselCell(
+                onClick = { onOpenArtist(cell.source) },
+                centered = true,
+                onLongClick = { onHide(HideTarget.Artist(cell.name)) },
+            ) {
                 HomeCover(
                     cell.source.id, initial = cell.name.take(1),
                     Modifier.size(CAROUSEL_ART).paperElevation(CircleShape),
@@ -1119,6 +1197,37 @@ private fun LazyListScope.forYouStrip(
             }
             else -> Unit
         }
+    }
+}
+
+/**
+ * A discovery playlist shelf ("Playlists with …", "Your genre: …"): covers with the platform badge,
+ * because the point of these rows is that they mix Spotify, Apple Music, Deezer and YouTube Music.
+ */
+private fun LazyListScope.discoveryPlaylistCarousel(
+    title: String,
+    playlists: List<PlaylistRef>,
+    onOpen: (PlaylistRef) -> Unit,
+    onHide: (HideTarget) -> Unit,
+    showAll: Boolean,
+) = carousel(
+    title,
+    playlists,
+    itemLimit = if (showAll) Int.MAX_VALUE else PREVIEW_ITEMS,
+    key = { "dp-${it.source.identityKey}" },
+) { playlist ->
+    CarouselCell(
+        onClick = { onOpen(playlist) },
+        onLongClick = { onHide(HideTarget.Playlist(playlist.source.identityKey, playlist.name)) },
+    ) {
+        HomeCover(
+            playlist.source.id, initial = playlist.name.take(1),
+            Modifier.size(CAROUSEL_ART).paperElevation(), initialSize = 40,
+            imageUrl = playlist.artwork.tileUrl(),
+        )
+        CellTitle(playlist.name)
+        CellSubtitle(playlistSubtitle(playlist))
+        SourceBadge(playlist.source.provider)
     }
 }
 
@@ -1348,13 +1457,20 @@ private fun LazyListScope.trackCarousel(
     tracks: List<Track>,
     onPlay: (Track) -> Unit,
     showAll: Boolean = false,
+    onHide: ((HideTarget) -> Unit)? = null,
 ) = carousel(
     title,
     tracks,
     itemLimit = if (showAll) Int.MAX_VALUE else PREVIEW_ITEMS,
     key = { it.source.identityKey },
 ) { track ->
-        CarouselCell(onClick = { onPlay(track) }) {
+        val artist = track.artists.firstOrNull()?.name?.takeIf { it.isNotBlank() }
+        val hideArtist: (() -> Unit)? = if (onHide != null && artist != null) {
+            { onHide(HideTarget.Artist(artist)) }
+        } else {
+            null
+        }
+        CarouselCell(onClick = { onPlay(track) }, onLongClick = hideArtist) {
             HomeCover(
                 track.source.id, initial = null,
                 Modifier.size(CAROUSEL_ART).paperElevation(),
@@ -1417,9 +1533,11 @@ private fun ConsentButton(label: String, filled: Boolean, onClick: () -> Unit) {
 private fun CarouselCell(
     onClick: () -> Unit,
     centered: Boolean = false,
+    /** Long press opens the "Not interested" sheet. Null on cards that have nothing to hide. */
+    onLongClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) = Column(
-    Modifier.width(CAROUSEL_ART).clickableScale(scale = 0.98f, onClick = onClick),
+    Modifier.width(CAROUSEL_ART).clickableScale(scale = 0.98f, onLongClick = onLongClick, onClick = onClick),
     horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start,
 ) { content() }
 

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_playlists_with">Playlists con %1$s</string>
+    <string name="home_your_genre">Tu género: %1$s</string>
+    <string name="home_new_from_artists">Novedades de tus artistas</string>
+
+    <string name="genre_reggaeton">Reguetón</string>
+    <string name="genre_hiphop">Hip-hop</string>
+    <string name="genre_electronic">Electrónica</string>
+    <string name="genre_reggae">Reggae y dancehall</string>
+    <string name="genre_pop">Pop</string>
+    <string name="genre_rock">Rock</string>
+    <string name="genre_metal">Metal</string>
+    <string name="genre_indie">Indie y alternativo</string>
+    <string name="genre_latin_regional">Regional mexicano</string>
+    <string name="genre_latin_tropical">Tropical</string>
+    <string name="genre_rnb">R&amp;B y soul</string>
+    <string name="genre_kpop">K-pop y J-pop</string>
+    <string name="genre_soundtrack">Bandas sonoras</string>
+    <string name="genre_folk">Folk y acústico</string>
+    <string name="genre_country">Country</string>
+    <string name="genre_jazz">Jazz</string>
+    <string name="genre_classical">Clásica</string>
+    <string name="genre_lofi">Lo-fi y chill</string>
+    <string name="genre_other">Otros</string>
+
+    <string name="discovery_not_interested">No me interesa</string>
+    <string name="discovery_hide_artist_caption">Ocultar a %1$s de tu Home. Sus canciones, álbumes y playlists dejan de aparecer y ya no influye en tus recomendaciones.</string>
+    <string name="discovery_hide_playlist_caption">Ocultar esta playlist de tu Home.</string>
+    <string name="discovery_hidden">Oculto: %1$s</string>
+    <string name="discovery_undo">Deshacer</string>
+
+    <string name="seed_title">Elige 3 artistas que te gusten</string>
+    <string name="seed_caption">Rizx arma con ellos tus primeras playlists y mixes, hasta que tengas historial.</string>
+    <string name="seed_done">Listo (%1$d)</string>
+    <string name="seed_not_now">Ahora no</string>
+
+    <string name="settings_discovery_reset">Ocultos de la Home</string>
+    <string name="settings_discovery_reset_caption">Toca para recuperar los artistas y playlists que marcaste como «No me interesa».</string>
+</resources>

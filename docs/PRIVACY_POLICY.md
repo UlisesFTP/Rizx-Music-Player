@@ -39,6 +39,9 @@ _Last reviewed: 2026-10-31 · applies to Rizx Player Android, version 1.0.2_
   tap). **No captured audio and no fingerprint is stored**, in this history or anywhere else, and the
   history is never uploaded.
 - **Plugins** you install, and the providers you enable, stay a local setting.
+- **"Not interested" and first-run picks**: the artists and playlists you hid from the Home and the
+  artists you picked on first run are a local file. They are not synced, and clearing app data removes
+  them. Settings › Recommendations › *Hidden from Home* resets the hidden list.
 
 ### Sent to third-party content providers (only when you use them)
 
@@ -57,6 +60,12 @@ embeds, only for imports and editorial charts), **LRCLIB**, **NetEase**, **KuGou
   does not control or receive that data.
 - **When:** only while you actively use a feature backed by that service. Disabled providers are never
   contacted.
+- **Home recommendations**: to build *Playlists with …*, *Your genre: …* and *New from your artists*,
+  the Home sends the names of a few of your most-played artists, or a genre such as "reggaeton hits", to
+  **Deezer**, **Apple** (iTunes Search and public artist pages) and **YouTube Music**. It also requests
+  fixed public playlist pages from **Apple** and **Spotify**. **Apple** also receives your country code,
+  but only if you allowed regional recommendations; otherwise it receives the fixed `us`. Your listening
+  log itself is never sent. With data saver on, Apple is not contacted for this.
 
 ### Update check — GitHub (automatic)
 

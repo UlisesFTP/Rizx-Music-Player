@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_playlists_with">Playlists avec %1$s</string>
+    <string name="home_your_genre">Votre genre : %1$s</string>
+    <string name="home_new_from_artists">Nouveautés de vos artistes</string>
+
+    <string name="genre_reggaeton">Reggaeton</string>
+    <string name="genre_hiphop">Hip-hop</string>
+    <string name="genre_electronic">Électro</string>
+    <string name="genre_reggae">Reggae et dancehall</string>
+    <string name="genre_pop">Pop</string>
+    <string name="genre_rock">Rock</string>
+    <string name="genre_metal">Metal</string>
+    <string name="genre_indie">Indé et alternatif</string>
+    <string name="genre_latin_regional">Musique mexicaine</string>
+    <string name="genre_latin_tropical">Tropical</string>
+    <string name="genre_rnb">R&amp;B et soul</string>
+    <string name="genre_kpop">K-pop et J-pop</string>
+    <string name="genre_soundtrack">Bandes originales</string>
+    <string name="genre_folk">Folk et acoustique</string>
+    <string name="genre_country">Country</string>
+    <string name="genre_jazz">Jazz</string>
+    <string name="genre_classical">Classique</string>
+    <string name="genre_lofi">Lo-fi et chill</string>
+    <string name="genre_other">Autres</string>
+
+    <string name="discovery_not_interested">Pas intéressé</string>
+    <string name="discovery_hide_artist_caption">Masquer %1$s de votre accueil. Ses titres, albums et playlists n\'apparaissent plus et n\'influencent plus vos recommandations.</string>
+    <string name="discovery_hide_playlist_caption">Masquer cette playlist de votre accueil.</string>
+    <string name="discovery_hidden">Masqué : %1$s</string>
+    <string name="discovery_undo">Annuler</string>
+
+    <string name="seed_title">Choisissez 3 artistes que vous aimez</string>
+    <string name="seed_caption">Rizx compose avec eux vos premières playlists et mixes, en attendant votre historique d\'écoute.</string>
+    <string name="seed_done">Terminé (%1$d)</string>
+    <string name="seed_not_now">Plus tard</string>
+
+    <string name="settings_discovery_reset">Masqués de l\'accueil</string>
+    <string name="settings_discovery_reset_caption">Touchez pour retrouver les artistes et playlists marqués « Pas intéressé ».</string>
+</resources>

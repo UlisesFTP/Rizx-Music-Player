@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home discovery (spec 026): personalized playlist shelves, release radar, "not interested", cold start. -->
+<resources>
+    <string name="home_playlists_with">Playlists with %1$s</string>
+    <string name="home_your_genre">Your genre: %1$s</string>
+    <string name="home_new_from_artists">New from your artists</string>
+
+    <string name="genre_reggaeton">Reggaeton</string>
+    <string name="genre_hiphop">Hip-hop</string>
+    <string name="genre_electronic">Electronic</string>
+    <string name="genre_reggae">Reggae &amp; dancehall</string>
+    <string name="genre_pop">Pop</string>
+    <string name="genre_rock">Rock</string>
+    <string name="genre_metal">Metal</string>
+    <string name="genre_indie">Indie &amp; alternative</string>
+    <string name="genre_latin_regional">Regional Mexican</string>
+    <string name="genre_latin_tropical">Tropical</string>
+    <string name="genre_rnb">R&amp;B &amp; soul</string>
+    <string name="genre_kpop">K-pop &amp; J-pop</string>
+    <string name="genre_soundtrack">Soundtracks</string>
+    <string name="genre_folk">Folk &amp; acoustic</string>
+    <string name="genre_country">Country</string>
+    <string name="genre_jazz">Jazz</string>
+    <string name="genre_classical">Classical</string>
+    <string name="genre_lofi">Lo-fi &amp; chill</string>
+    <string name="genre_other">Other</string>
+
+    <string name="discovery_not_interested">Not interested</string>
+    <string name="discovery_hide_artist_caption">Hide %1$s from your Home. Their songs, albums and playlists stop showing up and they no longer shape your recommendations.</string>
+    <string name="discovery_hide_playlist_caption">Hide this playlist from your Home.</string>
+    <string name="discovery_hidden">Hidden: %1$s</string>
+    <string name="discovery_undo">Undo</string>
+
+    <string name="seed_title">Pick 3 artists you like</string>
+    <string name="seed_caption">Rizx builds your first playlists and mixes from them, until there is some listening to go on.</string>
+    <string name="seed_done">Done (%1$d)</string>
+    <string name="seed_not_now">Not now</string>
+
+    <string name="settings_discovery_reset">Hidden from Home</string>
+    <string name="settings_discovery_reset_caption">Tap to bring back the artists and playlists you marked “Not interested”.</string>
+</resources>

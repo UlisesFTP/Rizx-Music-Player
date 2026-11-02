@@ -284,10 +284,41 @@ object ProviderModule {
         settings: SettingsRepository,
         region: RegionResolver,
         deezerArtists: fm.rizx.player.data.remote.deezer.DeezerArtistSearch,
-    ): fm.rizx.player.domain.repository.ForYouRepository =
-        fm.rizx.player.data.repository.ForYouRepositoryImpl(
-            favorites, recents, mix, deezer, settings, region, artists = deezerArtists,
+        itunes: ItunesApi,
+        okHttp: okhttp3.OkHttpClient,
+        json: kotlinx.serialization.json.Json,
+        youtube: YoutubeExtractorClient,
+        spotifyPlaylists: SpotifyPlaylistProvider,
+        dataSaver: DataSaverState,
+        feedback: fm.rizx.player.domain.discovery.DiscoveryFeedback,
+        seeds: fm.rizx.player.domain.discovery.TasteSeeds,
+    ): fm.rizx.player.domain.repository.ForYouRepository {
+        // The playlist shelves' platforms, in interleave order (spec 026, ADR 0033). Apple's storefront
+        // follows the same consent rule as its charts: the listener's country only when they allowed it.
+        val appleStorefront: suspend () -> String = {
+            val consented = settings.recsRegionalConsent.first() == true
+            (if (consented) region.country()?.lowercase() else null)
+                ?: fm.rizx.player.data.discovery.AppleMusicDiscoverySource.DEFAULT_STOREFRONT
+        }
+        val discovery = listOf(
+            fm.rizx.player.data.discovery.SpotifyGenreDiscoverySource(spotifyPlaylists),
+            fm.rizx.player.data.discovery.DeezerDiscoverySource(deezer),
+            fm.rizx.player.data.discovery.AppleMusicDiscoverySource(
+                itunes,
+                fm.rizx.player.data.remote.applemusic.AppleMusicShelfPage(okHttp, json),
+                storefront = appleStorefront,
+                savingData = dataSaver::savingNow,
+            ),
+            fm.rizx.player.data.discovery.YoutubeMusicDiscoverySource(youtube),
         )
+        return fm.rizx.player.data.repository.ForYouRepositoryImpl(
+            favorites, recents, mix, deezer, settings, region,
+            artists = deezerArtists,
+            discovery = discovery,
+            feedback = feedback,
+            seeds = seeds,
+        )
+    }
 
     /**
      * One instance app-wide: the Search screen, the player's artist link and the radio's id lookup all

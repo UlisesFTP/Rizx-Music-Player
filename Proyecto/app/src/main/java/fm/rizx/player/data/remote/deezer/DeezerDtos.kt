@@ -61,6 +61,8 @@ data class DeezerAlbumShortDto(
      * forty entries in one row.
      */
     @SerialName("record_type") val recordType: String? = null,
+    /** Deezer's genre id for the release (`/artist/{id}/albums`), the fallback genre of a taste artist. */
+    @SerialName("genre_id") val genreId: Long? = null,
     /** Present on `search/album` rows (the album's main artist); absent on track-nested albums. */
     val artist: DeezerArtistShortDto? = null,
 )
@@ -129,7 +131,12 @@ data class DeezerPlaylistDto(
     @SerialName("picture_big") val pictureBig: String? = null,
     @SerialName("picture_medium") val pictureMedium: String? = null,
     @SerialName("nb_tracks") val nbTracks: Int? = null,
+    /** Who made it — "Camojada - Deezer Latin Editor", "Deezer Charts", or a label account. */
+    val user: DeezerUserDto? = null,
 )
+
+@Serializable
+data class DeezerUserDto(val name: String? = null)
 
 /** `/playlist/{id}` — full playlist with its track list (Phase 22 URL import). */
 @Serializable

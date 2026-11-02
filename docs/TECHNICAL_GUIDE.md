@@ -430,6 +430,21 @@ queue and recents work identically for local files.
   phone — **a mix costs no network call**. "For you" rows (`ForYouRepositoryImpl`) seed YouTube Music
   autoplay from the user's tracks and Deezer artist radio / related artists. Regional rows are
   consent-gated; the country comes from SIM → network → locale, no permission, no location.
+- **Discovery shelves** (spec 026):
+  - **Anchors** are ranked by `TasteProfile.artists`; skips lower an artist. Hidden artists and the
+    cold-start picks are taken into account.
+  - **Playlists with …** and **Your genre: …** ask the four `DiscoveryPlaylistSource`s in
+    `data/discovery/`. Each source memoizes its answers for 6 h (`DiscoveryMemo`, single-flight).
+  - **Apple:** `AppleMusicShelfPage` reads `serialized-server-data`, never the markup, and is skipped
+    under data saver.
+  - **Deezer:** keeps only "Deezer …" creators.
+  - **Spotify:** only the verified genre ids in `GenreCatalog`.
+  - **New from your artists** filters each anchor's `artist/{id}/albums` page to the last 30 days. The
+    clock is injected, and pre-releases and garbage dates are excluded.
+  - **"Not interested"** lives in `filesDir/discovery_feedback.json` (`DiscoveryFeedbackStore`, which
+    also holds the cold-start picks) and is applied in `HomeViewModel.publish()` by `DiscoveryFilter`.
+    Hiding an artist refreshes the personalized half so it stops anchoring rows.
+  - **Mix seeds** are shuffled with the day as the seed, so the rows hold still across refreshes.
 - **Radio.** `GetRadioTracksUseCase` and `GetYoutubeMixTracksUseCase` feed the queue's auto-refill
   (`RADIO_REFILL_AHEAD = 2`, `RADIO_MAX_QUEUE = 200`); engines are keyed by `RadioMode` (YouTube
   Music mix, Apple, SoundCloud, with Deezer artist radio as the fallback every mode degrades to).

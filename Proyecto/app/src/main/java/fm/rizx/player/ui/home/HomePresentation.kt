@@ -96,11 +96,19 @@ fun homeHeroItems(
 fun ForYouSection.heroTracks(): List<Track> = when (this) {
     is ForYouSection.Mix -> items
     is ForYouSection.BecauseYouLike -> items
-    is ForYouSection.SimilarTo -> emptyList()
+    // Shelves of things to open, not songs to play: none of them can stand in as a hero's tracklist.
+    is ForYouSection.SimilarTo,
+    is ForYouSection.PlaylistsWith,
+    is ForYouSection.GenrePlaylists,
+    is ForYouSection.NewFromArtists,
+    -> emptyList()
 }
 
 private fun ForYouSection.heroSubject(): String = when (this) {
     is ForYouSection.Mix -> "mix|$seedTitle"
     is ForYouSection.BecauseYouLike -> "artist|$artistName"
     is ForYouSection.SimilarTo -> "similar|$anchorName"
+    is ForYouSection.PlaylistsWith -> "playlists|$anchorName"
+    is ForYouSection.GenrePlaylists -> "genre|${genre.name}"
+    is ForYouSection.NewFromArtists -> "new-releases"
 }

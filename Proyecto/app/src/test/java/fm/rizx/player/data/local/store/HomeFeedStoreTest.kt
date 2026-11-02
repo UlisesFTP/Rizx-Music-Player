@@ -165,4 +165,27 @@ class HomeFeedStoreTest {
         assertTrue(cached!!.feed.isEmpty)
         assertTrue(cached.sections.isEmpty())
     }
+
+    @Test
+    fun `the discovery shelves survive the disk round trip`() = runBlocking {
+        val playlist = fm.rizx.player.domain.model.PlaylistRef(id = "1", name = "Fuego Latino", source = ProviderRef("deezer", "playlist:1"))
+        val album = fm.rizx.player.domain.model.AlbumRef(title = "New", source = ProviderRef("deezer", "album:9"), year = 2026)
+        val sections = listOf(
+            ForYouSection.PlaylistsWith(anchorName = "Bad Bunny", playlists = listOf(playlist)),
+            ForYouSection.GenrePlaylists(genre = fm.rizx.player.domain.model.SoundGenre.REGGAETON, playlists = listOf(playlist)),
+            ForYouSection.NewFromArtists(albums = listOf(album)),
+        )
+        store().write(feed("a"), sections)
+
+        assertEquals(sections, store().read()!!.sections)
+    }
+
+    @Test
+    fun `a cache written before the discovery shelves existed still reads`() = runBlocking {
+        store().write(feed("a"), listOf(ForYouSection.BecauseYouLike(artistName = "X", items = listOf(track("b")))))
+
+        val cached = store().read()
+
+        assertEquals(1, cached!!.sections.size)
+    }
 }

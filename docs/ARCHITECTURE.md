@@ -185,8 +185,19 @@ interpolating clock rather than polling.
 
 `recently_played` in Room is a real listening log: plays, completions, skips, listened time, and
 time-of-day buckets. From it the app derives taste clusters, three daily mixes (70/30
-familiar/discovery), "Similar to …" rows, and radio seeding — all **on-device**; nothing about
-listening behaviour leaves the phone.
+familiar/discovery), "Similar to …" rows, and radio seeding — all **on-device**; the log itself never
+leaves the phone. What does leave it is the *question* a row needs answered: an artist or genre name sent
+to the catalogue that answers it.
+
+**Discovery shelves** (spec 026, ADR 0033):
+- `ForYouRepositoryImpl` ranks its anchor artists with `TasteProfile`, so skips count against an artist.
+- For those anchors it asks every `DiscoveryPlaylistSource` (`data/discovery/`: Deezer, Apple Music,
+  YouTube Music, Spotify genre packs) concurrently, each isolated, and merges the answers round-robin
+  (`DiscoveryMerge`).
+- `GenreCatalog` is the static, verified map from a `SoundGenre` to each platform's genre.
+- The release radar reads the anchors' Deezer discographies. The same pages give the fallback genre.
+- "Not interested" is `DiscoveryFeedback` (a local JSON store), applied at render time by
+  `DiscoveryFilter`, cached Home included. The cache keeps the unfiltered Home, so undo costs nothing.
 
 ## Smart 8D audio (adaptive spatialization)
 

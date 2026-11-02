@@ -53,4 +53,35 @@ sealed interface ForYouSection {
     ) : ForYouSection {
         override val size: Int get() = artists.size + albums.size
     }
+
+    /**
+     * Editorial playlists that feature one taste artist ("Playlists with <anchor>"), interleaved across
+     * Deezer, Apple Music and YouTube Music so the row reads as one shelf, not three provider dumps.
+     * Spotify cannot contribute here: finding playlists by artist needs a search it gates (ADR 0018).
+     */
+    @Serializable
+    @SerialName("playlists-with")
+    data class PlaylistsWith(val anchorName: String, val playlists: List<PlaylistRef> = emptyList()) : ForYouSection {
+        override val size: Int get() = playlists.size
+    }
+
+    /**
+     * Playlists for one of the listener's dominant genres ("Your genre: <genre>"), from all four
+     * platforms. The genre travels as the enum so the UI localizes the label.
+     */
+    @Serializable
+    @SerialName("genre-playlists")
+    data class GenrePlaylists(val genre: SoundGenre, val playlists: List<PlaylistRef> = emptyList()) : ForYouSection {
+        override val size: Int get() = playlists.size
+    }
+
+    /**
+     * What the listener's own artists released recently, newest first — the "release radar" shelf. One
+     * row for every anchor together, because a release radar split per artist is a discography.
+     */
+    @Serializable
+    @SerialName("new-from-artists")
+    data class NewFromArtists(val albums: List<AlbumRef> = emptyList()) : ForYouSection {
+        override val size: Int get() = albums.size
+    }
 }

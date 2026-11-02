@@ -65,6 +65,17 @@ interface DeezerApi {
     @GET("artist/{id}/related")
     suspend fun artistRelated(@Path("id") id: String, @Query("limit") limit: Int): DeezerArtistsWrapper
 
+    /**
+     * Playlists that feature the artist. Mostly Deezer's own editors ("100% <artist>", "Fuego Latino"),
+     * mixed with label and SEO accounts — the discovery source keeps only Deezer's (verified 2026-11-02).
+     */
+    @GET("artist/{id}/playlists")
+    suspend fun artistPlaylists(@Path("id") id: String, @Query("limit") limit: Int): DeezerPlaylistsWrapper
+
+    /** One genre's chart playlists — genre-filtered, unlike the chart's artists ("Metal Radar", "80s Metal"). */
+    @GET("chart/{genreId}/playlists")
+    suspend fun genrePlaylists(@Path("genreId") genreId: String, @Query("limit") limit: Int): DeezerPlaylistsWrapper
+
     /** Top tracks/albums/artists/playlists in one call (dashboard, Phase 19). */
     @GET("chart")
     suspend fun chart(): DeezerChartDto

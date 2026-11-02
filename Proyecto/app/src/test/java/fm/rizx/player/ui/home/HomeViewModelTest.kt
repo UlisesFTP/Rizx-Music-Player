@@ -37,6 +37,7 @@ import kotlinx.coroutines.test.runTest
 import fm.rizx.player.data.sync.FakeSyncCoordinator
 import fm.rizx.player.domain.sync.SyncApplied
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -273,6 +274,49 @@ class HomeViewModelTest {
             assertEquals("the rows stay put", 1, during.forYouSections.size)
             assertTrue("no second, empty copy of them below", during.forYouPending.isEmpty())
             second.complete(Unit)
+        }
+
+    /** A real store on a temp file, so hiding goes through the same code the app runs. */
+    private fun feedbackStore() = fm.rizx.player.data.local.store.DiscoveryFeedbackStore(
+        java.io.File(kotlin.io.path.createTempDirectory("rizx-feedback").toFile(), "discovery_feedback.json"),
+        io = mainDispatcherRule.dispatcher,
+    )
+
+    @Test
+    fun `a hidden artist is filtered out of the cached Home too, and undo brings it back`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            val cache = store()
+            val byHidden = Track("Hidden song", artists = listOf(fm.rizx.player.domain.model.ArtistCredit("Bad Bunny")), source = ProviderRef("deezer", "1"))
+            val other = Track("Kept song", artists = listOf(fm.rizx.player.domain.model.ArtistCredit("Feid")), source = ProviderRef("deezer", "2"))
+            cache.write(HomeFeed(topTracks = listOf(AttributedResult("d", "Deezer", listOf(byHidden, other)))), emptyList(), FAKE_CACHE_KEY)
+            val feedback = feedbackStore()
+            feedback.hideArtist("Bad Bunny")
+
+            val vm = HomeViewModel(
+                FakeDash { HomeFeed() }, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), cache,
+                FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents(), feedback = feedback,
+            ).useDispatchers(mainDispatcherRule.dispatcher)
+            val content = vm.state.first { it is HomeUiState.Content } as HomeUiState.Content
+            assertEquals(listOf("Kept song"), content.feed.topTracks.single().items.map { it.title })
+
+            feedback.unhideArtist("Bad Bunny")
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            val restored = vm.state.value as HomeUiState.Content
+            assertEquals("no refetch needed to bring it back", 2, restored.feed.topTracks.single().items.size)
+        }
+
+    @Test
+    fun `the seed picker shows on a blank slate and goes once dismissed`() =
+        runTest(mainDispatcherRule.dispatcher.scheduler) {
+            val feedback = feedbackStore()
+            val vm = HomeViewModel(
+                FakeDash { HomeFeed() }, InMemoryQueueRepository(), FakePlayback(), FakeForYou(), store(),
+                FakeSettingsRepository(), FakeFavorites(), NoopPlaylists, FakeRecents(), seeds = feedback,
+            ).useDispatchers(mainDispatcherRule.dispatcher)
+
+            assertTrue(vm.showSeedPicker.first { it })
+            vm.dismissSeedPicker()
+            assertFalse(vm.showSeedPicker.first { !it })
         }
 
     @Test

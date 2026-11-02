@@ -196,3 +196,58 @@ the published signing certificate. Its size, 11,867,389 bytes, is the same as 1.
 to a 4 KiB boundary, so small code changes do not move the total. Tell builds apart by SHA-256; `classes.dex`
 does differ. Phones on 1.0.0 and 1.0.1 hear about this release through the notification and the Settings row;
 the prompt itself first shows for the release after this one, on phones already running 1.0.2.
+
+**2026-11-02 — Home discovery: playlists picked for the listener, release radar, "Not interested", first run**
+(spec 026, ADR 0033). The Home's playlists used to be the same for everyone.
+
+What is new:
+- **"Playlists with <artist>"**: for the two strongest anchors, editorial playlists that feature the
+  artist, from Deezer, Apple Music and YouTube Music, interleaved.
+- **"Your genre: <genre>"**: for the two dominant genres, playlists from all four platforms. Spotify joins
+  only here, through editorial ids verified through the embed today, because its search stays out under
+  ADR 0018.
+- **"New from your artists"**: the anchors' releases from the last 30 days.
+- **Anchors** are now ranked by `TasteProfile`, so skips pull an artist down, and mix seeds hold through
+  the day.
+- **"Not interested"**: a long press, with Undo and a reset row in Settings. It is filtered at render time,
+  over the cached Home too.
+- **First-run picker**: three chart artists act as anchors until there is history.
+
+Measured while building it:
+- Deezer's `artist/{id}/playlists` mixes Deezer's editors with label SEO lists and spam, so only "Deezer …"
+  creators are kept.
+- Apple's artist and curator pages carry their shelves in `serialized-server-data`. The markup next to each
+  link often names the previous card, so it is not read.
+- Apple curator ids 976439526–976439587 were probed and recorded. Urbano Latino is 404 on `/mx/`, hence the
+  fallback to `us`.
+- No verifiable Spotify editorial id was found for corridos, salsa or soundtracks, so those genres have no
+  Spotify pack.
+- The "Not interested" list and the picks are not synced (no server table), which is recorded as open debt.
+
+Verified:
+- **Gate:** 1,748 JVM tests in 201 suites, lint 0 errors, `assembleDebug`. 46 tests are new, across 8 new
+  suites and additions to `HomeFeedStoreTest` and `HomeViewModelTest`.
+- **Instrumented suite:** 21 tests OK on `rizx28` via `am instrument`.
+- **Device**, `rizx28` headless, debug build with its data cleared:
+  - The first-run card offered chart artists; picking three filled the For you tab with "Playlists with Bad
+    Bunny / Peso Pluma" and "Your genre: Reggaeton / Regional Mexican", with Spotify, Apple Music, YouTube
+    Music and Deezer cards. Deezer cards wear the existing "Rizx" badge.
+  - An Apple "Essentials" playlist opened (40 tracks) and played.
+  - Hiding a playlist removed it at once and persisted across a force-stop.
+  - Undo removed the entry from `discovery_feedback.json`.
+  - Hiding Rauw Alejandro removed him and his album from every row.
+  - The Settings row went from 2 to 0 and emptied the file.
+  - With data saver on and a forced refresh, the discovery rows carried no Apple Music card. This was
+    observed in the UI, not in a network log; the app has no HTTP logging, and the skip itself is covered
+    by `AppleMusicDiscoverySourceTest`.
+  - The release radar did not show, which is correct: on Deezer the anchors' newest releases are
+    2026-09-24 (Natanael Cano), 2026-07-15 (Peso Pluma) and 2025-07-14 (Bad Bunny). The 30-day rule is
+    covered by `ForYouDiscoveryTest`.
+
+Two things seen:
+- Apple credits a song to "Peso Pluma & Neton Vega" as one name, and that string became an anchor ("Playlists
+  with Peso Pluma & Neton Vega"). Anchors take the first credit as given, which is existing behaviour.
+- Deezer's discography endpoint is not sorted by date, and the release radar reads one page of 50. A
+  prolific artist's newest record could sit past that page.
+
+Committed and pushed to `main`; not released.

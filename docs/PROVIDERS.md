@@ -58,12 +58,12 @@ crash the app. Repositories degrade gracefully — if one source is down, the ot
 
 | Source | Kind(s) | Role | How (keyless) |
 |---|---|---|---|
-| **Deezer** | Metadata · Dashboard · Playlists | Catalog search (tracks/artists/albums/playlists), charts & editorial feed, **per-genre charts** behind Search's browse wall, artist radio & similar artists, full paged discographies | Public Deezer API |
+| **Deezer** | Metadata · Dashboard · Playlists · Discovery | Catalog search (tracks/artists/albums/playlists), charts & editorial feed, **per-genre charts** behind Search's browse wall, artist radio & similar artists, full paged discographies, editorial playlists per artist and per genre, release radar | Public Deezer API |
 | **Audius** | Streaming | **Full-length** track streaming | Public Audius API (discovery nodes) |
-| **Apple / iTunes** | Metadata · Dashboard | Search & 30-second previews, 50-item RSS charts, Top-100 and editorial playlists (deduplicated to 60) | Public iTunes Search API + public RSS/browse endpoints |
+| **Apple / iTunes** | Metadata · Dashboard · Discovery | Search & 30-second previews, 50-item RSS charts, Top-100 and editorial playlists (deduplicated to 60), an artist's Essentials/Deep Cuts and genre curators' playlists for the Home's discovery rows | Public iTunes Search API + public RSS/browse endpoints + the data public artist/curator pages publish |
 | **YouTube / YT Music** | Streaming · Playlists · Discovery · Dashboard | Full-length extraction, playlist import/search, public songs/artists charts, music-album and music-playlist discovery, mixes and similar rows | NewPipeExtractor + public YouTube Charts (no API key) |
 | **SoundCloud** | Streaming · Dashboard | Independent/underground tracks and the public **New & hot** 50-song chart | NewPipeExtractor |
-| **Spotify** | Playlists · Dashboard | Full playlist import, eight public editorial/chart collections and album metadata/details derived from public Top-50/embed data | Public embed data + the anonymous bearer that page publishes (no private secret) |
+| **Spotify** | Playlists · Dashboard · Discovery | Full playlist import, eight public editorial/chart collections, album metadata/details derived from public Top-50/embed data, and fixed per-genre editorial playlists for the Home's genre rows | Public embed data + the anonymous bearer that page publishes (no private secret) |
 | **LRCLIB** | Lyrics | Line-synced (timed) lyrics | Public LRCLIB API |
 | **NetEase · KuGou** | Lyrics | Word-level karaoke lyrics (`yrc` / `krc`) | Public endpoints |
 | **Musixmatch** | Lyrics | Word-level `richsync` lyrics | Public web token fetched at runtime — nothing ships in the app |
@@ -102,6 +102,11 @@ Notes:
   ceiling the library applies when saving; Apple Music's playlist page carries its whole tracklist in one
   response. When a source genuinely cuts a list short, the playlist says so on its own screen rather than
   quietly presenting a partial import as a complete one.
+- **Discovery rows, per platform.** "Playlists with …" asks Deezer, Apple Music and YouTube Music;
+  "Your genre: …" also asks Spotify. Spotify has no keyless way to find which playlists feature an artist,
+  so it contributes **fixed, verified editorial ids per genre** instead. Deezer's artist lists keep only
+  playlists made by Deezer's own accounts, because the rest are label SEO lists and spam. Apple's pages are
+  skipped under data saver. A platform that fails or changes its pages only thins its own cards.
 - **Fakes precede reals:** the codebase keeps `Fake*` metadata/streaming providers (`FakeMetadataProvider`,
   `FakeStreamingProvider`, …) used to build and test each vertical slice before wiring the real source.
 

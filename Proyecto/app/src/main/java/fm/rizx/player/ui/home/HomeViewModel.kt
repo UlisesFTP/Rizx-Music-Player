@@ -7,6 +7,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import fm.rizx.player.core.error.AppError
 import fm.rizx.player.core.error.toSafeMessage
 import fm.rizx.player.data.local.store.HomeFeedStore
+import fm.rizx.player.domain.discovery.DiscoveryFeedback
+import fm.rizx.player.domain.discovery.DiscoveryFilter
+import fm.rizx.player.domain.discovery.HiddenItems
+import fm.rizx.player.domain.discovery.TasteSeeds
 import fm.rizx.player.domain.model.AppMix
 import fm.rizx.player.domain.model.DailyPick
 import fm.rizx.player.domain.model.Daypart
@@ -123,6 +127,10 @@ class HomeViewModel @Inject constructor(
     recents: fm.rizx.player.domain.repository.RecentlyPlayedRepository,
     private val sync: SyncCoordinator = NoSyncCoordinator,
     private val account: AccountRepository? = null,
+    /** "Not interested" (spec 026). Null in tests that don't exercise it — nothing is ever hidden then. */
+    private val feedback: DiscoveryFeedback? = null,
+    /** Cold-start artist picks (spec 026). Null → the picker never shows. */
+    private val seeds: TasteSeeds? = null,
 ) : ViewModel() {
 
     /**
@@ -184,6 +192,24 @@ class HomeViewModel @Inject constructor(
             SharingStarted.WhileSubscribed(5_000),
             HomePlaybackIndicator(),
         )
+
+    /** What the listener hid, applied to every render — cached Home included (see [DiscoveryFilter]). */
+    private var hidden: HiddenItems = HiddenItems()
+
+    /** The last thing hidden, offered back for a few seconds as "Undo". */
+    private val _lastHidden = MutableStateFlow<HideTarget?>(null)
+    val lastHidden: StateFlow<HideTarget?> = _lastHidden.asStateFlow()
+
+    /**
+     * Whether to offer the cold-start artist picker: nothing played, nothing liked, nothing picked yet
+     * and not dismissed. The moment any of those changes it goes away on its own.
+     */
+    val showSeedPicker: StateFlow<Boolean> by lazy {
+        val picks = seeds ?: return@lazy MutableStateFlow(false).asStateFlow()
+        combine(history, favorites.favoriteTracks(), picks.seeds, picks.dismissed) { played, liked, chosen, dismissed ->
+            played.isEmpty() && liked.isEmpty() && chosen.isEmpty() && !dismissed
+        }.flowOn(background).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    }
 
     private val _state = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
@@ -250,6 +276,8 @@ class HomeViewModel @Inject constructor(
     /** The announced-but-unfilled rows; see [HomeUiState.Content.forYouPending]. */
     private var pendingSections: List<ForYouSection> = emptyList()
     private var feedFirst = false
+    /** The deduped-but-unfiltered Home — what the cache stores, so unhiding needs no refetch. */
+    private var unfiltered: HomeFeedDeduper.Deduped? = null
     private var regionalConsent: Boolean? = null
     private var countryName: String? = null
 
@@ -257,6 +285,15 @@ class HomeViewModel @Inject constructor(
 
     init {
         load()
+        // Hiding or unhiding re-renders what is already here; it never needs the network.
+        feedback?.let { store ->
+            viewModelScope.launch {
+                store.hidden.distinctUntilChanged().collect {
+                    hidden = it
+                    publish()
+                }
+            }
+        }
         // Turning regional recommendations on/off changes the feed, so it is refetched — but the rows
         // already on screen stay until the new ones arrive. `distinctUntilChanged` matters: this flow
         // sits on the DataStore file every setting shares, so without it changing the theme or any
@@ -322,6 +359,8 @@ class HomeViewModel @Inject constructor(
             val cached = withContext(io) {
                 regionalConsent = forYou.regionalConsent.first()
                 countryName = forYou.countryName()
+                // Read before the cached Home is drawn, so a hidden card never flashes up for a frame.
+                feedback?.let { store -> attempt { store.hidden.first() }.getOrNull()?.let { hidden = it } }
                 selection = cacheKey()
                 if (useCache) cache.read(selection) else null
             }
@@ -380,9 +419,9 @@ class HomeViewModel @Inject constructor(
                 }
                 return@launch
             }
-            (_state.value as? HomeUiState.Content)
-                ?.takeIf { feedFailure == null }
-                ?.let { cache.write(it.feed, it.forYouSections, selection) }
+            unfiltered
+                ?.takeIf { feedFailure == null && _state.value is HomeUiState.Content }
+                ?.let { cache.write(it.feed, it.sections, selection) }
         }
         loadJob = job
         job.invokeOnCompletion { _isRefreshing.value = false }
@@ -398,9 +437,11 @@ class HomeViewModel @Inject constructor(
         if (feed == null && sections == null) return
         val deduped = deduper.dedupe(feed ?: HomeFeed(), sections.orEmpty(), feedFirst = feedFirst)
         if (deduped.feed.isEmpty && deduped.sections.isEmpty()) return
+        unfiltered = deduped
+        val shown = DiscoveryFilter.apply(deduped.feed, deduped.sections, hidden)
         _state.value = HomeUiState.Content(
-            feed = deduped.feed,
-            forYouSections = deduped.sections,
+            feed = shown.feed,
+            forYouSections = shown.sections,
             // Skeletons only ever stand in for rows that aren't there: once real ones exist they hold
             // their own place, and drawing the plan under them would be the jump this prevents.
             forYouPending = if (deduped.sections.isEmpty()) pendingSections else emptyList(),
@@ -470,6 +511,55 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * "Not interested": hides an artist (every shelf, every platform) or one playlist, at once and on
+     * this device. The For-you rows are rebuilt too, because a hidden artist must stop *anchoring*
+     * rows, not just vanish from them.
+     */
+    fun hide(target: HideTarget) {
+        val store = feedback ?: return
+        viewModelScope.launch {
+            when (target) {
+                is HideTarget.Artist -> store.hideArtist(target.name)
+                is HideTarget.Playlist -> store.hidePlaylist(target.identityKey)
+            }
+            _lastHidden.value = target
+            if (target is HideTarget.Artist) refresh()
+        }
+    }
+
+    fun undoHide() {
+        val store = feedback ?: return
+        val target = _lastHidden.value ?: return
+        _lastHidden.value = null
+        viewModelScope.launch {
+            when (target) {
+                is HideTarget.Artist -> store.unhideArtist(target.name)
+                is HideTarget.Playlist -> store.unhidePlaylist(target.identityKey)
+            }
+            if (target is HideTarget.Artist) refresh()
+        }
+    }
+
+    /** The undo offer timed out or was dismissed. */
+    fun clearLastHidden() {
+        _lastHidden.value = null
+    }
+
+    /** The cold-start picker's "Done": the picks become anchors and the personalized half is rebuilt. */
+    fun pickSeeds(names: List<String>) {
+        val picks = seeds ?: return
+        viewModelScope.launch {
+            picks.setSeeds(names)
+            refresh()
+        }
+    }
+
+    fun dismissSeedPicker() {
+        val picks = seeds ?: return
+        viewModelScope.launch { picks.dismiss() }
+    }
+
     /** The consent card's buttons; the consent collector in [init] refreshes the feed afterwards. */
     fun setRegionalConsent(consented: Boolean) {
         viewModelScope.launch { forYou.setRegionalConsent(consented) }
@@ -507,5 +597,19 @@ class HomeViewModel @Inject constructor(
          * heard this since March" can be true; reading forty of them would throw that away on the way in.
          */
         const val TASTE_ITEMS = 200
+    }
+}
+
+/** What a long press on a Home card can hide. */
+sealed interface HideTarget {
+    /** Shown in the undo bar. */
+    val label: String
+
+    data class Artist(val name: String) : HideTarget {
+        override val label: String get() = name
+    }
+
+    data class Playlist(val identityKey: String, val name: String) : HideTarget {
+        override val label: String get() = name
     }
 }

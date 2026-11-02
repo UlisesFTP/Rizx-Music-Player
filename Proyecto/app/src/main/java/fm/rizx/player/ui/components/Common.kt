@@ -10,7 +10,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -58,6 +60,7 @@ import fm.rizx.player.ui.util.rememberRizxHaptics
  * Pass [pressColor] (e.g. `c.rowHover`) to also fade a subtle background fill in/out while
  * pressed — the on-theme replacement for a ripple on full-width rows. [pressShape] clips it.
  */
+@OptIn(ExperimentalFoundationApi::class) // combinedClickable, only when a long press is asked for
 @Composable
 fun Modifier.clickableScale(
     scale: Float = 0.9f,
@@ -65,6 +68,8 @@ fun Modifier.clickableScale(
     pressColor: Color? = null,
     pressShape: Shape = RectangleShape,
     haptic: Boolean = true,
+    /** Optional long press (the Home's "not interested" sheet). Null keeps a plain click, as before. */
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ): Modifier {
     val interaction = remember { MutableInteractionSource() }
@@ -79,10 +84,27 @@ fun Modifier.clickableScale(
                 Modifier.background(pressColor.copy(alpha = pressColor.alpha * fill), pressShape)
             else Modifier,
         )
-        .clickable(interactionSource = interaction, indication = null, enabled = enabled) {
-            if (haptic) haptics.tick()
-            onClick()
-        }
+        .then(
+            if (onLongClick == null) {
+                Modifier.clickable(interactionSource = interaction, indication = null, enabled = enabled) {
+                    if (haptic) haptics.tick()
+                    onClick()
+                }
+            } else {
+                Modifier.combinedClickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    enabled = enabled,
+                    onLongClick = {
+                        if (haptic) haptics.tick()
+                        onLongClick()
+                    },
+                ) {
+                    if (haptic) haptics.tick()
+                    onClick()
+                }
+            },
+        )
 }
 
 /** Square (or circular) icon button with a fixed touch target. */

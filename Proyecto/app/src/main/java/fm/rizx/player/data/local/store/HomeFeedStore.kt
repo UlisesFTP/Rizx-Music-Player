@@ -122,6 +122,10 @@ class HomeFeedStore(
         is ForYouSection.Mix -> copy(items = items.map { it.stripResolutionState() })
         is ForYouSection.BecauseYouLike -> copy(items = items.map { it.stripResolutionState() })
         is ForYouSection.SimilarTo -> this
+        // Refs only — nothing in them can carry a resolved stream.
+        is ForYouSection.PlaylistsWith -> this
+        is ForYouSection.GenrePlaylists -> this
+        is ForYouSection.NewFromArtists -> this
     }
 
     private companion object {

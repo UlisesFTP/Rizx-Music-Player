@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_playlists_with">Playlists com %1$s</string>
+    <string name="home_your_genre">Seu gênero: %1$s</string>
+    <string name="home_new_from_artists">Novidades dos seus artistas</string>
+
+    <string name="genre_reggaeton">Reggaeton</string>
+    <string name="genre_hiphop">Hip-hop</string>
+    <string name="genre_electronic">Eletrônica</string>
+    <string name="genre_reggae">Reggae e dancehall</string>
+    <string name="genre_pop">Pop</string>
+    <string name="genre_rock">Rock</string>
+    <string name="genre_metal">Metal</string>
+    <string name="genre_indie">Indie e alternativo</string>
+    <string name="genre_latin_regional">Regional mexicano</string>
+    <string name="genre_latin_tropical">Tropical</string>
+    <string name="genre_rnb">R&amp;B e soul</string>
+    <string name="genre_kpop">K-pop e J-pop</string>
+    <string name="genre_soundtrack">Trilhas sonoras</string>
+    <string name="genre_folk">Folk e acústico</string>
+    <string name="genre_country">Country</string>
+    <string name="genre_jazz">Jazz</string>
+    <string name="genre_classical">Clássica</string>
+    <string name="genre_lofi">Lo-fi e chill</string>
+    <string name="genre_other">Outros</string>
+
+    <string name="discovery_not_interested">Não tenho interesse</string>
+    <string name="discovery_hide_artist_caption">Ocultar %1$s da sua Home. As músicas, álbuns e playlists deixam de aparecer e não influenciam mais suas recomendações.</string>
+    <string name="discovery_hide_playlist_caption">Ocultar esta playlist da sua Home.</string>
+    <string name="discovery_hidden">Oculto: %1$s</string>
+    <string name="discovery_undo">Desfazer</string>
+
+    <string name="seed_title">Escolha 3 artistas de que você gosta</string>
+    <string name="seed_caption">O Rizx monta com eles suas primeiras playlists e mixes, até você ter histórico.</string>
+    <string name="seed_done">Pronto (%1$d)</string>
+    <string name="seed_not_now">Agora não</string>
+
+    <string name="settings_discovery_reset">Ocultos da Home</string>
+    <string name="settings_discovery_reset_caption">Toque para recuperar os artistas e playlists marcados como “Não tenho interesse”.</string>
+</resources>

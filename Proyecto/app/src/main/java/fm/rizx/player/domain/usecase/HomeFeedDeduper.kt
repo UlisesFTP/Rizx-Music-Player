@@ -76,6 +76,23 @@ class HomeFeedDeduper(
                     (artists.size + albums.size).takeIf { it >= minRowItems }
                         ?.let { section.copy(artists = artists, albums = albums) }
                 }
+
+                // The discovery shelves claim from the same playlist/album sets as the charts, so a
+                // playlist picked for this listener is not offered a second time in the generic
+                // carousel below — the personal placement is the one that stays.
+                is ForYouSection.PlaylistsWith ->
+                    section.playlists.filter { seen.playlists.add(blender.playlistKey(it)) }
+                        .takeIf { it.size >= minRowItems }?.let { section.copy(playlists = it) }
+
+                is ForYouSection.GenrePlaylists ->
+                    section.playlists.filter { seen.playlists.add(blender.playlistKey(it)) }
+                        .takeIf { it.size >= minRowItems }?.let { section.copy(playlists = it) }
+
+                // A release radar is worth showing with a single new record: one fresh album by an
+                // artist you play is the whole point of the shelf, so it is exempt from the row minimum.
+                is ForYouSection.NewFromArtists ->
+                    section.albums.filter { seen.albums.add(blender.albumKey(it)) }
+                        .takeIf { it.isNotEmpty() }?.let { section.copy(albums = it) }
             }
         }
 

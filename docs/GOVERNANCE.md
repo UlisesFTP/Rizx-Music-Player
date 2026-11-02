@@ -186,6 +186,7 @@ Durable decisions, oldest first, with where the reasoning is recorded. Add a lin
 | 2026-09-13 | Ignore rules that name a folder are anchored to the root (`/supabase/`); the first CI run showed an unanchored rule had kept the app's `data/remote/supabase` package out of the public tree. A release tag is cut only after CI is green on that commit, because CI — not the maintainer's tree — is what proves the published source builds. | `CONTEXT.md` 2026-09-13, `.gitignore` |
 | 2026-10-30 | List reads that can outgrow one CursorWindow run in a transaction, so a sync write between two windows cannot crash them. | `CONTEXT.md` 2026-10-30 |
 | 2026-10-31 | A new version opens the update dialog by itself, once per version, and a lookup window of one hour replaces twelve; the download still starts only when the listener asks. | Spec 025, `CONTEXT.md` 2026-10-31 |
+| 2026-11-02 | Home discovery reads public editorial data: Deezer's API, the JSON that Apple's public artist and curator pages publish, YouTube Music search, and Spotify only through fixed, verified genre ids, because its search stays out (ADR 0018). "Not interested" and first-run picks stay on the device. | ADR 0033, spec 026 |
 
 ## 10. Open items and known debt
 
@@ -201,6 +202,10 @@ Recorded so nobody rediscovers them; none blocks daily work.
   does not ship one (it carries the deployment's certificate fingerprint).
 - The tracked `.vite/deps/` metadata at the repository root is a leftover with no role in the Android
   build; removing it is a housekeeping commit for the maintainer.
+- The Home's "Not interested" list and first-run picks are not synced to the account yet (no server
+  table); they live in `discovery_feedback.json` on each device.
+- `GenreCatalog`'s Spotify ids and Apple curator ids are static. Re-verify them (spec 026 lists how) when
+  a genre shelf goes thin.
 - Older docs (`ARCHITECTURE.md`, `FEATURES.md`, `PROVIDERS.md`) were refreshed on 2026-09-13 but
   keep their 2026-08-25 structure; the guides are the entry points.
 

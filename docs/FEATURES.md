@@ -126,10 +126,21 @@ entry plays it, or searches for it when it was never resolved.
 A streaming-grade feed, rendered progressively from a disk cache so a warm start paints instantly:
 
 - **Continue listening** speed dial (with a surprise-me die) on the overview tab.
-- A dedicated **For you** tab with all recommendation rows; the overview keeps only the first three.
+- A dedicated **For you** tab with all recommendation rows; the overview keeps the first six.
 - **Three daily mixes** of up to 12 songs, built from your own listening log (see Recommendations).
 - **"Similar to …"** rows anchored on artists you play, a **mood/genre station grid**, featured cards with
   preview, editorial playlists, charts, new releases, and mosaic tiles.
+- **Playlists picked for you**:
+  - **Playlists with …**: editorial playlists featuring your top artists, from Deezer, Apple Music and
+    YouTube Music;
+  - **Your genre: …**: playlists for your two strongest genres, from Spotify, Deezer, Apple Music and
+    YouTube Music;
+  - every card is labelled with its platform.
+- **New from your artists**: their releases from the last 30 days, newest first.
+- **Not interested**: long-press a card to hide an artist (every shelf, every platform) or a playlist,
+  with Undo. Settings › Recommendations › *Hidden from Home* brings everything back.
+- **First run**: with no history yet, pick three artists from the charts and the personalized rows start
+  from them.
 - A **feed source selector** — Deezer, Apple, Spotify editorial/charts, YouTube Music, SoundCloud
   **New & hot**, or a weighted blend. Compact rows show 10 items while full tabs use deeper source lists.
 - Rows announce themselves from local taste before any network call, so the layout doesn't jump while
@@ -217,6 +228,8 @@ cannot process. It never listens, never records, and adds nothing to the APK's d
 
 - An **on-device listening log** (plays, completions, skips, listening time, time-of-day) feeds taste
   clusters and **three daily mixes** at a 70/30 familiar/discovery split.
+- The artists your recommendations are built around are ranked by that log, so songs you keep skipping
+  pull an artist down. Mix seeds hold still through the day and change the next.
 - Optional **regional charts** personalization inferred from SIM/locale — asked in-app, no OS permission.
 - Everything is computed locally; nothing about your listening leaves the device.
 

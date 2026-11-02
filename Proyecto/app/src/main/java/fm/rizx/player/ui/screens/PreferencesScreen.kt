@@ -252,6 +252,10 @@ fun PreferencesScreen(
     val radioTitle = stringResource(R.string.pref_radio_algorithm)
     val radioValue = stringResource(radioAlgorithmLabel(radioAlgorithm))
     val radioCaption = stringResource(radioAlgorithmCaption(radioAlgorithm))
+    val hiddenCount by vm.hiddenCount.collectAsStateWithLifecycle()
+    val hiddenTitle = stringResource(R.string.settings_discovery_reset)
+    val hiddenCaption = stringResource(R.string.settings_discovery_reset_caption)
+    val hiddenValue = hiddenCount.toString()
     val regionalTitle = stringResource(R.string.settings_regional_recs)
     val regionalOff = stringResource(R.string.settings_regional_recs_off)
     val regionalUnset = stringResource(R.string.settings_regional_recs_unset)
@@ -378,6 +382,11 @@ fun PreferencesScreen(
                 ToggleRowDetail(regionalTitle, regionalCaption, regionalRecs == true) {
                     vm.setRegionalRecs(regionalRecs != true)
                 }
+            },
+            // Everything marked "Not interested" on the Home comes back. The value is the count, so
+            // the row visibly reads 0 once it is done.
+            entry(hiddenTitle, hiddenValue, hiddenCaption) {
+                SettingRow(hiddenTitle, hiddenValue, hiddenCaption, chevron = false) { vm.resetHidden() }
             },
         ),
         stringResource(R.string.settings_downloads) to listOf(

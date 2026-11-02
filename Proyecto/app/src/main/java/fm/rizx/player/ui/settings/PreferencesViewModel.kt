@@ -53,6 +53,8 @@ class PreferencesViewModel @Inject constructor(
     private val losslessIndex: LosslessIndexSource,
     private val dataSaverState: DataSaverState,
     private val spatial: fm.rizx.player.domain.playback.SpatialAudioController,
+    /** "Not interested" (spec 026), for the reset row. Null in tests that don't exercise it. */
+    private val feedback: fm.rizx.player.domain.discovery.DiscoveryFeedback? = null,
 ) : ViewModel() {
 
     /** A selectable Home-feed source: a registered dashboard provider. */
@@ -258,6 +260,17 @@ class PreferencesViewModel @Inject constructor(
 
     fun setAvoidDoubleSpatialization(enabled: Boolean) {
         viewModelScope.launch { settings.setAvoidDoubleSpatialization(enabled) }
+    }
+
+    /** How many artists and playlists are hidden from the Home — the reset row's value. */
+    val hiddenCount: StateFlow<Int> = (feedback?.hidden ?: kotlinx.coroutines.flow.flowOf(fm.rizx.player.domain.discovery.HiddenItems()))
+        .map { it.artistKeys.size + it.playlistKeys.size }
+        .asState(0)
+
+    /** Brings back everything marked "Not interested". */
+    fun resetHidden() {
+        val store = feedback ?: return
+        viewModelScope.launch { store.clear() }
     }
 
     fun clearCache() {

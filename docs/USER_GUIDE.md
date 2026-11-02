@@ -76,6 +76,17 @@ On **All**:
   *Rediscover*, *New to you*, *Around the world*, one mix per artist cluster. They cost no network:
   they are made from songs already known to the phone.
 - **Mix ·**, **Because you like …**, **Similar to …** — rows seeded by your own artists.
+- **New from your artists**: what the artists you play released in the last 30 days.
+- **Playlists with …** and **Your genre: …**: playlists chosen for you from Spotify, Deezer, Apple
+  Music and YouTube Music. The badge under each card says which. Spotify only appears in the genre rows,
+  because it cannot be asked which playlists feature an artist without signing in.
+- **Long-press** a song, artist, album or playlist card for **Not interested**:
+  - an artist disappears from every row and stops shaping your recommendations;
+  - a playlist disappears on its own;
+  - **Undo** appears for a few seconds, and Settings › Recommendations › *Hidden from Home* brings
+    everything back.
+- On a brand-new install, a card asks you to **pick 3 artists you like**; the personalized rows start
+  from them until you have listened to some music. **Not now** hides the card for good.
 - **Featured playlists**, **Playlists for you**, **Top songs**, **Top albums**, **Popular artists**,
   **New releases** — charts blended from Deezer, Apple Music, Spotify's editorial charts and YouTube
   Music. Each **See all** switches to the matching tab. Settings › Sources › **Home feed** narrows

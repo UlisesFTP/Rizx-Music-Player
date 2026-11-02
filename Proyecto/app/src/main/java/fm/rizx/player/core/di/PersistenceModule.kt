@@ -169,6 +169,26 @@ object PersistenceModule {
         SearchHistoryStore(File(context.filesDir, "search_history.json"))
 
     /**
+     * "Not interested" and the cold-start artist picks (spec 026). One store behind both seams, a
+     * singleton because its flows are hot: hiding a card on the Home must re-filter it at once, and the
+     * Settings reset must be seen by the Home without a re-read.
+     */
+    @Provides
+    @Singleton
+    fun provideDiscoveryFeedbackStore(@ApplicationContext context: Context): fm.rizx.player.data.local.store.DiscoveryFeedbackStore =
+        fm.rizx.player.data.local.store.DiscoveryFeedbackStore(File(context.filesDir, "discovery_feedback.json"))
+
+    @Provides
+    fun provideDiscoveryFeedback(
+        store: fm.rizx.player.data.local.store.DiscoveryFeedbackStore,
+    ): fm.rizx.player.domain.discovery.DiscoveryFeedback = store
+
+    @Provides
+    fun provideTasteSeeds(
+        store: fm.rizx.player.data.local.store.DiscoveryFeedbackStore,
+    ): fm.rizx.player.domain.discovery.TasteSeeds = store
+
+    /**
      * The curve the automatic equalizer worked out per song. Cached because the first play pays for a
      * genre lookup *and* twelve seconds of listening, and neither answer ever changes for that recording.
      */
